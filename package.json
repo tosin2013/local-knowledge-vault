@@ -1,0 +1,98 @@
+{
+  "name": "local-knowledge-vault",
+  "version": "0.1.0",
+  "description": "Local Knowledge Vault \u2014 PARA notes, FTS5 search, optional Ollama grounded Q&A",
+  "main": "dist-electron/main.js",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "test:mvp": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/test-mvp.ts",
+    "postinstall": "electron-builder install-app-deps || true",
+    "test:citation-pack": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/citation-pack-smoke.ts",
+    "test:media": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/media-captions-smoke.ts",
+    "test:mcp-discovery": "npx tsx scripts/mcp-notion-discovery-smoke.ts",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@fontsource/roboto": "^5.3.0",
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@mui/icons-material": "^6.5.0",
+    "@mui/material": "^6.5.0",
+    "better-sqlite3": "^11.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.localknowledge.vault",
+    "productName": "Vault",
+    "copyright": "Copyright \u00a9 Local Knowledge Vault",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "author": "Local Knowledge Vault"
+}

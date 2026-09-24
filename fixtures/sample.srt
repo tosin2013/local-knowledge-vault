@@ -1,0 +1,31 @@
+1
+00:00:00,000 --> 00:00:02,500
+Welcome to the Local Knowledge Vault media demo.
+
+2
+00:00:02,500 --> 00:00:06,000
+Captions become normal vault notes with timestamps.
+
+3
+00:00:06,000 --> 00:00:10,000
+Ask stays grounded and cites transcript chunks with itm_ ids.
+
+4
+00:00:10,000 --> 00:00:14,500
+When you click a citation, the player seeks to that moment.
+
+5
+00:00:14,500 --> 00:00:20,000
+Follow playhead narrows chat to nearby cues for about forty five seconds.
+
+6
+00:00:20,000 --> 00:00:28,000
+This second stretch keeps talking so chunking can group cues into longer notes around thirty to sixty seconds.
+
+7
+00:00:28,000 --> 00:00:36,000
+Chunk boundaries prefer time windows and character budgets without splitting a single cue across notes.
+
+8
+00:00:36,000 --> 00:00:42,000
+YouTube ingest uses yt-dlp when available; local SRT and VTT always work end to end.

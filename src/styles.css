@@ -1,0 +1,118 @@
+/* Layout-only helpers for Electron shell. Visual system lives in MUI M3 theme. */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar,
+.content,
+.chat-layout,
+.prompts-layout,
+.chat-sessions,
+.prompt-list-pane,
+.chat-main,
+.note-list,
+.session-list,
+.chat-thread,
+.panel {
+  min-height: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.note-list,
+.session-list,
+.chat-thread,
+.panel {
+  overflow: auto;
+  flex: 1;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-layout {
+  display: grid;
+  grid-template-columns: 1fr minmax(140px, 160px);
+  flex: 1;
+  overflow: hidden;
+}
+
+.prompts-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+
+.chat-sessions,
+.prompt-list-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.chat-composer {
+  flex-shrink: 0;
+  min-height: 120px;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+}
+
+.editor textarea.body,
+.editor .body-field {
+  flex: 1;
+  min-height: 240px;
+}
+
+.snippet mark,
+.snippet .hl {
+  color: var(--m3-palette-primary-main, #0097a7);
+  background: transparent;
+  font-weight: 600;
+}
+
+.vault-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}

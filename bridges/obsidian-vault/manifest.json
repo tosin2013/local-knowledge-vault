@@ -1,0 +1,9 @@
+{
+  "id": "vault-bridge",
+  "name": "Vault Bridge",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Ask your local Vault (grounded notes) from Obsidian via the Vault Bridge HTTP API on 127.0.0.1:8765.",
+  "author": "Vault",
+  "isDesktopOnly": true
+}

@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-electron/
+release/
+*.tsbuildinfo
+
+# Electron / electron-builder
+*.AppImage
+*.deb
+*.dmg
+*.exe
+*.blockmap
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+
+# SQLite / local data
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.db-journal
+*.db-wal
+*.db-shm
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local tool venvs / scratch
+.venv-ytdlp/
+.venv*/
+tmp-media/
+tmp/
+*.local
