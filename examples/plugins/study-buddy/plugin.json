@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "study-buddy",
+  "name": "Study buddy",
+  "version": "1.0.0",
+  "description": "A patient study-partner voice plus quick-ask prompts for revising from your own notes.",
+  "author": "Local Knowledge Vault examples",
+  "contributes": {
+    "personas": [
+      {
+        "name": "Study buddy",
+        "description": "Explains simply, then quizzes you with one question from your notes.",
+        "promptFile": "persona.md"
+      },
+      {
+        "name": "Exam examiner",
+        "description": "Terse, asks you to justify every claim with a citation.",
+        "prompt": "Speak like a strict but fair examiner. Keep answers short. After answering, point out which cited passage carries the key fact and ask the reader to restate it in their own words."
+      }
+    ],
+    "promptPacks": [
+      {
+        "name": "Revision",
+        "prompts": [
+          "Summarize the key ideas in my notes on this topic as 5 bullet points.",
+          "Quiz me: ask 3 questions I should be able to answer from these notes.",
+          "What are the definitions I need to memorize here?",
+          "Explain this like I'm new to it, using only my notes."
+        ]
+      }
+    ],
+    "mcpServers": [
+      {
+        "name": "Notion (study workspace)",
+        "url": "https://mcp.notion.com/mcp",
+        "description": "Optional: connect a Notion workspace with your course pages."
+      }
+    ]
+  }
+}

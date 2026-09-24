@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
     "test:mvp": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/test-mvp.ts",
+    "test:providers": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/providers-plugins-smoke.ts",
+    "test:providers:live": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/providers-live-groq.ts",
     "postinstall": "electron-builder install-app-deps || true",
     "test:citation-pack": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/citation-pack-smoke.ts",
     "test:media": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/media-captions-smoke.ts",

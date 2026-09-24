@@ -87,6 +87,8 @@ export interface AskGroundedResult {
 export interface OllamaHealth {
   ok: boolean
   models?: string[]
+  /** parameter_size per model when Ollama reports it (e.g. "8.2B"). */
+  modelSizes?: Record<string, string>
   error?: string
 }
 
@@ -165,52 +167,208 @@ export interface UpdatePromptPatch {
 }
 
 
-/* ---- LLM provider settings (renderer-safe; no API key) ---- */
-/* Grok = xAI. Groq = GroqCloud. Distinct vendors — label clearly in UI. */
+/* ---- LLM providers (renderer-safe; API keys NEVER cross IPC — only hasKey) ---- */
 
-export type LlmProviderChoice = 'auto' | 'ollama' | 'grok' | 'groq'
-export type LlmProviderId = 'ollama' | 'grok' | 'groq'
+/** Transport family. 'gemini' uses Google's official OpenAI-compatible endpoint. */
+export type ProviderKind = 'ollama' | 'openai-compatible' | 'anthropic' | 'gemini'
+export type ProviderSource = 'builtin' | 'user' | 'plugin'
+/** 'auto' = local-first resolution; otherwise a provider id. */
+export type ProviderSelection = 'auto' | string
 
-export interface LlmSettingsPatch {
-  provider?: LlmProviderChoice
-  grokEnabled?: boolean
-  grokModel?: string
-  groqEnabled?: boolean
-  groqModel?: string
-}
-
-export interface LlmSettingsPublic {
-  provider: LlmProviderChoice
-  grokEnabled: boolean
-  grokModel: string
-  groqEnabled: boolean
-  groqModel: string
-  /** xAI Grok key present */
-  hasKey: boolean
-  /** GroqCloud key present */
-  hasGroqKey: boolean
-}
-
-export interface GrokHealth {
+export interface ProviderHealth {
   ok: boolean
+  /** Installed / listed models (local: installed models). */
   models?: string[]
+  /** Ollama parameter sizes when reported, keyed by model name (e.g. "1.2B"). */
+  modelSizes?: Record<string, string>
   error?: string
-  hasKey: boolean
+  /** True when health was not probed (cloud: we don't ping on every status poll). */
+  skipped?: boolean
 }
 
-export interface GroqHealth {
-  ok: boolean
-  models?: string[]
-  error?: string
+export interface ProviderConfig {
+  id: string
+  kind: ProviderKind
+  label: string
+  baseUrl: string
+  /** Empty for local providers = auto-pick an installed model. */
+  model: string
   hasKey: boolean
+  /** Key required to call (cloud) vs optional (local / custom). */
+  requiresKey: boolean
+  local: boolean
+  enabled: boolean
+  source: ProviderSource
+  /** Preset this came from (openai, groq, lmstudio, custom …). */
+  presetId?: string
+  /** Plugin id when source === 'plugin'. */
+  pluginId?: string
+  /** Where the key lives (env var name or 'file'), never the key itself. */
+  keySource?: 'env' | 'file' | null
+  health?: ProviderHealth
+}
+
+export interface ProviderPresetInfo {
+  id: string
+  kind: ProviderKind
+  label: string
+  baseUrl: string
+  defaultModel: string
+  local: boolean
+  requiresKey: boolean
+  /** GET {baseUrl}/models works (Fetch models button). */
+  supportsModelList: boolean
+  docsUrl?: string
+  keyUrl?: string
+  notes?: string
+  /** Plugin-contributed presets. */
+  pluginId?: string
+}
+
+export interface ActiveProviderInfo {
+  id: string
+  label: string
+  kind: ProviderKind
+  local: boolean
+  model: string
+  /** Detected local model looks tiny (<3B params) — show a gentle hint. */
+  smallModel?: boolean
 }
 
 export interface LlmStatus {
-  ollama: OllamaHealth
-  grok: GrokHealth
-  groq: GroqHealth
-  active: LlmProviderId | null
+  selected: ProviderSelection
+  active: ActiveProviderInfo | null
   message: string
+  providers: ProviderConfig[]
+  /** Nothing local detected and no cloud provider enabled → show first-run card. */
+  needsSetup: boolean
+  /** Recommended local model for the first-run card. */
+  recommendedLocalModel: { name: string; command: string; why: string }
+}
+
+export interface ProviderDraft {
+  /** Existing id when editing; omitted when adding. */
+  id?: string
+  presetId?: string
+  kind: ProviderKind
+  label: string
+  baseUrl: string
+  model: string
+  local?: boolean
+  enabled?: boolean
+  /** undefined = keep existing key; '' or null = clear; string = set. */
+  apiKey?: string | null
+}
+
+export interface ProviderTestResult {
+  ok: boolean
+  latencyMs: number
+  model?: string
+  sample?: string
+  error?: string
+}
+
+export interface ProviderModelsResult {
+  ok: boolean
+  models: string[]
+  error?: string
+}
+
+/* ---- Declarative plugins (plugin.json, no code execution) ---- */
+
+export interface PluginProviderPreset {
+  id: string
+  label: string
+  kind: 'openai-compatible' | 'anthropic' | 'ollama' | 'gemini'
+  baseUrl: string
+  defaultModel: string
+  local?: boolean
+  requiresKey?: boolean
+  docsUrl?: string
+  notes?: string
+}
+
+export interface PluginPersona {
+  name: string
+  /** Voice / style text; Vault wraps it in the fixed grounding rules. */
+  prompt: string
+  description?: string
+}
+
+export interface PluginPromptPack {
+  name: string
+  prompts: string[]
+}
+
+export interface PluginMcpServerPreset {
+  name: string
+  url: string
+  description?: string
+}
+
+export interface PluginManifest {
+  schemaVersion: 1
+  id: string
+  name: string
+  version: string
+  description?: string
+  author?: string
+  homepage?: string
+  contributes: {
+    providers?: PluginProviderPreset[]
+    personas?: PluginPersona[]
+    promptPacks?: PluginPromptPack[]
+    mcpServers?: PluginMcpServerPreset[]
+  }
+}
+
+export interface PluginInfo {
+  id: string
+  name: string
+  version: string
+  description: string
+  author?: string
+  source: 'builtin' | 'installed'
+  enabled: boolean
+  /** Folder on disk (installed only). */
+  dir?: string
+  /** Short summary like ["2 providers", "1 persona"]. */
+  contributes: string[]
+  manifest?: PluginManifest
+  /** data: URL of icon.png when shipped (≤ 256 KB). */
+  iconDataUrl?: string
+}
+
+export interface PluginLoadError {
+  /** Folder name under plugins/ */
+  folder: string
+  dir: string
+  errors: string[]
+}
+
+export interface PluginListResult {
+  /** Installed (declarative) plugins. Built-in panels come from the renderer registry. */
+  plugins: PluginInfo[]
+  errors: PluginLoadError[]
+  pluginsDir: string
+  /** Disabled plugin ids (installed or built-in). */
+  disabled: string[]
+}
+
+export interface PluginInstallResult {
+  ok: boolean
+  canceled?: boolean
+  plugin?: PluginInfo
+  errors?: string[]
+  /** Non-fatal notes (e.g. skipped non-asset files, replaced older version). */
+  warnings?: string[]
+}
+
+export interface PluginContributions {
+  providers: Array<PluginProviderPreset & { pluginId: string }>
+  personas: Array<PluginPersona & { pluginId: string; pluginName: string }>
+  promptPacks: Array<PluginPromptPack & { pluginId: string; pluginName: string }>
+  mcpServers: Array<PluginMcpServerPreset & { pluginId: string; pluginName: string }>
 }
 
 /* ---- Import from URL ---- */

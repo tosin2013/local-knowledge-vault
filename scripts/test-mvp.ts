@@ -43,8 +43,8 @@ import {
   getGroqApiKey,
   getDefaultLlmSettings,
 } from '../electron/llm-settings'
-import { resolveProviderFromHealth } from '../electron/llm'
-import { orderGroqModels } from '../electron/groq'
+import { resolveFromProviders } from '../electron/llm'
+import type { ProviderConfig } from '../electron/types'
 import {
   isAllowedUrl,
   extractFromHtml,
@@ -302,148 +302,49 @@ async function main(): Promise<void> {
   else process.env.GROQ_API_KEY = prevGroqEnv2
   setGroqApiKey(null)
 
-  // orderGroqModels preference
-  const ordered = orderGroqModels(
-    ['whisper-large', 'openai/gpt-oss-20b', 'openai/gpt-oss-20b', 'mixtral'],
-    'custom-model'
-  )
-  assert(ordered[0] === 'custom-model', 'orderGroqModels puts configured first')
-  assert(ordered[1] === 'openai/gpt-oss-20b', 'orderGroqModels prefers llama* next')
-  assert(ordered.includes('openai/gpt-oss-20b'), 'orderGroqModels keeps openai/gpt-oss*')
-
   setLlmUserDataDir(null)
 
-  // --- resolveProvider pure logic ---
-  console.log('\nLLM resolveProviderFromHealth')
-  const ollamaUp = { ok: true, models: ['llama3.2:latest'] }
-  const ollamaDown = { ok: false, error: 'ECONNREFUSED' }
-  const grokUp = { ok: true, hasKey: true, models: ['grok-4.3'] }
-  const grokNoKey = { ok: false, hasKey: false, error: 'No xAI API key' }
-  const groqUp = { ok: true, hasKey: true, models: ['openai/gpt-oss-20b'] }
-  const groqNoKey = { ok: false, hasKey: false, error: 'No Groq API key' }
-  const baseSettings = {
-    grokEnabled: false,
-    grokModel: 'grok-4.3',
-    groqEnabled: false,
-    groqModel: 'openai/gpt-oss-20b',
-  } as const
-
-  const autoOllama = resolveProviderFromHealth({
-    settings: { provider: 'auto', ...baseSettings },
+  // --- Provider registry resolution (pure; local-first) ---
+  console.log('\nProvider registry resolveFromProviders')
+  const mk = (p: Partial<ProviderConfig> & Pick<ProviderConfig, 'id'>): ProviderConfig => ({
+    kind: 'openai-compatible',
+    label: p.id,
+    baseUrl: 'http://x',
+    model: '',
     hasKey: false,
-    hasGroqKey: false,
-    ollama: ollamaUp,
-    grok: grokNoKey,
-    groq: groqNoKey,
+    requiresKey: false,
+    local: false,
+    enabled: true,
+    source: 'builtin',
+    ...p,
   })
-  assert(autoOllama.provider === 'ollama' && autoOllama.status.message === 'Ollama ready', 'auto → Ollama when cloud off')
+  const ollamaUp = mk({ id: 'ollama', kind: 'ollama', label: 'Ollama', local: true, health: { ok: true, models: ['llama3.2:latest'] } })
+  const ollamaDown = mk({ id: 'ollama', kind: 'ollama', label: 'Ollama', local: true, health: { ok: false, error: 'ECONNREFUSED' } })
+  const lmDown = mk({ id: 'lmstudio', label: 'LM Studio', local: true, health: { ok: false, error: 'ECONNREFUSED' } })
+  const lmUp = mk({ id: 'lmstudio', label: 'LM Studio', local: true, health: { ok: true, models: ['qwen3-8b'] } })
+  const groqOn = mk({ id: 'groq', label: 'Groq', requiresKey: true, hasKey: true, model: 'openai/gpt-oss-20b' })
+  const groqNoKey = mk({ id: 'groq', label: 'Groq', requiresKey: true, hasKey: false, model: 'openai/gpt-oss-20b' })
+  const groqOff = { ...groqOn, enabled: false }
 
-  const autoGrok = resolveProviderFromHealth({
-    settings: { provider: 'auto', ...baseSettings, grokEnabled: true },
-    hasKey: true,
-    hasGroqKey: false,
-    ollama: ollamaUp,
-    grok: grokUp,
-    groq: groqNoKey,
-  })
-  assert(autoGrok.provider === 'grok' && /Grok ready/.test(autoGrok.status.message), 'auto → Grok when enabled+key (no Groq)')
-
-  const autoGroq = resolveProviderFromHealth({
-    settings: { provider: 'auto', ...baseSettings, groqEnabled: true, grokEnabled: true },
-    hasKey: true,
-    hasGroqKey: true,
-    ollama: ollamaUp,
-    grok: grokUp,
-    groq: groqUp,
-  })
-  assert(autoGroq.provider === 'groq' && /Groq ready/.test(autoGroq.status.message), 'auto prefers Groq when enabled+key')
-
-  const autoFallback = resolveProviderFromHealth({
-    settings: { provider: 'auto', ...baseSettings, grokEnabled: true },
-    hasKey: true,
-    hasGroqKey: false,
-    ollama: ollamaUp,
-    grok: { ok: false, hasKey: true, error: 'timeout' },
-    groq: groqNoKey,
-  })
-  assert(autoFallback.provider === 'ollama', 'auto falls back to Ollama on Grok hard failure')
-
-  const autoGroqFailToGrok = resolveProviderFromHealth({
-    settings: { provider: 'auto', ...baseSettings, groqEnabled: true, grokEnabled: true },
-    hasKey: true,
-    hasGroqKey: true,
-    ollama: ollamaUp,
-    grok: grokUp,
-    groq: { ok: false, hasKey: true, error: 'timeout' },
-  })
-  assert(autoGroqFailToGrok.provider === 'grok', 'auto falls back to Grok when Groq hard-fails')
-
-  const autoGroqFailToOllama = resolveProviderFromHealth({
-    settings: { provider: 'auto', ...baseSettings, groqEnabled: true },
-    hasKey: false,
-    hasGroqKey: true,
-    ollama: ollamaUp,
-    grok: grokNoKey,
-    groq: { ok: false, hasKey: true, error: 'timeout' },
-  })
-  assert(autoGroqFailToOllama.provider === 'ollama', 'auto falls back to Ollama when Groq hard-fails (no Grok)')
-
-  const grokOnlyNoKey = resolveProviderFromHealth({
-    settings: { provider: 'grok', ...baseSettings, grokEnabled: true },
-    hasKey: false,
-    hasGroqKey: false,
-    ollama: ollamaUp,
-    grok: grokNoKey,
-    groq: groqNoKey,
-  })
-  assert(
-    grokOnlyNoKey.provider === null && /no API key/i.test(grokOnlyNoKey.status.message),
-    'grok-only without key fails (no Ollama steal)'
-  )
-
-  const groqOnly = resolveProviderFromHealth({
-    settings: { provider: 'groq', ...baseSettings, groqEnabled: true },
-    hasKey: true,
-    hasGroqKey: true,
-    ollama: ollamaUp,
-    grok: grokUp,
-    groq: groqUp,
-  })
-  assert(groqOnly.provider === 'groq' && /Groq ready/.test(groqOnly.status.message), 'groq-only uses Groq')
-
-  const groqOnlyNoKey = resolveProviderFromHealth({
-    settings: { provider: 'groq', ...baseSettings, groqEnabled: true },
-    hasKey: true,
-    hasGroqKey: false,
-    ollama: ollamaUp,
-    grok: grokUp,
-    groq: groqNoKey,
-  })
-  assert(
-    groqOnlyNoKey.provider === null && /Groq.*no API key/i.test(groqOnlyNoKey.status.message),
-    'groq-only without key fails (no steal)'
-  )
-
-  const ollamaOnly = resolveProviderFromHealth({
-    settings: { provider: 'ollama', ...baseSettings, grokEnabled: true, groqEnabled: true },
-    hasKey: true,
-    hasGroqKey: true,
-    ollama: ollamaDown,
-    grok: grokUp,
-    groq: groqUp,
-  })
-  assert(ollamaOnly.provider === null, 'ollama-only ignores healthy cloud providers')
-
-  const offline = resolveProviderFromHealth({
-    settings: { provider: 'auto', ...baseSettings },
-    hasKey: false,
-    hasGroqKey: false,
-    ollama: ollamaDown,
-    grok: grokNoKey,
-    groq: groqNoKey,
-  })
-  assert(/offline/i.test(offline.status.message), 'offline message when nothing available')
-
+  const a1 = resolveFromProviders('auto', [ollamaUp, lmDown, groqOn])
+  assert(a1.status.active?.id === 'ollama' && a1.status.active.local, 'auto → Ollama first even when cloud enabled')
+  const a2 = resolveFromProviders('auto', [ollamaDown, lmUp, groqOn])
+  assert(a2.status.active?.id === 'lmstudio', 'auto → LM Studio when Ollama down')
+  const a3 = resolveFromProviders('auto', [ollamaDown, lmDown, groqOn])
+  assert(a3.status.active?.id === 'groq' && !a3.status.active.local, 'auto → enabled cloud only after locals')
+  const a4 = resolveFromProviders('auto', [ollamaDown, lmDown, groqOff])
+  assert(a4.status.active === null && a4.status.needsSetup, 'auto never picks a disabled cloud; needsSetup card')
+  assert(a1.candidates.map((c) => c.provider.id).join(',') === 'ollama,groq', 'auto fallback order local → cloud')
+  const e1 = resolveFromProviders('groq', [ollamaUp, lmUp, groqOn])
+  assert(e1.status.active?.id === 'groq' && e1.candidates.length === 1, 'explicit groq uses Groq only')
+  const e2 = resolveFromProviders('groq', [ollamaUp, lmUp, groqNoKey])
+  assert(e2.status.active === null && /API key/i.test(e2.status.message), 'explicit groq without key fails (no local steal)')
+  const e3 = resolveFromProviders('ollama', [ollamaDown, lmUp, groqOn])
+  assert(e3.status.active === null, 'explicit ollama ignores other healthy providers')
+  const e4 = resolveFromProviders('auto', [mk({ ...ollamaUp, health: { ok: true, models: [] } }), lmDown])
+  assert(/ollama pull/.test(e4.status.message), 'Ollama running with no models suggests ollama pull')
+  const e5 = resolveFromProviders('auto', [mk({ ...ollamaUp, health: { ok: true, models: ['llama3.2:1b'] } })])
+  assert(e5.status.active?.smallModel === true, 'tiny local model flagged smallModel')
 
   // --- Import from URL (pure helpers) ---
   console.log('\nImport from URL helpers')

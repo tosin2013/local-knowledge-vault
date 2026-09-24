@@ -1,80 +1,96 @@
 /**
- * Minimal Ollama HTTP client (localhost:11434).
- * Cloud provider stubs intentionally omitted — keep local-only for MVP.
- * // Future: CloudProvider interface could wrap OpenAI/Anthropic; not in MVP.
+ * Ollama adapter (native API): GET /api/tags, POST /api/generate.
+ * Base URL: provider config → LKV_OLLAMA_URL → http://127.0.0.1:11434
  */
 import type { OllamaHealth } from './types'
+import { ollamaBaseUrl, isSmallModel } from './providers/presets'
+import {
+  errMessage,
+  fetchWithTimeout,
+  joinUrl,
+  readErrorDetail,
+  stripThinking,
+  type GenerateInput,
+  type GenerateResult,
+} from './providers/http'
 
-const OLLAMA_BASE = process.env.LKV_OLLAMA_URL ?? 'http://127.0.0.1:11434'
-const FETCH_TIMEOUT_MS = 4000
+const HEALTH_TIMEOUT_MS = 4000
 
-async function fetchWithTimeout(
-  url: string,
-  init?: RequestInit,
-  timeoutMs = FETCH_TIMEOUT_MS
-): Promise<Response> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+export async function ollamaHealth(baseUrl: string = ollamaBaseUrl()): Promise<OllamaHealth> {
   try {
-    return await fetch(url, { ...init, signal: ctrl.signal })
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-export async function ollamaHealth(): Promise<OllamaHealth> {
-  try {
-    const res = await fetchWithTimeout(`${OLLAMA_BASE}/api/tags`)
+    const res = await fetchWithTimeout(joinUrl(baseUrl, '/api/tags'), undefined, HEALTH_TIMEOUT_MS)
     if (!res.ok) {
       return { ok: false, error: `Ollama HTTP ${res.status}` }
     }
-    const data = (await res.json()) as { models?: Array<{ name: string }> }
-    const models = (data.models ?? []).map((m) => m.name)
-    return { ok: true, models }
+    const data = (await res.json()) as {
+      models?: Array<{ name: string; details?: { parameter_size?: string; family?: string } }>
+    }
+    const list = data.models ?? []
+    const models = list.map((m) => m.name)
+    const modelSizes: Record<string, string> = {}
+    for (const m of list) {
+      if (m.details?.parameter_size) modelSizes[m.name] = m.details.parameter_size
+    }
+    return { ok: true, models, modelSizes }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: message }
+    return { ok: false, error: errMessage(err) }
   }
 }
 
-/** Prefer env override, then llama3.2*, then first available model */
-export function pickModel(models: string[]): string | null {
+function isEmbeddingModel(name: string): boolean {
+  return /embed|bge-|nomic-embed|minilm|rerank/i.test(name)
+}
+
+/**
+ * Prefer env override, then non-embedding, not-tiny models; among those qwen3 / llama3.x,
+ * then the first available. Tiny models are still used when nothing bigger is installed.
+ */
+export function pickModel(models: string[], sizes: Record<string, string> = {}): string | null {
   const envModel = process.env.LKV_OLLAMA_MODEL
   if (envModel) return envModel
-  if (!models.length) return null
-  const preferred = models.find((m) => /^llama3\.2/i.test(m))
-  if (preferred) return preferred
-  const llama = models.find((m) => /llama/i.test(m))
-  if (llama) return llama
-  return models[0]
+  const chat = models.filter((m) => !isEmbeddingModel(m))
+  if (!chat.length) return null
+  const big = chat.filter((m) => !isSmallModel(m, sizes[m]))
+  const pool = big.length ? big : chat
+  const prefs = [/^qwen3/i, /^llama3\.2/i, /^llama3/i, /llama/i, /^gemma3/i, /^mistral/i]
+  for (const re of prefs) {
+    const hit = pool.find((m) => re.test(m))
+    if (hit) return hit
+  }
+  return pool[0]
 }
 
 export async function ollamaGenerate(
   model: string,
-  prompt: string
-): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  input: GenerateInput | string,
+  baseUrl: string = ollamaBaseUrl()
+): Promise<GenerateResult> {
+  const req = typeof input === 'string' ? { prompt: input } : input
   try {
     const res = await fetchWithTimeout(
-      `${OLLAMA_BASE}/api/generate`,
+      joinUrl(baseUrl, '/api/generate'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model,
-          prompt,
+          prompt: req.prompt,
+          ...(req.system ? { system: req.system } : {}),
           stream: false,
-          options: { temperature: 0.2 },
+          options: {
+            temperature: 0.2,
+            ...(req.maxTokens ? { num_predict: req.maxTokens } : {}),
+          },
         }),
       },
-      120_000
+      req.timeoutMs ?? 180_000
     )
     if (!res.ok) {
-      return { ok: false, error: `Ollama generate HTTP ${res.status}` }
+      return { ok: false, error: await readErrorDetail(res, 'Ollama') }
     }
     const data = (await res.json()) as { response?: string }
-    return { ok: true, text: data.response ?? '' }
+    return { ok: true, text: stripThinking(data.response ?? '') }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: message }
+    return { ok: false, error: errMessage(err) }
   }
 }

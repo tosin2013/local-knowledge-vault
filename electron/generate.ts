@@ -1,5 +1,5 @@
 /**
- * Grounded Q&A: retrieve → optional LLM (Ollama/Grok) → validate citations.
+ * Grounded Q&A: retrieve → provider registry (local-first) → validate citations.
  * Citations MUST be subset of retrieved hit IDs; hallucinated IDs are dropped.
  */
 import type {
@@ -50,14 +50,26 @@ Cite supporting passages using square brackets with the exact item id, e.g. [itm
 If the passages do not contain enough information, say so honestly.
 Do not invent facts or cite ids that are not listed.`
 
-export function buildGroundedPrompt(
+export interface GroundedMessages {
+  /** Grounding rules (+ personality guidance). Same text for every provider. */
+  system: string
+  /** Passages + conversation so far + question. */
+  prompt: string
+}
+
+/**
+ * Split the grounded prompt into a system part (rules) and a user part (passages + question).
+ * Every provider gets exactly these two strings — only the transport differs
+ * (Ollama `system`, OpenAI-style system message, Anthropic top-level `system`).
+ */
+export function buildGroundedMessages(
   question: string,
   hits: SearchHit[],
   options?: {
     systemExtra?: string
     history?: Array<Pick<ChatMessage, 'role' | 'content'>>
   }
-): string {
+): GroundedMessages {
   const passages = hits
     .map((h, i) => {
       const item = getItem(h.id)
@@ -81,14 +93,44 @@ export function buildGroundedPrompt(
     historyBlock = `\n\nConversation so far:\n${turns}\n`
   }
 
-  return `${guidance}
-
-Passages:
+  return {
+    system: guidance,
+    prompt: `Passages:
 ${passages}
 ${historyBlock}
 Question: ${question}
 
-Answer (with [id] citations):`
+Answer (with [id] citations):`,
+  }
+}
+
+/** Single-string form (rules + passages + question). Kept for tests / legacy callers. */
+export function buildGroundedPrompt(
+  question: string,
+  hits: SearchHit[],
+  options?: {
+    systemExtra?: string
+    history?: Array<Pick<ChatMessage, 'role' | 'content'>>
+  }
+): string {
+  const m = buildGroundedMessages(question, hits, options)
+  return `${m.system}\n\n${m.prompt}`
+}
+
+/** Friendly copy when no provider could answer. Shared by Ask + Chat. */
+export function offlineCopy(
+  gen: { error: string; provider?: string | null; providerLabel?: string },
+  suffix: string
+): string {
+  const msg = gen.error
+  const name = providerDisplayName(gen.provider, gen.providerLabel)
+  if (/api key/i.test(msg)) return `${msg}. ${suffix} — add the key in Advanced → AI providers, or use a local model.`
+  if (/no models|ollama pull/i.test(msg)) return `${msg}. ${suffix}.`
+  if (/no local model detected|not running/i.test(msg)) {
+    return `Vault runs on local models — start Ollama or LM Studio (or add a cloud provider in Advanced). ${suffix}.`
+  }
+  if (gen.provider) return `${name} call failed (${msg}). ${suffix}.`
+  return `${msg}. ${suffix}.`
 }
 
 export function citationsFromIds(ids: string[]): Citation[] {
@@ -115,31 +157,17 @@ export async function askGrounded(input: AskGroundedInput): Promise<AskGroundedR
     }
   }
 
-  const prompt = buildGroundedPrompt(input.question, hits, {
+  const messages = buildGroundedMessages(input.question, hits, {
     systemExtra: input.systemExtra,
   })
-  const gen = await llmGenerate(prompt)
+  const gen = await llmGenerate(messages)
   if (!gen.ok) {
-    const msg = gen.error
-    const name = providerDisplayName(gen.provider)
-    let answer: string
-    if (/no api key/i.test(msg)) {
-      answer = `${msg}. Showing search hits only — add a key in Advanced or use Ollama.`
-    } else if (/no models/i.test(msg)) {
-      answer = `${msg}. Pull a model (e.g. llama3.2) and retry.`
-    } else if (/offline/i.test(msg)) {
-      answer = `${name === 'AI' ? 'AI' : name} is offline. Showing search hits only — search still works.`
-    } else if (gen.provider) {
-      answer = `${name} call failed (${msg}). Showing search hits only.`
-    } else {
-      answer = `${msg}. Showing search hits only.`
-    }
     return {
-      answer,
+      answer: offlineCopy(gen, 'Showing search hits only'),
       citations: [],
       hits,
       offline: true,
-      error: msg,
+      error: gen.error,
     }
   }
 

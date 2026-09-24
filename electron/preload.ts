@@ -37,9 +37,16 @@ import type {
   ImportFromUrlResult,
   Item,
   ListItemsInput,
-  LlmSettingsPatch,
-  LlmSettingsPublic,
   LlmStatus,
+  PluginContributions,
+  PluginInstallResult,
+  PluginListResult,
+  ProviderConfig,
+  ProviderDraft,
+  ProviderModelsResult,
+  ProviderPresetInfo,
+  ProviderSelection,
+  ProviderTestResult,
   OllamaHealth,
   Prompt,
   SearchQueryInput,
@@ -73,15 +80,37 @@ const api = {
   },
   llm: {
     status: (): Promise<LlmStatus> => ipcRenderer.invoke('llm:status'),
-    getSettings: (): Promise<LlmSettingsPublic> => ipcRenderer.invoke('llm:getSettings'),
-    setSettings: (partial: LlmSettingsPatch): Promise<LlmSettingsPublic> =>
-      ipcRenderer.invoke('llm:setSettings', partial),
-    setApiKey: (key: string | null): Promise<{ hasKey: boolean }> =>
-      ipcRenderer.invoke('llm:setApiKey', key),
-    hasKey: (): Promise<boolean> => ipcRenderer.invoke('llm:hasKey'),
-    setGroqApiKey: (key: string | null): Promise<{ hasGroqKey: boolean }> =>
-      ipcRenderer.invoke('llm:setGroqApiKey', key),
-    hasGroqKey: (): Promise<boolean> => ipcRenderer.invoke('llm:hasGroqKey'),
+  },
+  providers: {
+    list: (): Promise<{
+      providers: ProviderConfig[]
+      selected: ProviderSelection
+      presets: ProviderPresetInfo[]
+    }> => ipcRenderer.invoke('providers:list'),
+    setSelected: (sel: ProviderSelection): Promise<ProviderSelection> =>
+      ipcRenderer.invoke('providers:setSelected', sel),
+    setEnabled: (id: string, enabled: boolean): Promise<ProviderConfig[]> =>
+      ipcRenderer.invoke('providers:setEnabled', id, enabled),
+    /** apiKey is write-only: sent to main, stored locally, never returned. */
+    save: (draft: ProviderDraft): Promise<ProviderConfig> => ipcRenderer.invoke('providers:save', draft),
+    remove: (id: string): Promise<boolean> => ipcRenderer.invoke('providers:remove', id),
+    test: (draft: ProviderDraft): Promise<ProviderTestResult> => ipcRenderer.invoke('providers:test', draft),
+    fetchModels: (draft: ProviderDraft): Promise<ProviderModelsResult> =>
+      ipcRenderer.invoke('providers:fetchModels', draft),
+  },
+  plugins: {
+    list: (): Promise<PluginListResult> => ipcRenderer.invoke('plugins:list'),
+    reload: (): Promise<PluginListResult> => ipcRenderer.invoke('plugins:reload'),
+    setEnabled: (id: string, enabled: boolean): Promise<PluginListResult> =>
+      ipcRenderer.invoke('plugins:setEnabled', id, enabled),
+    remove: (id: string): Promise<PluginListResult> => ipcRenderer.invoke('plugins:remove', id),
+    install: (kind?: 'folder' | 'zip', srcPath?: string): Promise<PluginInstallResult> =>
+      ipcRenderer.invoke('plugins:install', kind, srcPath),
+    openFolder: (): Promise<{ path: string; error?: string }> => ipcRenderer.invoke('plugins:openFolder'),
+    contributions: (): Promise<PluginContributions> => ipcRenderer.invoke('plugins:contributions'),
+  },
+  app: {
+    openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('app:openExternal', url),
   },
   chat: {
     listSessions: (): Promise<ChatSession[]> => ipcRenderer.invoke('chat:listSessions'),

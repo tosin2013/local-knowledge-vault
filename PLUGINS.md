@@ -1,13 +1,24 @@
 # Vault plugins
 
-Plugins are optional full-panel views registered in a lightweight in-app registry. They do **not** replace Ask-home for notes: opening a plugin switches the center panel; the notes rail and note peek stay available.
+There are two kinds of plugins:
+
+1. **Declarative plugins (`plugin.json`)**: shareable packs of provider presets, personas,
+   prompt packs and MCP server presets. They run no code. You install them from **Plugins →
+   Manage plugins** (folder or .zip) or drop them into `<userData>/plugins/`. See
+   **[docs/plugins-authoring.md](./docs/plugins-authoring.md)** and `examples/plugins/`.
+2. **Built-in panels**: React views compiled into the app (below). They can be hidden in
+   Manage plugins.
+
+## Built-in panels
+
+Built-in panels are optional full-panel views registered in a lightweight in-app registry. They do **not** replace Ask-home for notes: opening a plugin switches the center panel; the notes rail and note peek stay available.
 
 ## How to add a plugin
 
 1. Create a folder under `src/plugins/<your-id>/` with a React view component.
 2. Export a `VaultPlugin` descriptor (`id`, `name`, `description`, `render`).
 3. Register it in `src/plugins/registry.ts` by appending to the `plugins` array.
-4. The header **Plugins** menu lists every registered plugin automatically — no menu edits required.
+4. The header **Plugins** menu lists every registered plugin automatically (minus ones hidden in **Manage plugins**). No menu edits are needed.
 
 Example:
 
@@ -55,7 +66,7 @@ Vault supports grounded “voice pack” personas for Media chat. A Soul-like sp
 
 Vault plugins and external connectors share three endpoint classes:
 
-1. **In-app plugins** — React panels in `src/plugins/` (this file).
+1. **In-app plugins**: React panels in `src/plugins/` (this file), plus declarative `plugin.json` packs ([authoring guide](./docs/plugins-authoring.md)).
 2. **Vault Bridge HTTP** — Obsidian / local tools → `127.0.0.1:8765` (see [`bridges/README.md`](./bridges/README.md), [`docs/bridges.md`](./docs/bridges.md)).
 3. **MCP** — **preferred Notion path**: Vault’s in-app MCP client (Plugins → **MCP connections**). Cursor/Grok Bot Notion connectors are optional; do not rely on them alone. A custom Notion community-style plugin is **out of scope**. Scaffold notes: `bridges/notion-vault/`.
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { PluginMcpPresetsSection } from '../contrib'
 import {
   Alert,
   Box,
@@ -293,6 +294,12 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
           {info}
         </Alert>
       )}
+
+      <PluginMcpPresetsSection
+        existingUrls={servers.map((s) => s.url)}
+        onAdded={() => void refresh()}
+        onError={setError}
+      />
 
       <Card variant="outlined">
         <CardContent>

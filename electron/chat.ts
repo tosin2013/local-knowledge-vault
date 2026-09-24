@@ -10,10 +10,11 @@ import {
   updateSessionTitle,
 } from './db'
 import { searchQuery } from './search'
-import { llmGenerate, providerDisplayName } from './llm'
+import { llmGenerate } from './llm'
 import {
-  buildGroundedPrompt,
+  buildGroundedMessages,
   citationsFromIds,
+  offlineCopy,
   extractCitedIds,
   validateCitations,
 } from './generate'
@@ -245,29 +246,15 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     .filter((m: ChatMessage) => m.role === 'user' || m.role === 'assistant')
     .slice(-HISTORY_TURNS)
 
-  const prompt = buildGroundedPrompt(text, hits, {
+  const grounded = buildGroundedMessages(text, hits, {
     systemExtra,
     history: recent.map((m) => ({ role: m.role, content: m.content })),
   })
 
-  const gen = await llmGenerate(prompt)
+  const gen = await llmGenerate(grounded)
   if (!gen.ok) {
-    const msg = gen.error
-    const name = providerDisplayName(gen.provider)
-    let content: string
-    if (/no api key/i.test(msg)) {
-      content = `${msg}. Your message was saved — add a key in Advanced or use Ollama.`
-    } else if (/no models/i.test(msg)) {
-      content = `${msg}. Your message was saved — pull a model (e.g. llama3.2) and retry.`
-    } else if (/offline/i.test(msg)) {
-      content =
-        'AI is offline. Your message was saved — start Ollama or enable Grok in Advanced to enable grounded replies.'
-    } else if (gen.provider) {
-      content = `${name} call failed (${msg}). Your message was saved — showing search context only.`
-    } else {
-      content = `${msg}. Your message was saved — showing search context only.`
-    }
-    return finish(content, [], hits, { offline: true, error: msg })
+    const content = offlineCopy(gen, 'Your message was saved — showing search context only')
+    return finish(content, [], hits, { offline: true, error: gen.error })
   }
 
   const allowed = new Set(hits.map((h) => h.id))

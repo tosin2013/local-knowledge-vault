@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { PluginPersonasSection } from '../contrib'
 import {
   Alert,
   Box,
@@ -280,6 +281,13 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
           {error}
         </Alert>
       )}
+
+      <PluginPersonasSection
+        onInstalled={(name) => {
+          void refreshCustom()
+          setStatus(`Plugin voice “${name}” installed — pick it from Media chat voice chips.`)
+        }}
+      />
 
       <Typography variant="body2" color="text.secondary">
         Voice packs work with any ingested media (not one persona per video). Install built-ins below, or use

@@ -1,7 +1,7 @@
 /**
  * Electron main process — app lifecycle + IPC handlers.
  */
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell, type OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { pathToFileURL } from 'url'
@@ -34,7 +34,7 @@ import { searchQuery } from './search'
 import { askGrounded } from './generate'
 import { sendChatTurn } from './chat'
 import { ollamaHealth } from './ollama'
-import { resolveProvider } from './llm'
+import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
 import {
   findCompanionCaptions,
@@ -70,14 +70,24 @@ import {
   writeCitationPackZip,
 } from './citation-pack'
 import {
-  getLlmSettingsPublic,
-  setLlmSettings,
-  setXaiApiKey,
-  hasXaiApiKey,
-  setGroqApiKey,
-  hasGroqApiKey,
-  type LlmSettings,
-} from './llm-settings'
+  getSelection,
+  listPresets,
+  listProviderConfigs,
+  loadProvidersFile,
+  removeProvider,
+  setProviderEnabled,
+  setSelection,
+  upsertProvider,
+} from './provider-store'
+import {
+  getPluginContributions,
+  installPluginFrom,
+  listPluginsResult,
+  pluginsDir,
+  reloadPlugins,
+  removePlugin,
+  setPluginEnabled,
+} from './plugin-loader'
 import type {
   AskGroundedInput,
   ChatSendInput,
@@ -99,7 +109,16 @@ import type {
   MediaCreatePersonaInput,
   McpAddServerInput,
   McpCallToolInput,
+  ProviderDraft,
+  ProviderSelection,
 } from './types'
+
+// Optional isolated profile (fresh-install demos, tests): LKV_USER_DATA_DIR=/tmp/vault-fresh
+if (process.env.LKV_USER_DATA_DIR?.trim()) {
+  const dir = process.env.LKV_USER_DATA_DIR.trim()
+  fs.mkdirSync(dir, { recursive: true })
+  app.setPath('userData', dir)
+}
 
 
 // Custom protocol for local media playback in <video>/<audio>
@@ -202,26 +221,69 @@ function registerIpc(): void {
     return ollamaHealth()
   })
 
-  // LLM provider settings / status (never return full API key)
+  // LLM provider registry (keys never cross IPC — renderer only sees hasKey)
   ipcMain.handle('llm:status', async () => {
     const resolved = await resolveProvider()
     return resolved.status
   })
-  ipcMain.handle('llm:getSettings', () => getLlmSettingsPublic())
-  ipcMain.handle('llm:setSettings', (_e, partial: Partial<LlmSettings>) => {
-    setLlmSettings(partial ?? {})
-    return getLlmSettingsPublic()
+  ipcMain.handle('providers:list', () => ({
+    providers: listProviderConfigs(),
+    selected: getSelection(),
+    presets: listPresets(),
+  }))
+  ipcMain.handle('providers:setSelected', (_e, sel: ProviderSelection) => setSelection(sel))
+  ipcMain.handle('providers:setEnabled', (_e, id: string, enabled: boolean) => {
+    setProviderEnabled(id, !!enabled)
+    return listProviderConfigs()
   })
-  ipcMain.handle('llm:setApiKey', (_e, key: string | null) => {
-    setXaiApiKey(key)
-    return { hasKey: hasXaiApiKey() }
+  ipcMain.handle('providers:save', (_e, draft: ProviderDraft) => upsertProvider(draft))
+  ipcMain.handle('providers:remove', (_e, id: string) => removeProvider(id))
+  ipcMain.handle('providers:test', (_e, draft: ProviderDraft) => testProvider(draft))
+  ipcMain.handle('providers:fetchModels', (_e, draft: ProviderDraft) => fetchProviderModels(draft))
+
+  // Declarative plugins
+  ipcMain.handle('plugins:list', () => listPluginsResult())
+  ipcMain.handle('plugins:reload', () => {
+    reloadPlugins()
+    return listPluginsResult()
   })
-  ipcMain.handle('llm:hasKey', () => hasXaiApiKey())
-  ipcMain.handle('llm:setGroqApiKey', (_e, key: string | null) => {
-    setGroqApiKey(key)
-    return { hasGroqKey: hasGroqApiKey() }
+  ipcMain.handle('plugins:setEnabled', (_e, id: string, enabled: boolean) => setPluginEnabled(id, !!enabled))
+  ipcMain.handle('plugins:remove', (_e, id: string) => removePlugin(id))
+  ipcMain.handle('plugins:contributions', () => getPluginContributions())
+  ipcMain.handle('plugins:openFolder', async () => {
+    const dir = pluginsDir()
+    fs.mkdirSync(dir, { recursive: true })
+    const err = await shell.openPath(dir)
+    return { path: dir, error: err || undefined }
   })
-  ipcMain.handle('llm:hasGroqKey', () => hasGroqApiKey())
+  ipcMain.handle('plugins:install', async (_e, kind?: 'folder' | 'zip', srcPath?: string) => {
+    let src = srcPath
+    if (!src) {
+      const opts: OpenDialogOptions =
+        kind === 'zip'
+          ? {
+              title: 'Install plugin (.zip)',
+              properties: ['openFile'],
+              filters: [{ name: 'Plugin zip', extensions: ['zip'] }],
+            }
+          : { title: 'Install plugin (folder with plugin.json)', properties: ['openDirectory'] }
+      const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
+      if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true }
+      src = r.filePaths[0]
+    }
+    return installPluginFrom(src)
+  })
+
+  ipcMain.handle('app:openExternal', async (_e, url: string) => {
+    try {
+      const u = new URL(url)
+      if (u.protocol !== 'https:') return false
+      await shell.openExternal(u.toString())
+      return true
+    } catch {
+      return false
+    }
+  })
 
   // Chat
   ipcMain.handle('chat:listSessions', () => listSessions())
@@ -443,6 +505,16 @@ app.whenReady().then(() => {
     ensureMediaPersonaPrompts()
   } catch {
     /* seed best-effort */
+  }
+  try {
+    reloadPlugins()
+  } catch (err) {
+    console.error('[Vault plugins] load failed:', err)
+  }
+  try {
+    loadProvidersFile() // creates lkv-providers.json (migrating lkv-llm.json) on first run
+  } catch (err) {
+    console.error('[Vault providers] load failed:', err)
   }
   registerIpc()
   createWindow()

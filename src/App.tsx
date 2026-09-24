@@ -7,6 +7,9 @@ import {
   Chip,
   Collapse,
   CssBaseline,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControl,
   FormControlLabel,
@@ -44,6 +47,11 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import ExtensionIcon from '@mui/icons-material/Extension'
 import { createM3Theme } from './theme/m3Theme'
 import { listPlugins, getPlugin } from './plugins/registry'
+import { MANAGE_PLUGINS_ID } from './plugins/manage'
+import { PLUGINS_CHANGED_EVENT, usePluginContributions } from './plugins/contrib'
+import { FirstRunLocalCard, SmallModelHint, aiChipLabel } from './components/ai/FirstRunLocalCard'
+import { ProvidersPanel } from './components/ai/ProvidersPanel'
+import { ProviderDialog } from './components/ai/ProviderDialog'
 import type {
   AskGroundedResult,
   ChatMessage,
@@ -52,9 +60,9 @@ import type {
   Citation,
   Item,
   ItemFilters,
-  LlmProviderChoice,
-  LlmSettingsPublic,
   LlmStatus,
+  ProviderConfig,
+  ProviderPresetInfo,
   Para,
   Prompt,
   SearchHit,
@@ -345,11 +353,15 @@ export default function App() {
   const [askResult, setAskResult] = useState<AskGroundedResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [llmStatus, setLlmStatus] = useState<LlmStatus | null>(null)
-  const [llmSettings, setLlmSettingsState] = useState<LlmSettingsPublic | null>(null)
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
-  const [groqApiKeyDraft, setGroqApiKeyDraft] = useState('')
-  const [apiKeyBusy, setApiKeyBusy] = useState(false)
-  const [groqApiKeyBusy, setGroqApiKeyBusy] = useState(false)
+  const [llmChecking, setLlmChecking] = useState(false)
+  const [providerPresets, setProviderPresets] = useState<ProviderPresetInfo[]>([])
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false)
+  const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null)
+  const [providerInitialPreset, setProviderInitialPreset] = useState<string | undefined>(undefined)
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
+  const [smallHintDismissed, setSmallHintDismissed] = useState(false)
+  const [disabledPlugins, setDisabledPlugins] = useState<string[]>([])
+  const pluginContribs = usePluginContributions()
   const [error, setError] = useState<string | null>(null)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [importUrl, setImportUrl] = useState('')
@@ -437,22 +449,65 @@ export default function App() {
   const refreshLlm = useCallback(async () => {
     if (!window.lkv?.llm) return
     try {
-      const [status, settings] = await Promise.all([
-        window.lkv.llm.status(),
-        window.lkv.llm.getSettings(),
-      ])
+      const status = await window.lkv.llm.status()
       setLlmStatus(status)
-      setLlmSettingsState(settings)
     } catch {
       setLlmStatus({
-        ollama: { ok: false, error: 'unavailable' },
-        grok: { ok: false, hasKey: false, error: 'unavailable' },
-        groq: { ok: false, hasKey: false, error: 'unavailable' },
+        selected: 'auto',
         active: null,
         message: 'AI offline — search still works',
+        providers: [],
+        needsSetup: false,
+        recommendedLocalModel: {
+          name: 'qwen3:8b',
+          command: 'ollama pull qwen3:8b',
+          why: 'Small (~5 GB) and good at following citation rules.',
+        },
       })
     }
   }, [])
+
+  /** Manual re-check (first-run card / provider panel) with a visible busy state. */
+  const recheckLlm = useCallback(async () => {
+    setLlmChecking(true)
+    try {
+      await refreshLlm()
+      if (window.lkv?.providers) {
+        const r = await window.lkv.providers.list()
+        setProviderPresets(r.presets)
+      }
+    } finally {
+      setLlmChecking(false)
+    }
+  }, [refreshLlm])
+
+  const refreshPluginState = useCallback(async () => {
+    if (!window.lkv?.plugins) return
+    try {
+      const r = await window.lkv.plugins.list()
+      setDisabledPlugins(r.disabled)
+      const pr = await window.lkv.providers.list()
+      setProviderPresets(pr.presets)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshPluginState()
+    const onChange = () => {
+      void refreshPluginState()
+      void refreshLlm()
+    }
+    window.addEventListener(PLUGINS_CHANGED_EVENT, onChange)
+    return () => window.removeEventListener(PLUGINS_CHANGED_EVENT, onChange)
+  }, [refreshPluginState, refreshLlm])
+
+  const openAddProvider = (presetId?: string) => {
+    setEditingProvider(null)
+    setProviderInitialPreset(presetId)
+    setProviderDialogOpen(true)
+  }
 
   const refreshSessions = useCallback(async () => {
     if (!window.lkv) return
@@ -1227,82 +1282,13 @@ export default function App() {
   )
 
   const aiReady = llmStatus?.active != null
-  const aiStatusText = advanced
-    ? llmStatus == null
-      ? 'AI: …'
-      : llmStatus.message
-    : llmStatus == null
-      ? 'AI: …'
-      : aiReady
-        ? 'AI: ready'
-        : 'AI: not available — search still works'
-
-  const saveLlmSettings = async (patch: {
-    provider?: LlmProviderChoice
-    grokEnabled?: boolean
-    grokModel?: string
-    groqEnabled?: boolean
-    groqModel?: string
-  }) => {
-    if (!window.lkv?.llm) return
-    const next = await window.lkv.llm.setSettings(patch)
-    setLlmSettingsState(next)
-    await refreshLlm()
-  }
-
-  const onSaveApiKey = async () => {
-    if (!window.lkv?.llm) return
-    setApiKeyBusy(true)
-    try {
-      const trimmed = apiKeyDraft.trim()
-      const res = await window.lkv.llm.setApiKey(trimmed || null)
-      setApiKeyDraft('')
-      setLlmSettingsState((s) => (s ? { ...s, hasKey: res.hasKey } : s))
-      await refreshLlm()
-    } finally {
-      setApiKeyBusy(false)
-    }
-  }
-
-  const onClearApiKey = async () => {
-    if (!window.lkv?.llm) return
-    setApiKeyBusy(true)
-    try {
-      const res = await window.lkv.llm.setApiKey(null)
-      setApiKeyDraft('')
-      setLlmSettingsState((s) => (s ? { ...s, hasKey: res.hasKey } : s))
-      await refreshLlm()
-    } finally {
-      setApiKeyBusy(false)
-    }
-  }
-
-  const onSaveGroqApiKey = async () => {
-    if (!window.lkv?.llm) return
-    setGroqApiKeyBusy(true)
-    try {
-      const trimmed = groqApiKeyDraft.trim()
-      const res = await window.lkv.llm.setGroqApiKey(trimmed || null)
-      setGroqApiKeyDraft('')
-      setLlmSettingsState((s) => (s ? { ...s, hasGroqKey: res.hasGroqKey } : s))
-      await refreshLlm()
-    } finally {
-      setGroqApiKeyBusy(false)
-    }
-  }
-
-  const onClearGroqApiKey = async () => {
-    if (!window.lkv?.llm) return
-    setGroqApiKeyBusy(true)
-    try {
-      const res = await window.lkv.llm.setGroqApiKey(null)
-      setGroqApiKeyDraft('')
-      setLlmSettingsState((s) => (s ? { ...s, hasGroqKey: res.hasGroqKey } : s))
-      await refreshLlm()
-    } finally {
-      setGroqApiKeyBusy(false)
-    }
-  }
+  const aiStatusText = aiChipLabel(llmStatus, advanced)
+  const showFirstRun = !!llmStatus?.needsSetup
+  const showSmallHint = !!llmStatus?.active?.smallModel && !smallHintDismissed
+  const visiblePlugins = listPlugins().filter((p) => !disabledPlugins.includes(p.id))
+  const quickAsks = pluginContribs.promptPacks.flatMap((pack) =>
+    pack.prompts.slice(0, 6).map((q) => ({ q, pack: pack.name })),
+  ).slice(0, 8)
 
   const muiTheme = useMemo(
     () => createM3Theme(theme === 'blink-light' ? 'light' : 'dark'),
@@ -1403,10 +1389,15 @@ export default function App() {
               <Chip
                 size="small"
                 label={aiStatusText}
-                color={llmStatus == null ? 'default' : aiReady ? 'success' : 'warning'}
+                color={llmStatus == null ? 'default' : aiReady ? (llmStatus.active?.local ? 'success' : 'info') : 'warning'}
                 variant={llmStatus == null ? 'outlined' : 'filled'}
-                title={advanced ? (llmStatus?.message ?? 'AI status') : 'Local or Grok AI when configured'}
-                sx={{ maxWidth: 220 }}
+                title={`${llmStatus?.message ?? 'AI status'} — click for AI providers`}
+                onClick={() => {
+                  setAiSettingsOpen(true)
+                  void recheckLlm()
+                }}
+                sx={{ maxWidth: 280 }}
+                data-testid="ai-chip"
               />
               {advanced && (
                 <Button
@@ -1439,7 +1430,7 @@ export default function App() {
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
               >
-                {listPlugins().map((plug) => (
+                {visiblePlugins.map((plug) => (
                   <MenuItem
                     key={plug.id}
                     selected={activePluginId === plug.id}
@@ -1459,6 +1450,24 @@ export default function App() {
                     </Box>
                   </MenuItem>
                 ))}
+                <Divider />
+                <MenuItem
+                  selected={activePluginId === MANAGE_PLUGINS_ID}
+                  onClick={() => {
+                    setPluginsMenuAnchor(null)
+                    setActivePluginId(MANAGE_PLUGINS_ID)
+                    setMode('chat')
+                  }}
+                >
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>
+                      Manage plugins…
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 280 }}>
+                      Install plugin.json packs, enable or remove plugins
+                    </Typography>
+                  </Box>
+                </MenuItem>
               </Menu>
               <FormControlLabel
                 control={
@@ -1889,7 +1898,7 @@ export default function App() {
             {!activePluginId && mode === 'chat' && (
               <Box className="chat-layout">
                 <Box className="chat-main">
-                  {advanced && llmSettings && (
+                  {advanced && llmStatus && (
                     <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                       <details>
                         <summary
@@ -1900,201 +1909,45 @@ export default function App() {
                             listStyle: 'none',
                           }}
                         >
-                          AI settings
-                          {llmStatus && (
-                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                              · {llmStatus.message}
-                            </Typography>
-                          )}
+                          AI providers
+                          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                            · {llmStatus.message}
+                          </Typography>
                         </summary>
-                        <Stack spacing={1} sx={{ px: 1.5, pb: 1.5, maxWidth: 480 }}>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={llmSettings.groqEnabled}
-                                onChange={(e) => void saveLlmSettings({ groqEnabled: e.target.checked })}
-                                size="small"
-                              />
-                            }
-                            label={<Typography variant="body2">Enable Groq (console.groq.com)</Typography>}
+                        <Box sx={{ px: 1.5, pb: 1.5 }}>
+                          <ProvidersPanel
+                            status={llmStatus}
+                            checking={llmChecking}
+                            onRefresh={() => void recheckLlm()}
+                            onAdd={() => openAddProvider()}
+                            onEdit={(p) => {
+                              setEditingProvider(p)
+                              setProviderDialogOpen(true)
+                            }}
+                            onError={(m) => setError(m)}
                           />
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={llmSettings.grokEnabled}
-                                onChange={(e) => void saveLlmSettings({ grokEnabled: e.target.checked })}
-                                size="small"
-                              />
-                            }
-                            label={<Typography variant="body2">Enable Grok (xAI)</Typography>}
-                          />
-                          <FormControl size="small" sx={{ maxWidth: 280 }}>
-                            <InputLabel id="llm-provider-label">Provider</InputLabel>
-                            <Select
-                              labelId="llm-provider-label"
-                              label="Provider"
-                              value={llmSettings.provider}
-                              onChange={(e) =>
-                                void saveLlmSettings({
-                                  provider: e.target.value as LlmProviderChoice,
-                                })
-                              }
-                            >
-                              <MenuItem value="auto">Auto</MenuItem>
-                              <MenuItem value="ollama">Ollama</MenuItem>
-                              <MenuItem value="groq">Groq</MenuItem>
-                              <MenuItem value="grok">Grok (xAI)</MenuItem>
-                            </Select>
-                          </FormControl>
-                          {llmStatus && (
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                              <Chip
-                                size="small"
-                                label={`Ollama: ${llmStatus.ollama.ok ? 'Ready' : 'Offline'}`}
-                                color={llmStatus.ollama.ok ? 'success' : 'default'}
-                                variant="outlined"
-                              />
-                              <Chip
-                                size="small"
-                                label={`Groq: ${
-                                  !llmSettings.groqEnabled
-                                    ? 'Off'
-                                    : llmStatus.groq.hasKey
-                                      ? llmStatus.groq.ok
-                                        ? 'Ready'
-                                        : 'Offline'
-                                      : 'Needs key'
-                                }`}
-                                color={
-                                  llmSettings.groqEnabled && llmStatus.groq.ok
-                                    ? 'success'
-                                    : llmSettings.groqEnabled && !llmStatus.groq.hasKey
-                                      ? 'warning'
-                                      : 'default'
-                                }
-                                variant="outlined"
-                              />
-                              <Chip
-                                size="small"
-                                label={`Grok: ${
-                                  !llmSettings.grokEnabled
-                                    ? 'Off'
-                                    : llmStatus.grok.hasKey
-                                      ? llmStatus.grok.ok
-                                        ? 'Ready'
-                                        : 'Offline'
-                                      : 'Needs key'
-                                }`}
-                                color={
-                                  llmSettings.grokEnabled && llmStatus.grok.ok
-                                    ? 'success'
-                                    : llmSettings.grokEnabled && !llmStatus.grok.hasKey
-                                      ? 'warning'
-                                      : 'default'
-                                }
-                                variant="outlined"
-                              />
-                            </Stack>
-                          )}
-                          {llmSettings.groqEnabled && (
-                            <>
-                              <TextField
-                                label="Groq model"
-                                value={llmSettings.groqModel}
-                                onChange={(e) =>
-                                  setLlmSettingsState((s) => (s ? { ...s, groqModel: e.target.value } : s))
-                                }
-                                onBlur={(e) => {
-                                  const v = e.target.value.trim() || 'openai/gpt-oss-20b'
-                                  void saveLlmSettings({ groqModel: v })
-                                }}
-                                placeholder="openai/gpt-oss-20b"
-                                sx={{ maxWidth: 280 }}
-                              />
-                              <TextField
-                                type="password"
-                                label={`Groq API key (${llmSettings.hasGroqKey ? 'Key saved' : 'No key'})`}
-                                value={groqApiKeyDraft}
-                                onChange={(e) => setGroqApiKeyDraft(e.target.value)}
-                                placeholder={llmSettings.hasGroqKey ? '•••••••• (enter to replace)' : 'Paste key'}
-                                autoComplete="off"
-                                sx={{ maxWidth: 280 }}
-                              />
-                              <Stack direction="row" spacing={1} sx={{ maxWidth: 280 }}>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  fullWidth
-                                  disabled={groqApiKeyBusy || !groqApiKeyDraft.trim()}
-                                  onClick={() => void onSaveGroqApiKey()}
-                                >
-                                  Save
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  fullWidth
-                                  disabled={groqApiKeyBusy || !llmSettings.hasGroqKey}
-                                  onClick={() => void onClearGroqApiKey()}
-                                >
-                                  Clear
-                                </Button>
-                              </Stack>
-                            </>
-                          )}
-                          {llmSettings.grokEnabled && (
-                            <>
-                              <TextField
-                                label="Grok model (xAI)"
-                                value={llmSettings.grokModel}
-                                onChange={(e) =>
-                                  setLlmSettingsState((s) => (s ? { ...s, grokModel: e.target.value } : s))
-                                }
-                                onBlur={(e) => {
-                                  const v = e.target.value.trim() || 'grok-4.3'
-                                  void saveLlmSettings({ grokModel: v })
-                                }}
-                                placeholder="grok-4.3"
-                                sx={{ maxWidth: 280 }}
-                              />
-                              <TextField
-                                type="password"
-                                label={`xAI Grok API key (${llmSettings.hasKey ? 'Key saved' : 'No key'})`}
-                                value={apiKeyDraft}
-                                onChange={(e) => setApiKeyDraft(e.target.value)}
-                                placeholder={llmSettings.hasKey ? '•••••••• (enter to replace)' : 'Paste key'}
-                                autoComplete="off"
-                                sx={{ maxWidth: 280 }}
-                              />
-                              <Stack direction="row" spacing={1} sx={{ maxWidth: 280 }}>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  fullWidth
-                                  disabled={apiKeyBusy || !apiKeyDraft.trim()}
-                                  onClick={() => void onSaveApiKey()}
-                                >
-                                  Save
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  fullWidth
-                                  disabled={apiKeyBusy || !llmSettings.hasKey}
-                                  onClick={() => void onClearApiKey()}
-                                >
-                                  Clear
-                                </Button>
-                              </Stack>
-                            </>
-                          )}
-                        </Stack>
+                        </Box>
                       </details>
                     </Box>
                   )}
 
                   <Box className="chat-thread" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, bgcolor: 'background.default' }}>
-                    {messages.length === 0 && (
+                    {showFirstRun && llmStatus && (
+                      <FirstRunLocalCard
+                        status={llmStatus}
+                        checking={llmChecking}
+                        onRecheck={() => void recheckLlm()}
+                        onUseCloud={() => openAddProvider('openrouter')}
+                      />
+                    )}
+                    {showSmallHint && llmStatus?.active && (
+                      <SmallModelHint
+                        active={llmStatus.active}
+                        recommended={llmStatus.recommendedLocalModel?.name}
+                        onDismiss={() => setSmallHintDismissed(true)}
+                      />
+                    )}
+                    {messages.length === 0 && !showFirstRun && (
                       <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Paper sx={{ p: 4, maxWidth: 520, textAlign: 'center', borderRadius: 5 }}>
                           <Typography variant="h6" color="primary" gutterBottom>
@@ -2103,6 +1956,20 @@ export default function App() {
                           <Typography variant="body2" color="text.secondary">
                             {askEmpty.body}
                           </Typography>
+                          {quickAsks.length > 0 && (
+                            <Stack direction="row" flexWrap="wrap" gap={0.75} justifyContent="center" sx={{ mt: 2 }} data-testid="quick-asks">
+                              {quickAsks.map(({ q, pack }) => (
+                                <Chip
+                                  key={`${pack}:${q}`}
+                                  size="small"
+                                  variant="outlined"
+                                  label={q.length > 60 ? q.slice(0, 57) + '…' : q}
+                                  title={`${q} — from “${pack}”`}
+                                  onClick={() => setChatInput(q)}
+                                />
+                              ))}
+                            </Stack>
+                          )}
                         </Paper>
                       </Box>
                     )}
@@ -2852,6 +2719,63 @@ export default function App() {
           </Box>
         </Box>
       </Box>
+      <ProviderDialog
+        open={providerDialogOpen}
+        presets={providerPresets}
+        editing={editingProvider}
+        initialPresetId={providerInitialPreset}
+        onClose={() => setProviderDialogOpen(false)}
+        onSaved={(cfg) => {
+          setProviderDialogOpen(false)
+          setStatusMsg(`Saved provider “${cfg.label}”.`)
+          void recheckLlm()
+        }}
+      />
+      <Dialog open={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} fullWidth maxWidth={advanced ? 'md' : 'sm'}>
+        <DialogTitle>AI providers</DialogTitle>
+        <DialogContent>
+          {llmStatus && advanced && (
+            <ProvidersPanel
+              status={llmStatus}
+              checking={llmChecking}
+              onRefresh={() => void recheckLlm()}
+              onAdd={() => openAddProvider()}
+              onEdit={(p) => {
+                setEditingProvider(p)
+                setProviderDialogOpen(true)
+              }}
+              onError={(m) => setError(m)}
+            />
+          )}
+          {llmStatus && !advanced && (
+            <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+              <Typography variant="body2">{llmStatus.message}</Typography>
+              {llmStatus.needsSetup && (
+                <FirstRunLocalCard
+                  status={llmStatus}
+                  checking={llmChecking}
+                  onRecheck={() => void recheckLlm()}
+                  onUseCloud={() => openAddProvider('openrouter')}
+                />
+              )}
+              {llmStatus.active?.smallModel && (
+                <SmallModelHint active={llmStatus.active} recommended={llmStatus.recommendedLocalModel?.name} onDismiss={() => undefined} />
+              )}
+              <Stack direction="row" spacing={1}>
+                <Button size="small" onClick={() => void recheckLlm()} disabled={llmChecking}>
+                  {llmChecking ? 'Checking…' : 'Re-check'}
+                </Button>
+                <Button size="small" onClick={() => openAddProvider()}>
+                  Add provider
+                </Button>
+                <Button size="small" onClick={() => setUiModePersist('advanced')}>
+                  All providers (Advanced)
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+        </DialogContent>
+      </Dialog>
     </ThemeProvider>
   )
 }

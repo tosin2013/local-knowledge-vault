@@ -1,8 +1,8 @@
 # Local Knowledge Vault (MVP)
 
-Local-first Electron desktop app for PARA-organized notes with **SQLite FTS5** full-text search and optional **Ollama** grounded Q&A that only cites retrieved item IDs.
+Local-first Electron desktop app for PARA-organized notes with **SQLite FTS5** full-text search and grounded Q&A that only cites retrieved item IDs.
 
-Search works with **no network and no Ollama**. Ask requires a local Ollama instance.
+Search works with **no network and no model**. Ask uses a **local model first**: Ollama or LM Studio, auto-detected. You can add your own cloud provider too (OpenAI, Anthropic, Gemini, OpenRouter, Mistral, DeepSeek, Together, Groq, xAI or any OpenAI-compatible URL). See **[docs/providers.md](./docs/providers.md)**. Shareable, code-free plugins are covered in **[docs/plugins-authoring.md](./docs/plugins-authoring.md)**.
 
 ## What this MVP includes
 
@@ -15,7 +15,7 @@ Search works with **no network and no Ollama**. Ask requires a local Ollama inst
 
 ## Out of scope (intentionally)
 
-Vectors/HNSW, RRF fusion, link expand, plugins, PDF import, brainstorm sessions, cloud LLM providers (only a stub comment in code).
+Vectors/HNSW, RRF fusion, link expand, PDF import, brainstorm sessions, streaming responses.
 
 ## Layout
 
@@ -63,18 +63,25 @@ npm run typecheck
 
 `test:mvp` runs via `ELECTRON_RUN_AS_NODE` so `better-sqlite3` matches Electron's ABI. It validates: DB seed, filters, FTS5 hits, citation hallucination rejection, and that `ollama.health()` does not crash when Ollama is down.
 
-## Ollama (optional for Search, required for Ask)
+## Local models (recommended) and other providers
 
-1. Install and run [Ollama](https://ollama.com)
-2. Pull a model, e.g. `ollama pull llama3.2`
-3. App probes `http://127.0.0.1:11434/api/tags`
+1. Install and run [Ollama](https://ollama.com) (or [LM Studio](https://lmstudio.ai) with a model loaded).
+2. Pull a small model that follows instructions well: `ollama pull qwen3:8b` (alternative: `llama3.1:8b`).
+3. Vault detects it automatically. The header chip reads `Local · Ollama · qwen3:8b`.
 
 Env overrides:
 
-- `LKV_OLLAMA_URL` — default `http://127.0.0.1:11434`
-- `LKV_OLLAMA_MODEL` — force a model name; otherwise prefers `llama3.2*`, then any llama, then first listed model
+- `LKV_OLLAMA_URL`: default `http://127.0.0.1:11434`
+- `LKV_LMSTUDIO_URL`: default `http://127.0.0.1:1234/v1`
+- `LKV_OLLAMA_MODEL`: forces a model name. Otherwise Vault prefers non-embedding models of 3B+ params (qwen3 → llama3.2 → llama3 → …).
+- `LKV_USER_DATA_DIR`: use a different settings/keys/plugins folder (for example a throwaway profile).
 
-If Ollama is down, Search still works; Ask returns hits + `offline: true`.
+With no model available, Search still works and Ask returns the matching notes plus a friendly notice. Cloud providers, key storage and the migration from the old Groq/Grok settings are described in [docs/providers.md](./docs/providers.md).
+
+Extra checks:
+
+- `npm run test:providers` runs offline tests of the registry, adapters (mock servers), migration and plugin loader.
+- `npm run test:providers:live` runs a live Groq "Test connection" using your saved key. It is read-only and never prints the key.
 
 ## IPC API (`window.lkv`)
 
@@ -84,6 +91,9 @@ If Ollama is down, Search still works; Ask returns hits + `offline: true`.
 - `search.query({ text, filters, limit? })`
 - `ask.grounded({ question, filters, limit? })`
 - `ollama.health()`
+- `llm.status()`: active provider, provider list with health, first-run flag
+- `providers.list / setSelected / setEnabled / save / remove / test / fetchModels` (keys are write-only)
+- `plugins.list / install / setEnabled / remove / reload / openFolder / contributions`
 
 ## Success criteria checklist
 

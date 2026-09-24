@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "openrouter-free-models",
+  "name": "OpenRouter free models",
+  "version": "1.0.0",
+  "description": "Provider presets for OpenRouter's free tier. Add your own OpenRouter key after enabling (free models are rate-limited and the list changes often).",
+  "author": "Local Knowledge Vault examples",
+  "homepage": "https://openrouter.ai/models?max_price=0",
+  "contributes": {
+    "providers": [
+      {
+        "id": "free-router",
+        "label": "OpenRouter · Free router",
+        "kind": "openai-compatible",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "defaultModel": "openrouter/free",
+        "requiresKey": true,
+        "docsUrl": "https://openrouter.ai/openrouter/free",
+        "notes": "Routes each request to an available free model. Good zero-cost cloud fallback."
+      },
+      {
+        "id": "gemma-free",
+        "label": "OpenRouter · Gemma 4 31B (free)",
+        "kind": "openai-compatible",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "defaultModel": "google/gemma-4-31b-it:free",
+        "requiresKey": true,
+        "notes": "Pinned free model. If it disappears from OpenRouter, use Fetch models to pick another :free id."
+      },
+      {
+        "id": "qwen-free",
+        "label": "OpenRouter · Qwen 3.8 27B (free)",
+        "kind": "openai-compatible",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "defaultModel": "qwen/qwen3.8-27b:free",
+        "requiresKey": true
+      }
+    ]
+  }
+}
