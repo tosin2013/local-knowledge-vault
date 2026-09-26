@@ -49,7 +49,7 @@ Motivation: I kept getting confident answers from "chat with your notes" tools t
 check. I wanted the opposite default: an answer is only useful if I can click through to the note
 it came from, and "I don't know" is a valid answer.
 
-Stack: Electron 33, React 18, Vite, TypeScript, MUI, better-sqlite3 with FTS5, and the official MCP
+Stack: Electron 44, React 19, Vite, TypeScript, MUI, better-sqlite3 with FTS5, and the official MCP
 TypeScript SDK. Installers are built with electron-builder.
 
 Local-first design choices:
