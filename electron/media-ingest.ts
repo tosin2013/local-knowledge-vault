@@ -27,6 +27,7 @@ import {
   updateChatProfile,
   updatePrompt,
 } from './db'
+import { resolveUserDataDir } from './user-data'
 import type { ChatProfile, Item, Prompt } from './types'
 
 export const MEDIA_READER_NAME = 'Media reader'
@@ -236,17 +237,40 @@ export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
   }
 }
 
-/** Locate yt-dlp binary (PATH, project venv, or python -m yt_dlp). */
+/**
+ * Locate yt-dlp: LKV_YTDLP_PATH → PATH → <userData>/bin → common install dirs → project venv →
+ * python -m yt_dlp. Apps launched from Finder/Explorer get a minimal PATH, so the well-known
+ * install dirs (Homebrew, pipx/uv, Scoop, winget) are probed explicitly.
+ */
 export function resolveYtDlp(): { cmd: string; argsPrefix: string[] } | null {
-  const which = spawnSync('which', ['yt-dlp'], { encoding: 'utf8' })
-  if (which.status === 0 && which.stdout.trim()) {
-    return { cmd: which.stdout.trim(), argsPrefix: [] }
-  }
+  const isWin = process.platform === 'win32'
+  const exe = isWin ? 'yt-dlp.exe' : 'yt-dlp'
 
-  // Project-local venv created for Media chat MVP
+  const envPath = process.env.LKV_YTDLP_PATH?.trim()
+  if (envPath && fs.existsSync(envPath)) return { cmd: envPath, argsPrefix: [] }
+
+  const which = spawnSync(isWin ? 'where' : 'which', ['yt-dlp'], { encoding: 'utf8' })
+  const found = which.status === 0 ? which.stdout.split(/\r?\n/)[0]?.trim() : ''
+  if (found) return { cmd: found, argsPrefix: [] }
+
+  const home = os.homedir()
   const candidates = [
-    path.join(__dirname, '..', '.venv-ytdlp', 'bin', 'yt-dlp'),
-    path.join(process.cwd(), '.venv-ytdlp', 'bin', 'yt-dlp'),
+    path.join(resolveUserDataDir(), 'bin', exe),
+    ...(isWin
+      ? [
+          path.join(home, 'scoop', 'shims', exe),
+          path.join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Links', exe),
+          path.join(home, '.local', 'bin', exe),
+        ]
+      : [
+          '/opt/homebrew/bin/yt-dlp',
+          '/usr/local/bin/yt-dlp',
+          '/usr/bin/yt-dlp',
+          path.join(home, '.local', 'bin', 'yt-dlp'),
+        ]),
+    // Project-local venv created for Media chat MVP (dev checkouts)
+    path.join(__dirname, '..', '.venv-ytdlp', isWin ? 'Scripts' : 'bin', exe),
+    path.join(process.cwd(), '.venv-ytdlp', isWin ? 'Scripts' : 'bin', exe),
   ]
   for (const c of candidates) {
     if (fs.existsSync(c)) return { cmd: c, argsPrefix: [] }
@@ -286,6 +310,62 @@ export function youtubeEmbedUrl(watchUrl: string): string | null {
   const id = extractYoutubeId(watchUrl)
   if (!id) return null
   return `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1`
+}
+
+/** Written by yt-dlp's --print-to-file so the title comes from the same run as the captions. */
+const YTDLP_TITLE_FILE = 'lkv-title.txt'
+
+/** Extra yt-dlp arguments from LKV_YTDLP_EXTRA_ARGS (whitespace-separated), e.g. `--cookies-from-browser firefox`. */
+function ytDlpExtraArgsFromEnv(): string[] {
+  return (process.env.LKV_YTDLP_EXTRA_ARGS ?? '').trim().split(/\s+/).filter(Boolean)
+}
+
+/**
+ * yt-dlp arguments for downloading one English caption track (manual preferred, auto fallback).
+ * No player_client is forced: the android client returns no automatic captions and its caption
+ * URLs need a PO token (HTTP 429), while yt-dlp's default clients fetch them. The title is
+ * written in the same run, so there is no second request right after a rate-limited one.
+ */
+export function buildYtDlpSubtitleArgs(url: string, tmpDir: string, extraArgs: string[] = []): string[] {
+  return [
+    '--skip-download',
+    '--write-subs',
+    '--write-auto-subs',
+    // A few English variants only; downloading every en-* track trips 429s.
+    '--sub-langs',
+    'en,en-US,en-GB',
+    '--sub-format',
+    'vtt/srt/best',
+    '--sleep-subtitles',
+    '2',
+    '--retries',
+    '5',
+    '--retry-sleep',
+    'http:exp=1:20',
+    '--print-to-file',
+    '%(title)s',
+    path.join(tmpDir, YTDLP_TITLE_FILE),
+    '-o',
+    path.join(tmpDir, '%(title)s.%(ext)s'),
+    '--no-warnings',
+    ...extraArgs,
+    url,
+  ]
+}
+
+/** User-facing error for a yt-dlp run that produced no caption file. */
+export function describeYtDlpFailure(output: string, status: number | null): string {
+  const err = output.trim()
+  if (/HTTP Error 429|Too Many Requests/i.test(err)) {
+    return (
+      'YouTube rate-limited the caption download (HTTP 429). Wait a few minutes and retry. ' +
+      'If it keeps happening, install yt-dlp with impersonation support ' +
+      '(pipx install "yt-dlp[default,curl-cffi]"), update it, or set ' +
+      'LKV_YTDLP_EXTRA_ARGS="--cookies-from-browser firefox". Local SRT/VTT ingest still works.'
+    )
+  }
+  if (status !== 0) return `yt-dlp failed: ${(err || `yt-dlp exited ${status}`).slice(0, 800)}`
+  return 'No captions/subtitles found for this YouTube URL (video may lack captions). Try another URL or ingest a local SRT/VTT.'
 }
 
 export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult {
@@ -342,34 +422,14 @@ export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult
   const ytdlp = resolveYtDlp()
   if (!ytdlp) {
     throw new Error(
-      'yt-dlp not found. Install it (e.g. create .venv-ytdlp and pip install yt-dlp) then retry. Local SRT/VTT ingest still works.'
+      'yt-dlp not found. Install it (brew install yt-dlp, pipx install yt-dlp, or winget install yt-dlp), or set LKV_YTDLP_PATH, then retry. Local SRT/VTT ingest still works.'
     )
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-yt-'))
 
   try {
-    // Prefer a single English track (manual or auto). Avoid downloading every
-    // en-* variant — that trips YouTube 429s and older flag combos with --print
-    // could exit 0 without writing any files.
-    const args = [
-      ...ytdlp.argsPrefix,
-      '--skip-download',
-      '--write-subs',
-      '--write-auto-subs',
-      '--sub-langs',
-      'en',
-      '--sub-format',
-      'vtt/srt/best',
-      '--sleep-subtitles',
-      '2',
-      '--extractor-args',
-      'youtube:player_client=android',
-      '-o',
-      path.join(tmpDir, '%(title)s.%(ext)s'),
-      '--no-warnings',
-      url,
-    ]
+    const args = [...ytdlp.argsPrefix, ...buildYtDlpSubtitleArgs(url, tmpDir, ytDlpExtraArgsFromEnv())]
     const result = spawnSync(ytdlp.cmd, args, {
       encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
@@ -394,29 +454,18 @@ export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult
 
     // yt-dlp may return non-zero if a secondary lang 429s after one good file.
     if (!captionFile) {
-      const err = (result.stderr || result.stdout || '').trim() || `yt-dlp exited ${result.status}`
-      throw new Error(
-        result.status !== 0
-          ? `yt-dlp failed: ${err.slice(0, 800)}`
-          : 'No captions/subtitles found for this YouTube URL (video may lack captions). Try another URL or ingest a local SRT/VTT.'
-      )
+      throw new Error(describeYtDlpFailure(result.stderr || result.stdout || '', result.status))
     }
 
-    // Title from a quick metadata probe (non-fatal if it fails).
+    // Title written by --print-to-file in the same run (non-fatal if missing).
     let printedTitle: string | undefined
     try {
-      const titleProbe = spawnSync(
-        ytdlp.cmd,
-        [...ytdlp.argsPrefix, '--skip-download', '--print', '%(title)s', '--no-warnings', url],
-        { encoding: 'utf8', timeout: 60_000 }
-      )
-      if (titleProbe.status === 0) {
-        printedTitle = (titleProbe.stdout || '')
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean)
-          .pop()
-      }
+      printedTitle = fs
+        .readFileSync(path.join(tmpDir, YTDLP_TITLE_FILE), 'utf8')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .pop()
     } catch {
       /* ignore */
     }

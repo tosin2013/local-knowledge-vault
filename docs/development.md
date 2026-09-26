@@ -85,6 +85,8 @@ matches Electron's ABI.
 | `LKV_OLLAMA_URL` | `http://127.0.0.1:11434` |
 | `LKV_LMSTUDIO_URL` | `http://127.0.0.1:1234/v1` |
 | `LKV_OLLAMA_MODEL` | force a model name. Otherwise Vault skips embedding models, prefers 3B+ params, and prefers qwen3 → llama3.2 → llama3 → gemma3 → mistral |
+| `LKV_YTDLP_PATH` | explicit `yt-dlp` binary for Media chat. Otherwise Vault checks `PATH`, `<userData>/bin/`, Homebrew, `~/.local/bin` (pipx/uv), Scoop/winget, then a repo `.venv-ytdlp` |
+| `LKV_YTDLP_EXTRA_ARGS` | extra `yt-dlp` arguments for YouTube caption downloads, whitespace-separated (for example `--cookies-from-browser firefox` when YouTube rate-limits with HTTP 429) |
 | `LKV_USER_DATA_DIR` | use a different settings / keys / plugins / database folder (for example a throwaway demo profile) |
 | `LKV_<PRESET>_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, … | provider keys; env vars win over saved key files (see [providers.md](./providers.md)) |
 

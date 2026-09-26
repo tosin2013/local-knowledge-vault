@@ -98,7 +98,8 @@ explains why a broken pack was rejected.
 ### More
 
 - **Media chat.** Paste a YouTube URL (captions fetched with [`yt-dlp`](https://github.com/yt-dlp/yt-dlp),
-  which must be installed) or open a local video/audio file with its `.srt`/`.vtt` captions. Captions
+  which must be installed; `pipx install "yt-dlp[default,curl-cffi]"` includes the browser
+  impersonation that avoids YouTube 429 errors) or open a local video/audio file with its `.srt`/`.vtt` captions. Captions
   become timed transcript notes you can ask about. With local media, clicking a citation seeks the
   player; YouTube embeds show the timestamp instead. Player and chat can go fullscreen together.
 - **Media personas.** Reusable voices (Desk cohost, Curious student, Skeptical investor, or your
