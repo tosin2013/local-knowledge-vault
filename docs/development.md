@@ -5,9 +5,9 @@ is in the [README](../README.md).
 
 ## Stack
 
-- **Electron 33** main process (`electron/`): SQLite via `better-sqlite3`, IPC, provider registry,
+- **Electron 44** main process (`electron/`): SQLite via `better-sqlite3`, IPC, provider registry,
   plugin loader, MCP client, local HTTP bridge.
-- **React 18 + Vite 5 + TypeScript** renderer (`src/`), MUI components.
+- **React 19 + Vite 5 + TypeScript** renderer (`src/`), MUI components.
 - **electron-builder** for installers.
 
 ## Layout

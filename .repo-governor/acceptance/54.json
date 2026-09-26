@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #54: docs still named the pre-#46/#12 stack (Electron 33, React 18). Criterion 1 fails while any tracked doc outside the historical *_RESULT.md notes says either; 2-3 require development.md to name the current versions from package.json.",
+  "authority_id": "54",
+  "criteria": [
+    { "check": "command_exit", "target": "! git grep -nE 'Electron 33|React 18' -- '*.md' ':!*RESULT.md'" },
+    { "check": "command_exit", "target": "grep -q 'Electron 44' docs/development.md" },
+    { "check": "command_exit", "target": "grep -q 'React 19' docs/development.md" }
+  ]
+}
