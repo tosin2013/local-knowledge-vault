@@ -74,7 +74,8 @@
         "deb"
       ],
       "category": "Office",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "maintainer": "Tosin Akinosho <1975599+tosin2013@users.noreply.github.com>"
     },
     "mac": {
       "target": [
@@ -97,5 +98,6 @@
       "allowToChangeInstallationDirectory": true
     }
   },
-  "author": "Tosin Akinosho"
+  "author": "Tosin Akinosho",
+  "homepage": "https://github.com/tosin2013/local-knowledge-vault"
 }
