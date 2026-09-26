@@ -14,7 +14,12 @@ import {
   parseTStartFromBody,
 } from '../electron/media-captions'
 import { closeDb, initDb, listItems } from '../electron/db'
-import { ingestLocalMedia, ensureMediaReaderPrompt } from '../electron/media-ingest'
+import {
+  buildYtDlpSubtitleArgs,
+  describeYtDlpFailure,
+  ingestLocalMedia,
+  ensureMediaReaderPrompt,
+} from '../electron/media-ingest'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)
@@ -56,6 +61,29 @@ assert(vttCues[1].text === 'Beta line', 'vtt italic stripped')
 
 const manyChunks = chunkCues(cues, { targetSec: 8, maxChars: 120 })
 assert(manyChunks.length >= 2, `small window should yield multiple chunks, got ${manyChunks.length}`)
+
+// yt-dlp subtitle invocation (#26): no forced android client (it returns no automatic
+// captions and 429s on PO-token-gated caption URLs), title in the same run, retries,
+// English regional variants, and user-supplied extra args placed before the URL.
+const ytArgs = buildYtDlpSubtitleArgs('https://www.youtube.com/watch?v=abc', '/tmp/x', [
+  '--cookies-from-browser',
+  'firefox',
+])
+assert(!ytArgs.some((a) => a.includes('player_client')), 'no forced player_client')
+assert(ytArgs.includes('--print-to-file'), 'title captured in the same run')
+assert(ytArgs.includes('--retries') && ytArgs.includes('--retry-sleep'), 'retries with backoff')
+const langs = ytArgs[ytArgs.indexOf('--sub-langs') + 1]
+assert(/\ben\b/.test(langs) && langs.includes('en-US') && langs.includes('en-GB'), `sub-langs: ${langs}`)
+assert(ytArgs[ytArgs.length - 1] === 'https://www.youtube.com/watch?v=abc', 'URL is last')
+assert(ytArgs.indexOf('--cookies-from-browser') < ytArgs.length - 1, 'extra args before URL')
+
+const rateLimited = describeYtDlpFailure(
+  "ERROR: Unable to download video subtitles for 'en': HTTP Error 429: Too Many Requests",
+  1
+)
+assert(/rate.?limit/i.test(rateLimited) && rateLimited.includes('curl-cffi'), `429 message: ${rateLimited}`)
+assert(describeYtDlpFailure('ERROR: boom', 1).startsWith('yt-dlp failed: ERROR: boom'), 'generic failure')
+assert(/no captions/i.test(describeYtDlpFailure('', 0)), 'exit 0 without files means no captions')
 
 console.log('OK parse+chunk:', {
   cues: cues.length,
