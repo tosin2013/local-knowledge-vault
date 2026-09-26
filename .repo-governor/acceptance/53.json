@@ -1,0 +1,14 @@
+{
+  "$comment": "Completion bar for #53: add CONTRIBUTING.md so agents and contributors have branch policy, required checks and governance rules to follow. Criteria 1-6 fail before the file exists; each content check matches a rule the issue requires. 7-8 guard that nothing else broke. AGENTS.md and a PR template are out of scope per the issue.",
+  "authority_id": "53",
+  "criteria": [
+    { "check": "file_exists", "target": "CONTRIBUTING.md" },
+    { "check": "command_exit", "target": "grep -q 'fix/<issue>-<slug>' CONTRIBUTING.md" },
+    { "check": "command_exit", "target": "grep -q 'npm run typecheck' CONTRIBUTING.md && grep -q 'npm run build' CONTRIBUTING.md" },
+    { "check": "command_exit", "target": "grep -q 'ELECTRON_RUN_AS_NODE=1' CONTRIBUTING.md" },
+    { "check": "command_exit", "target": "grep -q 'Closes #' CONTRIBUTING.md" },
+    { "check": "command_exit", "target": "grep -q '`roadmap`' CONTRIBUTING.md && grep -q '`ready`' CONTRIBUTING.md" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}
