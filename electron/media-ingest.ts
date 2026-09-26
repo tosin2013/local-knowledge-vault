@@ -2,7 +2,7 @@
  * Media chat ingest: local video/audio + captions, YouTube via yt-dlp.
  * Creates transcript notes, Media reader prompt, and a chat profile.
  */
-import { spawnSync } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -237,6 +237,83 @@ export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
   }
 }
 
+/** Result of one async yt-dlp run (never blocks the main process). */
+export interface YtDlpRunResult {
+  stdout: string
+  stderr: string
+  status: number | null
+  signal: NodeJS.Signals | null
+  /** True when the timeout killed the process before it exited. */
+  timedOut: boolean
+  /** Set when the process could not be spawned at all (e.g. ENOENT). */
+  error?: Error
+}
+
+/**
+ * Run a yt-dlp command asynchronously, capturing stdout/stderr, with a hard timeout and an
+ * optional output cap. Unlike `spawnSync` this never blocks the event loop, so a slow or hung
+ * yt-dlp (or YouTube rate-limiting) can't freeze the app. On timeout the child is killed and
+ * `timedOut` is set; a spawn failure surfaces via `error`.
+ */
+export function runYtDlp(
+  cmd: string,
+  args: string[],
+  opts: { timeoutMs: number; maxBuffer?: number } = { timeoutMs: 60_000 }
+): Promise<YtDlpRunResult> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    let settled = false
+
+    const finish = (result: YtDlpRunResult): void => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, opts.timeoutMs)
+
+    // Mirror spawnSync's maxBuffer: stop the process if output outgrows the budget so a runaway
+    // child can't exhaust main-process memory. We keep the bytes collected so far.
+    const cap = (chunk: Buffer, acc: string): string => {
+      const next = acc + chunk.toString('utf8')
+      if (opts.maxBuffer && next.length > opts.maxBuffer) {
+        child.kill('SIGKILL')
+        return acc
+      }
+      return next
+    }
+
+    child.stdout?.on('data', (d: Buffer) => {
+      stdout = cap(d, stdout)
+    })
+    child.stderr?.on('data', (d: Buffer) => {
+      stderr = cap(d, stderr)
+    })
+
+    child.on('error', (err) => {
+      clearTimeout(timer)
+      finish({ stdout, stderr, status: null, signal: null, timedOut, error: err })
+    })
+
+    child.on('close', (code, signal) => {
+      clearTimeout(timer)
+      finish({
+        stdout,
+        stderr,
+        status: code,
+        signal: signal as NodeJS.Signals | null,
+        timedOut,
+      })
+    })
+  })
+}
+
 /**
  * Locate yt-dlp: LKV_YTDLP_PATH → PATH → <userData>/bin → common install dirs → project venv →
  * python -m yt_dlp. Apps launched from Finder/Explorer get a minimal PATH, so the well-known
@@ -402,8 +479,21 @@ export function buildYtDlpSubtitleArgs(
 }
 
 /** User-facing error for a yt-dlp run that produced no caption file. */
-export function describeYtDlpFailure(output: string, status: number | null): string {
+export function describeYtDlpFailure(
+  output: string,
+  status: number | null,
+  opts: { timedOut?: boolean; error?: Error } = {}
+): string {
   const err = output.trim()
+  if (opts.error) {
+    return `Failed to run yt-dlp: ${opts.error.message.slice(0, 800)}`
+  }
+  if (opts.timedOut) {
+    return (
+      'yt-dlp timed out (no response). YouTube may be slow or rate-limiting; wait and retry, ' +
+      'or ingest a local SRT/VTT instead.'
+    )
+  }
   if (/HTTP Error 429|Too Many Requests/i.test(err)) {
     return (
       'YouTube rate-limited the caption download (HTTP 429). Wait a few minutes and retry. ' +
@@ -416,7 +506,7 @@ export function describeYtDlpFailure(output: string, status: number | null): str
   return 'No captions/subtitles found for this YouTube URL (video may lack captions). Try another URL or ingest a local SRT/VTT.'
 }
 
-export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult {
+export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<MediaIngestResult> {
   const url = input.url.trim()
   if (!url) throw new Error('YouTube URL is required')
 
@@ -432,10 +522,10 @@ export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult
     try {
       const ytdlp = resolveYtDlp()
       if (ytdlp) {
-        const titleProbe = spawnSync(
+        const titleProbe = await runYtDlp(
           ytdlp.cmd,
           [...ytdlp.argsPrefix, '--skip-download', '--print', '%(title)s', '--no-warnings', url],
-          { encoding: 'utf8', timeout: 60_000 }
+          { timeoutMs: 60_000 }
         )
         if (titleProbe.status === 0) {
           title =
@@ -481,11 +571,11 @@ export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult
     // Metadata first, so exactly one caption track is requested (no machine translations).
     // The JSON lists every translation language and can exceed 10 MB.
     let track: CaptionTrack | undefined
-    const meta = spawnSync(ytdlp.cmd, [...ytdlp.argsPrefix, '-J', '--skip-download', '--no-warnings', ...extraArgs, url], {
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      timeout: 60_000,
-    })
+    const meta = await runYtDlp(
+      ytdlp.cmd,
+      [...ytdlp.argsPrefix, '-J', '--skip-download', '--no-warnings', ...extraArgs, url],
+      { timeoutMs: 60_000, maxBuffer: 64 * 1024 * 1024 }
+    )
     if (meta.status === 0 && meta.stdout) {
       const picked = pickCaptionTrack(JSON.parse(meta.stdout) as YtDlpCaptionInfo)
       if (!picked) {
@@ -500,10 +590,9 @@ export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult
     // Otherwise fall through without a track: the download below requests a few English variants.
 
     const args = [...ytdlp.argsPrefix, ...buildYtDlpSubtitleArgs(url, tmpDir, extraArgs, track)]
-    const result = spawnSync(ytdlp.cmd, args, {
-      encoding: 'utf8',
+    const result = await runYtDlp(ytdlp.cmd, args, {
+      timeoutMs: 180_000,
       maxBuffer: 20 * 1024 * 1024,
-      timeout: 180_000,
     })
 
     const files = fs.readdirSync(tmpDir)
@@ -524,7 +613,12 @@ export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult
 
     // yt-dlp may return non-zero if a secondary lang 429s after one good file.
     if (!captionFile) {
-      throw new Error(describeYtDlpFailure(result.stderr || result.stdout || '', result.status))
+      throw new Error(
+        describeYtDlpFailure(result.stderr || result.stdout || '', result.status, {
+          timedOut: result.timedOut,
+          error: result.error,
+        })
+      )
     }
 
     // Title written by --print-to-file in the same run (non-fatal if missing).

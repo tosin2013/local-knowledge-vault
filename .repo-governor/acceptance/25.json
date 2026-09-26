@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #25: yt-dlp was invoked with spawnSync inside the media:ingestYoutube IPC handler, blocking the main process for up to 180s (subtitles) + 60s (metadata) + 60s (title probe) and, on timeout, surfacing a confusing 'yt-dlp exited null' (result.error never read). The fix converts the three heavy calls to an async runYtDlp() helper (spawn + hard timeout + SIGKILL) so the event loop stays free, and rewrites describeYtDlpFailure to report timeouts and spawn errors clearly. Criteria 1 fails before the change (spawnSync(ytdlp… was present) and passes after; 2 guards type safety of the async signature; 3 runs the media smoke test, which now asserts async + timeout + error behaviour with a stub child process.",
+  "authority_id": "25",
+  "criteria": [
+    { "check": "command_exit", "target": "! grep -n 'spawnSync(ytdlp' electron/media-ingest.ts" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "tests_pass", "target": "npm run test:media" }
+  ]
+}
