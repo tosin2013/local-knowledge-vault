@@ -255,6 +255,6 @@ scripts. For plugin ideas, start with a `plugin.json` pack; see
 
 ## License
 
-License: TBD. No license file has been chosen yet.
+Vault is licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attributions.
 
 Built by Tosin Akinosho ([@tosin2013](https://github.com/tosin2013)).

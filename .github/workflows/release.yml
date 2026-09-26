@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            dist: npm run build && npx electron-builder --mac --arm64 --x64 --publish never
+          - os: windows-latest
+            dist: npm run dist:win
+          - os: ubuntu-latest
+            dist: npm run dist:linux
+    env:
+      # Unsigned builds for now; see README for the macOS "Open Anyway" steps.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # better-sqlite3 is native, so each OS builds its own copy (postinstall → install-app-deps).
+      - run: npm ci
+
+      - name: Build installers
+        run: ${{ matrix.dist }}
+        shell: bash
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vault-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist-artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist-artifacts/*
+          generate_release_notes: true

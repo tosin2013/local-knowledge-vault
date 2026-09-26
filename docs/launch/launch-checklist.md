@@ -4,18 +4,12 @@ Work top to bottom. Items marked **(owner)** need a decision or an account only 
 
 ## Before anything is public
 
-1. **Choose and add a LICENSE (owner).** There is no license file today, and the README says
-   "License: TBD". Without one, nobody can legally reuse the code, and "open source" claims
-   (Product Hunt topic, `#OpenSource`) are off the table. Update the README License section when
-   you add it.
+1. ~~**Choose and add a LICENSE (owner).**~~ Done: Apache-2.0 (`LICENSE`, `NOTICE`).
 2. **Make the repository public (owner).** `tosin2013/local-knowledge-vault` is private; every
    launch post links to it.
 3. **Publish installers.**
-   - The release workflow is not in the repo right now. A backup exists at
-     `/tmp/vault-workflows-backup/release.yml` on the build box (Linux/macOS/Windows matrix with
-     electron-builder). Restore it to `.github/workflows/release.yml` and commit it when you're
-     ready; this kit deliberately did not restore it. `/tmp` is not permanent, so copy it
-     somewhere safe soon.
+   - The release workflow is committed at `.github/workflows/release.yml` (macOS, Windows and
+     Linux matrix with electron-builder).
    - Tag and push: `git tag v0.1.0 && git push origin v0.1.0` (see [docs/release.md](../release.md)).
    - Check the Release has `.dmg`, `.zip`, `.exe`, `.AppImage` and `.deb`, and install at least
      the Mac build yourself to confirm the unsigned-open steps in the README are right.

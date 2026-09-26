@@ -126,5 +126,4 @@ npm run dist         # current platform
 ```
 
 `better-sqlite3` is native, so package on the target OS rather than cross-compiling. The
-GitHub Actions release workflow is described in [release.md](./release.md) (the workflow file is
-not currently committed; see [launch/launch-checklist.md](./launch/launch-checklist.md)).
+GitHub Actions workflows (CI and release) are described in [release.md](./release.md).

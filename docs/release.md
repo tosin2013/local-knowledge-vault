@@ -2,6 +2,14 @@
 
 Cross-platform installers are produced by **electron-builder** via GitHub Actions (`.github/workflows/release.yml`).
 
+Other automation:
+
+- **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, runs
+  `npm ci`, `typecheck`, `build` and the offline smoke tests (`test:mvp`, `test:providers`,
+  `test:media`, `test:citation-pack`).
+- **Dependabot** (`.github/dependabot.yml`): weekly npm and GitHub Actions updates. Electron major
+  versions are ignored because they change the native ABI; upgrade those by hand.
+
 ## Cut a release
 
 ```bash
@@ -11,14 +19,16 @@ git push origin v0.1.0
 # or: git push --tags
 ```
 
-You can also run the workflow manually: **Actions → Release → Run workflow**.
+You can also run the workflow manually: **Actions → Release → Run workflow** (or
+`gh workflow run release.yml`). Manual runs upload installers as workflow artifacts only; a GitHub
+Release is created only for `v*` tags.
 
 ## Artifacts
 
 | OS | Targets |
 |----|---------|
 | Linux | `.AppImage`, `.deb` |
-| macOS | `.dmg`, `.zip` |
+| macOS | `.dmg`, `.zip` for Apple silicon (arm64) and Intel (x64) |
 | Windows | NSIS `.exe` installer |
 
 Artifacts upload per OS job. On a `v*` tag, the same files attach to a GitHub Release.
