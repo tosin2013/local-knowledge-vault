@@ -17,9 +17,11 @@ import { closeDb, initDb, listItems } from '../electron/db'
 import {
   buildYtDlpSubtitleArgs,
   describeYtDlpFailure,
+  ingestYoutubeMedia,
   pickCaptionTrack,
   ingestLocalMedia,
   ensureMediaReaderPrompt,
+  runYtDlp,
 } from '../electron/media-ingest'
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -118,35 +120,90 @@ console.log('OK parse+chunk:', {
 })
 
 // Optional: ingest into temp DB with a tiny silent-less media stub path
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-media-'))
-const dbPath = path.join(tmp, 'test.sqlite')
-const mediaStub = path.join(tmp, 'demo.mp4')
-const captionsCopy = path.join(tmp, 'demo.srt')
-fs.writeFileSync(mediaStub, 'not-a-real-video')
-fs.copyFileSync(fixture, captionsCopy)
+void (async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-media-'))
+  const dbPath = path.join(tmp, 'test.sqlite')
+  const mediaStub = path.join(tmp, 'demo.mp4')
+  const captionsCopy = path.join(tmp, 'demo.srt')
+  fs.writeFileSync(mediaStub, 'not-a-real-video')
+  fs.copyFileSync(fixture, captionsCopy)
 
-initDb(dbPath)
-ensureMediaReaderPrompt()
-const result = ingestLocalMedia({
-  mediaPath: mediaStub,
-  captionsPath: captionsCopy,
-  project: 'Media Demo',
-})
-assert(result.noteCount === chunks.length || result.noteCount > 0, 'notes created')
-assert(result.promptId, 'prompt id')
-assert(result.profileId, 'profile id')
-const items = listItems({ project: 'Media Demo', kind: 'transcript' })
-assert(items.length === result.noteCount, 'list matches')
-const t0 = parseTStartFromBody(items[0].body)
-assert(t0 != null, 't_start in body')
-console.log('OK ingest:', {
-  project: result.project,
-  notes: result.noteCount,
-  sampleTitle: items[0].title,
-  t_start: t0,
-  mediaProtocolUrl: result.mediaProtocolUrl,
-})
+  initDb(dbPath)
+  ensureMediaReaderPrompt()
+  const result = ingestLocalMedia({
+    mediaPath: mediaStub,
+    captionsPath: captionsCopy,
+    project: 'Media Demo',
+  })
+  assert(result.noteCount === chunks.length || result.noteCount > 0, 'notes created')
+  assert(result.promptId, 'prompt id')
+  assert(result.profileId, 'profile id')
+  const items = listItems({ project: 'Media Demo', kind: 'transcript' })
+  assert(items.length === result.noteCount, 'list matches')
+  const t0 = parseTStartFromBody(items[0].body)
+  assert(t0 != null, 't_start in body')
+  console.log('OK ingest:', {
+    project: result.project,
+    notes: result.noteCount,
+    sampleTitle: items[0].title,
+    t_start: t0,
+    mediaProtocolUrl: result.mediaProtocolUrl,
+  })
 
-closeDb()
-fs.rmSync(tmp, { recursive: true, force: true })
-console.log('media-captions-smoke: PASS')
+  // ---- #25: yt-dlp must run async (no main-process freeze) and surface timeout/error clearly ----
+
+  // Pure-function error wording first.
+  assert(
+    /timed out/.test(describeYtDlpFailure('', null, { timedOut: true })),
+    'timeout produces a clear message'
+  )
+  assert(
+    /Failed to run yt-dlp/.test(describeYtDlpFailure('', null, { error: new Error('ENOENT') })),
+    'spawn error surfaces'
+  )
+
+  // runYtDlp: a fast-exiting stub resolves with stdout and status 0.
+  const stubDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-stub-'))
+  const fastStub = path.join(stubDir, 'fast.js')
+  fs.writeFileSync(fastStub, "console.log('hello-out'); process.exit(0)\n")
+  const fast = await runYtDlp(process.execPath, [fastStub], { timeoutMs: 5000 })
+  assert(fast.status === 0, `fast stub status 0, got ${fast.status}`)
+  assert(fast.stdout.trim() === 'hello-out', `fast stub stdout: ${fast.stdout}`)
+  assert(fast.timedOut === false, 'fast stub did not time out')
+
+  // A non-zero exit is captured as status, not thrown.
+  const failStub = path.join(stubDir, 'fail.js')
+  fs.writeFileSync(failStub, "console.error('boom'); process.exit(3)\n")
+  const fail = await runYtDlp(process.execPath, [failStub], { timeoutMs: 5000 })
+  assert(fail.status === 3, `fail stub status 3, got ${fail.status}`)
+  assert(fail.stderr.trim() === 'boom', `fail stub stderr: ${fail.stderr}`)
+
+  // A stub that never exits is killed on timeout; the promise still resolves promptly.
+  const slowStub = path.join(stubDir, 'slow.js')
+  fs.writeFileSync(slowStub, 'setTimeout(() => {}, 60_000)\n')
+  const slowStarted = Date.now()
+  const slow = await runYtDlp(process.execPath, [slowStub], { timeoutMs: 300 })
+  const elapsedMs = Date.now() - slowStarted
+  assert(slow.timedOut === true, 'slow stub timed out')
+  assert(slow.status === null, `slow stub killed → status null, got ${slow.status}`)
+  assert(elapsedMs < 5000, `timeout resolved promptly (${elapsedMs}ms)`)
+
+  fs.rmSync(stubDir, { recursive: true, force: true })
+
+  // ingestYoutubeMedia is async and its offline branch (captionsPath) still works.
+  const ytPromise = ingestYoutubeMedia({
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    captionsPath: captionsCopy,
+  })
+  assert(ytPromise instanceof Promise, 'ingestYoutubeMedia returns a Promise (async)')
+  const ytResult = await ytPromise
+  assert(ytResult.noteCount > 0, 'youtube offline ingest created notes')
+  console.log('OK async:', { timeoutResolvedMs: elapsedMs, ytNotes: ytResult.noteCount })
+
+  closeDb()
+  fs.rmSync(tmp, { recursive: true, force: true })
+  console.log('media-captions-smoke: PASS')
+})().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
