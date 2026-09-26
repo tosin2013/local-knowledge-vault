@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #15: the loopback Bridge HTTP API had wildcard CORS, no auth, no Host/Content-Type checks, and unbounded request bodies, so any website (or DNS rebinding) could read notes via /v1/ask. Fix: remove CORS entirely, add a per-install bearer token (generated on first use, stored 0600, shown in Settings under AI providers -> Vault Bridge), allowlist loopback Hosts, require Content-Type: application/json, and cap bodies at 64 KB (413). Criteria 1-2 fail before the change (the static CORS grep + the new bridge smoke test, which also asserts 401/403/415/413 and token rotation); 3-5 guard typecheck, build, and the rest of the suite. 'Ship the bridge disabled by default' from the issue was considered and declined: it stays enabled but now requires the token. A headless Electron UI-mount test is out of scope here and tracked under #43 (test gaps).",
+  "authority_id": "15",
+  "criteria": [
+    { "check": "command_exit", "target": "! grep -q \"Access-Control-Allow-Origin\" electron/bridge-server.ts" },
+    { "check": "tests_pass", "target": "npm run test:bridge" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp && npm run test:media" }
+  ]
+}

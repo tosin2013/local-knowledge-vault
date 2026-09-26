@@ -16,6 +16,7 @@
     "postinstall": "electron-builder install-app-deps || true",
     "test:citation-pack": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/citation-pack-smoke.ts",
     "test:media": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/media-captions-smoke.ts",
+    "test:bridge": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/bridge-smoke.ts",
     "test:mcp-discovery": "npx tsx scripts/mcp-notion-discovery-smoke.ts",
     "dist": "npm run build && electron-builder --publish never",
     "dist:linux": "npm run build && electron-builder --linux --publish never",

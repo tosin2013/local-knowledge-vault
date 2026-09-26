@@ -51,7 +51,13 @@ import {
   createCustomMediaPersona,
   listMediaVoicePacks,
 } from './media-personas'
-import { startBridgeServer, stopBridgeServer, getBridgeServerStatus } from './bridge-server'
+import {
+  startBridgeServer,
+  stopBridgeServer,
+  getBridgeServerStatus,
+  getBridgeToken,
+  rotateBridgeToken,
+} from './bridge-server'
 import {
   listMcpServers,
   addMcpServer,
@@ -464,6 +470,8 @@ function registerIpc(): void {
   ipcMain.handle('media:listVoicePacks', () => listMediaVoicePacks())
 
   ipcMain.handle('bridge:status', () => getBridgeServerStatus())
+  ipcMain.handle('bridge:getToken', () => getBridgeToken())
+  ipcMain.handle('bridge:rotateToken', () => rotateBridgeToken())
 
   // MCP connections (Notion MCP + arbitrary Streamable HTTP servers)
   ipcMain.handle('mcp:listServers', () => listMcpServers())

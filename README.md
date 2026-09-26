@@ -208,8 +208,8 @@ What leaves your machine:
   that is a cloud provider it receives an excerpt of the page.
 - **Media chat** contacts YouTube (through `yt-dlp` and the embedded player) only for YouTube media.
 - **Notion** is contacted only if you connect it under MCP connections.
-- The Obsidian bridge listens on `127.0.0.1` only and has no authentication yet. Do not expose
-  that port.
+- The Obsidian bridge listens on `127.0.0.1` only and requires a per-install bearer token (shown
+  in **AI providers → Vault Bridge**). Do not expose or port-forward that port.
 
 ## Build from source
 

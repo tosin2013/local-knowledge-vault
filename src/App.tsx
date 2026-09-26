@@ -52,6 +52,7 @@ import { PLUGINS_CHANGED_EVENT, usePluginContributions } from './plugins/contrib
 import { FirstRunLocalCard, SmallModelHint, aiChipLabel } from './components/ai/FirstRunLocalCard'
 import { ProvidersPanel } from './components/ai/ProvidersPanel'
 import { ProviderDialog } from './components/ai/ProviderDialog'
+import { BridgeSettings } from './components/ai/BridgeSettings'
 import type {
   AskGroundedResult,
   ChatMessage,
@@ -2774,6 +2775,7 @@ export default function App() {
               </Stack>
             </Stack>
           )}
+          <BridgeSettings />
         </DialogContent>
       </Dialog>
     </ThemeProvider>
