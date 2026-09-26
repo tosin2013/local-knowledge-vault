@@ -71,11 +71,18 @@
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "rpm",
+        "snap"
       ],
       "category": "Office",
       "icon": "build/icon.png",
       "maintainer": "Tosin Akinosho <1975599+tosin2013@users.noreply.github.com>"
+    },
+    "snap": {
+      "summary": "Chat with your notes locally, with cited answers",
+      "grade": "stable",
+      "confinement": "strict"
     },
     "mac": {
       "target": [
