@@ -312,6 +312,47 @@ export function youtubeEmbedUrl(watchUrl: string): string | null {
   return `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1`
 }
 
+/** One caption track chosen from yt-dlp metadata. */
+export interface CaptionTrack {
+  lang: string
+  auto: boolean
+  /** YouTube machine translation (caption URL carries `tlang=`); used only as a last resort. */
+  translated?: boolean
+}
+
+type CaptionFormats = Array<{ ext?: string; url?: string }>
+interface YtDlpCaptionInfo {
+  subtitles?: Record<string, CaptionFormats>
+  automatic_captions?: Record<string, CaptionFormats>
+}
+
+const MANUAL_ENGLISH = ['en', 'en-US', 'en-GB']
+const isEnglish = (lang: string) => /^en(-|$)/i.test(lang)
+const isTranslation = (formats: CaptionFormats) => formats.some((f) => (f.url ?? '').includes('tlang='))
+
+/**
+ * Pick the caption track to download from `yt-dlp -J` metadata:
+ * manual English (en, en-US, en-GB, then any en-*), then the original auto transcript
+ * (`en-orig`), then any auto English track that is not a translation, and only then a
+ * machine translation. For auto-caption videos YouTube's `en` is often a translation
+ * (`tlang=en`), which it rate-limits with HTTP 429.
+ */
+export function pickCaptionTrack(info: YtDlpCaptionInfo): CaptionTrack | null {
+  const manual = info.subtitles ?? {}
+  const manualLang =
+    MANUAL_ENGLISH.find((l) => manual[l]?.length) ??
+    Object.keys(manual).find((l) => isEnglish(l) && manual[l]?.length)
+  if (manualLang) return { lang: manualLang, auto: false }
+
+  const auto = info.automatic_captions ?? {}
+  if (auto['en-orig']?.length) return { lang: 'en-orig', auto: true }
+  const english = Object.keys(auto).filter((l) => isEnglish(l) && auto[l]?.length)
+  const original = english.find((l) => !isTranslation(auto[l]))
+  if (original) return { lang: original, auto: true }
+  if (english[0]) return { lang: english[0], auto: true, translated: true }
+  return null
+}
+
 /** Written by yt-dlp's --print-to-file so the title comes from the same run as the captions. */
 const YTDLP_TITLE_FILE = 'lkv-title.txt'
 
@@ -326,14 +367,21 @@ function ytDlpExtraArgsFromEnv(): string[] {
  * URLs need a PO token (HTTP 429), while yt-dlp's default clients fetch them. The title is
  * written in the same run, so there is no second request right after a rate-limited one.
  */
-export function buildYtDlpSubtitleArgs(url: string, tmpDir: string, extraArgs: string[] = []): string[] {
+export function buildYtDlpSubtitleArgs(
+  url: string,
+  tmpDir: string,
+  extraArgs: string[] = [],
+  track?: CaptionTrack
+): string[] {
+  // With a chosen track, download exactly that one (see pickCaptionTrack). Without one
+  // (metadata unavailable), fall back to a few English variants; every en-* track is a
+  // request, and requesting them all trips 429s.
+  const selection = track
+    ? [track.auto ? '--write-auto-subs' : '--write-subs', '--sub-langs', track.lang]
+    : ['--write-subs', '--write-auto-subs', '--sub-langs', 'en,en-US,en-GB']
   return [
     '--skip-download',
-    '--write-subs',
-    '--write-auto-subs',
-    // A few English variants only; downloading every en-* track trips 429s.
-    '--sub-langs',
-    'en,en-US,en-GB',
+    ...selection,
     '--sub-format',
     'vtt/srt/best',
     '--sleep-subtitles',
@@ -429,7 +477,29 @@ export function ingestYoutubeMedia(input: IngestYoutubeInput): MediaIngestResult
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-yt-'))
 
   try {
-    const args = [...ytdlp.argsPrefix, ...buildYtDlpSubtitleArgs(url, tmpDir, ytDlpExtraArgsFromEnv())]
+    const extraArgs = ytDlpExtraArgsFromEnv()
+    // Metadata first, so exactly one caption track is requested (no machine translations).
+    // The JSON lists every translation language and can exceed 10 MB.
+    let track: CaptionTrack | undefined
+    const meta = spawnSync(ytdlp.cmd, [...ytdlp.argsPrefix, '-J', '--skip-download', '--no-warnings', ...extraArgs, url], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 60_000,
+    })
+    if (meta.status === 0 && meta.stdout) {
+      const picked = pickCaptionTrack(JSON.parse(meta.stdout) as YtDlpCaptionInfo)
+      if (!picked) {
+        throw new Error(
+          'No English captions found for this YouTube URL. Try another URL or ingest a local SRT/VTT.'
+        )
+      }
+      track = picked
+    } else if (/HTTP Error 429|Too Many Requests/i.test(meta.stderr || '')) {
+      throw new Error(describeYtDlpFailure(meta.stderr, meta.status))
+    }
+    // Otherwise fall through without a track: the download below requests a few English variants.
+
+    const args = [...ytdlp.argsPrefix, ...buildYtDlpSubtitleArgs(url, tmpDir, extraArgs, track)]
     const result = spawnSync(ytdlp.cmd, args, {
       encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
