@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #16: Ollama auto-pick never excluded `:cloud`/`-cloud` tags, which have no size in the name, so a cloud model (e.g. glm-5.2:cloud) could be picked as the 'Local' default and send questions + note passages to ollama.com. Fix: exclude cloud tags from pickModel, report cloud-tagged models as non-local in activeInfo/UI, and unit-test pickModel. Criteria 1-2 fail before the change (the static cloud-filter grep + the pickModel unit tests in test:mvp); 3-4 guard typecheck and build.",
+  "authority_id": "16",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"!isCloudModel(m)\" electron/ollama.ts" },
+    { "check": "tests_pass", "target": "npm run test:mvp" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

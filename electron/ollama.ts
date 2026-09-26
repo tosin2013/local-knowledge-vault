@@ -3,7 +3,7 @@
  * Base URL: provider config → LKV_OLLAMA_URL → http://127.0.0.1:11434
  */
 import type { OllamaHealth } from './types'
-import { ollamaBaseUrl, isSmallModel } from './providers/presets'
+import { ollamaBaseUrl, isSmallModel, isCloudModel } from './providers/presets'
 import {
   errMessage,
   fetchWithTimeout,
@@ -42,13 +42,15 @@ function isEmbeddingModel(name: string): boolean {
 }
 
 /**
- * Prefer env override, then non-embedding, not-tiny models; among those qwen3 / llama3.x,
- * then the first available. Tiny models are still used when nothing bigger is installed.
+ * Prefer env override, then non-embedding, non-cloud, not-tiny models; among those
+ * qwen3 / llama3.x, then the first available. Tiny models are still used when nothing
+ * bigger is installed. Cloud models (`:cloud` / `-cloud`) are never auto-picked — they
+ * run on ollama.com, not locally.
  */
 export function pickModel(models: string[], sizes: Record<string, string> = {}): string | null {
   const envModel = process.env.LKV_OLLAMA_MODEL
   if (envModel) return envModel
-  const chat = models.filter((m) => !isEmbeddingModel(m))
+  const chat = models.filter((m) => !isEmbeddingModel(m) && !isCloudModel(m))
   if (!chat.length) return null
   const big = chat.filter((m) => !isSmallModel(m, sizes[m]))
   const pool = big.length ? big : chat

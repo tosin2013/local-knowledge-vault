@@ -346,6 +346,24 @@ async function main(): Promise<void> {
   const e5 = resolveFromProviders('auto', [mk({ ...ollamaUp, health: { ok: true, models: ['llama3.2:1b'] } })])
   assert(e5.status.active?.smallModel === true, 'tiny local model flagged smallModel')
 
+  // --- pickModel cloud exclusion + fallbacks (pure) ---
+  console.log('\npickModel cloud exclusion')
+  const cloudSkip = pickModel(['llama3.2:1b', 'glm-5.2:cloud'])
+  assert(cloudSkip === 'llama3.2:1b', 'pickModel skips a :cloud model in favor of a local one')
+  const onlyCloud = pickModel(['glm-5.2:cloud', 'qwen3:cloud'])
+  assert(onlyCloud === null, 'pickModel returns null when only :cloud models exist')
+  const dashCloud = pickModel(['llama3.2:1b', 'glm-5.2-cloud'])
+  assert(dashCloud === 'llama3.2:1b', 'pickModel skips a -cloud model too')
+  const sizeFallback = pickModel(['model-a', 'model-b'], { 'model-a': '1B', 'model-b': '8B' })
+  assert(sizeFallback === 'model-b', 'pickModel size fallback prefers non-small (8B over 1B)')
+  const noMatchFallback = pickModel(['phi3:mini', 'gemma2:2b'])
+  assert(noMatchFallback === 'phi3:mini', 'pickModel no-family-match falls back to pool[0]')
+  const cloudAuto = resolveFromProviders('auto', [
+    mk({ id: 'ollama', kind: 'ollama', label: 'Ollama', local: true, model: 'glm-5.2:cloud', health: { ok: true, models: ['glm-5.2:cloud'] } }),
+  ])
+  assert(cloudAuto.status.active?.local === false, 'auto with explicitly-set :cloud model reported non-local')
+  assert(/^Cloud/.test(cloudAuto.status.message), 'auto status message says Cloud for a :cloud model')
+
   // --- Import from URL (pure helpers) ---
   console.log('\nImport from URL helpers')
   const okHttps = isAllowedUrl('https://example.com/path')
