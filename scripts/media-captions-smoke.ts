@@ -17,6 +17,7 @@ import { closeDb, initDb, listItems } from '../electron/db'
 import {
   buildYtDlpSubtitleArgs,
   describeYtDlpFailure,
+  pickCaptionTrack,
   ingestLocalMedia,
   ensureMediaReaderPrompt,
 } from '../electron/media-ingest'
@@ -84,6 +85,31 @@ const rateLimited = describeYtDlpFailure(
 assert(/rate.?limit/i.test(rateLimited) && rateLimited.includes('curl-cffi'), `429 message: ${rateLimited}`)
 assert(describeYtDlpFailure('ERROR: boom', 1).startsWith('yt-dlp failed: ERROR: boom'), 'generic failure')
 assert(/no captions/i.test(describeYtDlpFailure('', 0)), 'exit 0 without files means no captions')
+
+// Caption track choice (#49): for auto-caption videos YouTube's 'en' is a machine translation
+// (tlang=en) that gets rate-limited; the original transcript is 'en-orig'.
+const ORIG = 'https://www.youtube.com/api/timedtext?v=x&kind=asr&lang=en&fmt=vtt'
+const TRANSLATED = 'https://www.youtube.com/api/timedtext?v=x&kind=asr&lang=uk&tlang=en&fmt=vtt'
+const autoOnly = {
+  subtitles: {},
+  automatic_captions: { en: [{ ext: 'vtt', url: TRANSLATED }], 'en-orig': [{ ext: 'vtt', url: ORIG }] },
+}
+assert(JSON.stringify(pickCaptionTrack(autoOnly)) === JSON.stringify({ lang: 'en-orig', auto: true }), 'auto: prefer en-orig over translated en')
+const manual = { subtitles: { en: [{ ext: 'vtt', url: ORIG }] }, automatic_captions: autoOnly.automatic_captions }
+assert(JSON.stringify(pickCaptionTrack(manual)) === JSON.stringify({ lang: 'en', auto: false }), 'manual English wins')
+const regional = { subtitles: { 'en-GB': [{ ext: 'vtt', url: ORIG }] }, automatic_captions: {} }
+assert(pickCaptionTrack(regional)?.lang === 'en-GB', 'manual regional English')
+const autoOriginalEn = { subtitles: {}, automatic_captions: { en: [{ ext: 'vtt', url: ORIG }] } }
+assert(JSON.stringify(pickCaptionTrack(autoOriginalEn)) === JSON.stringify({ lang: 'en', auto: true }), 'auto en without tlang is original')
+const onlyTranslated = { subtitles: {}, automatic_captions: { en: [{ ext: 'vtt', url: TRANSLATED }] } }
+assert(pickCaptionTrack(onlyTranslated)?.translated === true, 'translation only as flagged last resort')
+assert(pickCaptionTrack({ subtitles: {}, automatic_captions: {} }) === null, 'no English captions → null')
+
+const autoTrackArgs = buildYtDlpSubtitleArgs('https://www.youtube.com/watch?v=abc', '/tmp/x', [], { lang: 'en-orig', auto: true })
+assert(autoTrackArgs[autoTrackArgs.indexOf('--sub-langs') + 1] === 'en-orig', 'download exactly the chosen track')
+assert(autoTrackArgs.includes('--write-auto-subs') && !autoTrackArgs.includes('--write-subs'), 'auto track: auto subs only')
+const manualTrackArgs = buildYtDlpSubtitleArgs('https://www.youtube.com/watch?v=abc', '/tmp/x', [], { lang: 'en', auto: false })
+assert(manualTrackArgs.includes('--write-subs') && !manualTrackArgs.includes('--write-auto-subs'), 'manual track: manual subs only')
 
 console.log('OK parse+chunk:', {
   cues: cues.length,
