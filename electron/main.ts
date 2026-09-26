@@ -58,6 +58,7 @@ import {
   getBridgeToken,
   rotateBridgeToken,
 } from './bridge-server'
+import { resolveMediaFile, mediaMimeType } from './media-protocol'
 import {
   listMcpServers,
   addMcpServer,
@@ -134,10 +135,7 @@ protocol.registerSchemesAsPrivileged([
     privileges: {
       standard: true,
       secure: true,
-      supportFetchAPI: true,
       stream: true,
-      bypassCSP: true,
-      corsEnabled: true,
     },
   },
 ])
@@ -556,14 +554,31 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
-  protocol.handle('lkvmedia', (request) => {
+  protocol.handle('lkvmedia', async (request) => {
     try {
       const u = new URL(request.url)
-      const filePath = u.searchParams.get('path')
-      if (!filePath) {
-        return new Response('missing path', { status: 400 })
+      // lkvmedia://media/<opaque-id> — the id is looked up in the registry,
+      // never a filesystem path.
+      const id = u.pathname.replace(/^\/+/, '').split('/')[0]
+      if (!id) {
+        return new Response('missing media id', { status: 400 })
       }
-      return net.fetch(pathToFileURL(filePath).href)
+      const filePath = resolveMediaFile(id)
+      if (!filePath) {
+        return new Response('unknown media id', { status: 404 })
+      }
+      const headers: Record<string, string> = {}
+      const range = request.headers.get('range')
+      if (range) headers.Range = range
+      const res = await net.fetch(pathToFileURL(filePath).href, { headers })
+      const outHeaders: Record<string, string> = {
+        'Content-Type': mediaMimeType(filePath),
+        'Accept-Ranges': 'bytes',
+      }
+      if (res.status === 206 && res.headers.get('content-range')) {
+        outHeaders['Content-Range'] = res.headers.get('content-range')!
+      }
+      return new Response(res.body, { status: res.status, headers: outHeaders })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return new Response(msg, { status: 500 })
