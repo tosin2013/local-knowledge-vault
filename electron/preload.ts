@@ -179,6 +179,8 @@ const api = {
   bridge: {
     status: (): Promise<{ running: boolean; host: string; port: number; version: string }> =>
       ipcRenderer.invoke('bridge:status'),
+    getToken: (): Promise<string> => ipcRenderer.invoke('bridge:getToken'),
+    rotateToken: (): Promise<string> => ipcRenderer.invoke('bridge:rotateToken'),
   },
   mcp: {
     listServers: (): Promise<McpServerSummary[]> => ipcRenderer.invoke('mcp:listServers'),

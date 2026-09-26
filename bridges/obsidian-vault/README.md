@@ -29,8 +29,11 @@ The folder ships `main.js` (no build required) plus `main.ts` as the typed sourc
 ## Settings
 
 - **Bridge base URL** — default `http://127.0.0.1:8765`
+- **Bridge token** — paste the bearer token from **Vault → AI providers → Vault Bridge** (required)
 - **Default project** — optional Vault/media project scope
 
 ## Security
 
-Bridge is loopback-only and has **no auth in v0**. Only use on a trusted machine; keep Vault running only when you need it.
+Bridge is loopback-only and requires a per-install bearer token. Copy it from **Vault → AI
+providers → Vault Bridge** into the plugin's **Bridge token** setting. Only use on a trusted
+machine; keep Vault running only when you need it.

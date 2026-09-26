@@ -23,24 +23,33 @@ Started automatically when the Vault Electron app is ready. Bound to **`127.0.0.
 | `GET` | `/v1/projects` | — | `{ projects: [{ project, noteCount, source? }] }` |
 | `POST` | `/v1/ask` | `{ text, project?, promptId? }` | `{ answer, citations }` |
 
-### Security (v0)
+### Security (v1)
 
 - **Local only** — listens on `127.0.0.1:8765`, not `0.0.0.0`.
-- **No auth yet** — anyone on your machine can hit the API while Vault is running. Fine for a personal workstation; do not tunnel or port-forward this port.
-- Toggle / auth / token can come later; this scaffold is intentionally minimal.
+- **Bearer auth** — `/v1/projects` and `/v1/ask` require `Authorization: Bearer <token>`. The token
+  is generated per install, stored at `<userData>/lkv-bridge-token` (0600), and shown in
+  **Vault → AI providers → Vault Bridge**. `/health` stays open for liveness.
+- **Host allowlist** — requests with a non-loopback `Host` header are rejected (DNS-rebinding guard).
+- **JSON only** — `POST /v1/ask` requires `Content-Type: application/json`.
+- **Size-capped** — request bodies over 64 KB are rejected with `413`.
+- **No CORS** — responses carry no `Access-Control-Allow-Origin`, so a browser page cannot read them.
 
 ### Quick curl
 
 ```bash
-# Health
+TOKEN="<from Vault → AI providers → Vault Bridge>"
+
+# Health (no auth)
 curl -s http://127.0.0.1:8765/health | jq .
 
 # Projects
-curl -s http://127.0.0.1:8765/v1/projects | jq .
+curl -s http://127.0.0.1:8765/v1/projects \
+  -H "Authorization: Bearer $TOKEN" | jq .
 
 # Grounded ask (optionally scope to a media/vault project)
 curl -s -X POST http://127.0.0.1:8765/v1/ask \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"text":"What was said about rates?","project":"my-video"}' | jq .
 ```
 

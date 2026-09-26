@@ -7,10 +7,12 @@
  *   node ask-vault.mjs --prompt-id prm_xxx "Your question"
  */
 const BRIDGE = process.env.VAULT_BRIDGE || 'http://127.0.0.1:8765'
+const TOKEN = process.env.VAULT_BRIDGE_TOKEN || ''
 
 function usage() {
   console.error(`Usage: node ask-vault.mjs [--project NAME] [--prompt-id ID] "question text"
-Env: VAULT_BRIDGE (default ${BRIDGE})`)
+Env: VAULT_BRIDGE (default ${BRIDGE})
+     VAULT_BRIDGE_TOKEN (bearer token from Vault → Settings → Vault Bridge)`)
   process.exit(1)
 }
 
@@ -46,11 +48,20 @@ async function main() {
 
   const res = await fetch(`${BRIDGE}/v1/ask`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+    },
     body: JSON.stringify({ text, project, promptId }),
   })
   const data = await res.json()
   if (!res.ok || data.error) {
+    if (res.status === 401) {
+      console.error(
+        'Unauthorized. Set VAULT_BRIDGE_TOKEN to the bearer token shown in Vault → Settings → Vault Bridge.'
+      )
+      process.exit(3)
+    }
     console.error(data.error || `Ask failed: HTTP ${res.status}`)
     process.exit(3)
   }
