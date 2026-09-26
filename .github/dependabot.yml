@@ -5,15 +5,25 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # Minor/patch PRs auto-merge after CI (see workflows/dependabot-auto-merge.yml);
+    # majors are labeled `major-update` and wait for manual approval.
+    # Packages that must move together share a group, so a major lands as one PR.
     groups:
+      react:
+        patterns: [react, react-dom, '@types/react', '@types/react-dom']
+      mui:
+        patterns: ['@mui/*', '@emotion/*']
+      vite:
+        patterns: [vite, '@vitejs/*', 'vite-plugin-electron*', tailwindcss, '@tailwindcss/*']
+      electron:
+        patterns: [electron, electron-builder]
       minor-and-patch:
         update-types: [minor, patch]
-    ignore:
-      # Electron majors change the native ABI (better-sqlite3); upgrade by hand and test.
-      - dependency-name: electron
-        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

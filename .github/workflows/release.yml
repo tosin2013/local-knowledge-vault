@@ -35,6 +35,14 @@ jobs:
           node-version: 22
           cache: npm
 
+      # rpmbuild for the .rpm target; snapcraft for the .snap target.
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          sudo snap install snapcraft --classic
+
       # better-sqlite3 is native, so each OS builds its own copy (postinstall → install-app-deps).
       - run: npm ci
 
@@ -52,6 +60,29 @@ jobs:
             release/*.exe
             release/*.AppImage
             release/*.deb
+            release/*.rpm
+            release/*.snap
+
+  snap:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      # Created with `snapcraft export-login`; until this secret exists the upload is skipped.
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+    steps:
+      - uses: actions/download-artifact@v8
+        if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
+        with:
+          name: vault-ubuntu-latest
+          path: linux
+
+      # Lands in the edge channel; promote to stable on snapcraft.io after trying it.
+      - name: Upload to Snap Store (edge)
+        if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
+        run: |
+          sudo snap install snapcraft --classic
+          snapcraft upload --release=edge linux/*.snap
 
   publish:
     needs: build

@@ -20,8 +20,12 @@ automatically), and you can add a cloud provider or a shareable plugin in a few 
 
 Installers will be published on the
 **[Releases page](https://github.com/tosin2013/local-knowledge-vault/releases)**: `.dmg`/`.zip`
-for macOS, an NSIS `.exe` for Windows, and `.AppImage`/`.deb` for Linux. Until the first release
-is up, [build from source](#build-from-source).
+for macOS, an NSIS `.exe` for Windows, and `.AppImage`/`.deb`/`.rpm`/`.snap` for Linux. Until the
+first release is up, [build from source](#build-from-source).
+
+**Linux:** on Ubuntu/Debian run `sudo apt install ./local-knowledge-vault_*_amd64.deb`; on Fedora run
+`sudo dnf install ./local-knowledge-vault-*.x86_64.rpm`. The snap is confined, so **Media chat** can't reach a
+`yt-dlp` installed outside it; use the `.deb`, `.rpm` or AppImage if you need YouTube import.
 
 **macOS: the app is not signed yet.** The first time you open it, macOS will block it:
 
@@ -233,7 +237,7 @@ Installers:
 ```bash
 npm run dist:mac     # dmg + zip (on macOS)
 npm run dist:win     # NSIS installer (on Windows)
-npm run dist:linux   # AppImage + deb (on Linux)
+npm run dist:linux   # AppImage + deb + rpm + snap (on Linux)
 ```
 
 More (layout, IPC API, environment variables, all test scripts):
