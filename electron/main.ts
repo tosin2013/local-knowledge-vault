@@ -172,8 +172,19 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // better-sqlite3 is main-only; preload stays thin
+      sandbox: true, // preload only uses contextBridge/ipcRenderer
     },
+  })
+
+  // Deny new windows; open http(s) links in the user's browser instead.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  // Block top-frame navigation away from the app's own origin.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!isTrustedAppUrl(url)) event.preventDefault()
   })
 
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -186,6 +197,13 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+}
+
+/** Only the app's own origin (dev server or packaged file://) may navigate the top frame. */
+function isTrustedAppUrl(url: string): boolean {
+  const dev = process.env.VITE_DEV_SERVER_URL?.trim()
+  if (dev && url.startsWith(dev)) return true
+  return url.startsWith('file://')
 }
 
 function registerIpc(): void {

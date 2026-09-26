@@ -1,0 +1,13 @@
+{
+  "$comment": "Completion bar for #17: the main window had no will-navigate/setWindowOpenHandler guards, sandbox was off, and the CSP allowed 'unsafe-inline' 'unsafe-eval' and broad connect-src in production — so a target=_blank link (Media 'Watch' or the YouTube iframe logo) could open a remote-origin Electron window with the full window.lkv IPC surface, and XSS could escalate. Fix: deny window.open (route http/https to shell.openExternal), block non-app top-frame navigation, enable sandbox, and use a strict production CSP (script-src 'self', connect-src 'self') with a relaxed CSP injected only in dev. Criteria 1-4 fail before the change (guards/sandbox absent, 'unsafe-eval' present); 5-7 guard typecheck, build, and the rest of the suite. Electron fuses are a packaging step and are tracked separately (not asserted here).",
+  "authority_id": "17",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"setWindowOpenHandler\" electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q \"will-navigate\" electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q \"sandbox: true\" electron/main.ts" },
+    { "check": "command_exit", "target": "! grep -q \"'unsafe-eval'\" index.html" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp && npm run test:media" }
+  ]
+}
