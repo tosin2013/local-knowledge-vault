@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #20: initDb ran unguarded during startup, so a corrupt/locked lkv.sqlite (or a better-sqlite3 ABI mismatch) rejected the startup promise and the app opened no window and showed no error. Fix: wrap DB init in initializeDbWithRecovery, which logs the error to startup-error.log and shows a dialog with 'Back up & reset' (renames lkv.sqlite + WAL/SHM and retries), 'Open data folder', and 'Quit'. Criterion 1 fails before the change (the recovery function did not exist); 2-4 guard typecheck, build, and the rest of the suite. The dialog itself is not asserted headlessly (Electron UI), so the bar checks the code path exists and that everything still builds/tests.",
+  "authority_id": "20",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"initializeDbWithRecovery\" electron/main.ts" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp && npm run test:media" }
+  ]
+}
