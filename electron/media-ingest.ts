@@ -360,26 +360,52 @@ export function resolveYtDlp(): { cmd: string; argsPrefix: string[] } | null {
   return null
 }
 
+const YOUTUBE_ID_RE = /^[\w-]{11}$/
+
+function isYoutubeHost(hostname: string): boolean {
+  const h = hostname.toLowerCase()
+  return (
+    h === 'youtube.com' ||
+    h.endsWith('.youtube.com') ||
+    h === 'youtu.be' ||
+    h.endsWith('.youtu.be') ||
+    h === 'youtube-nocookie.com' ||
+    h.endsWith('.youtube-nocookie.com')
+  )
+}
+
+/** Extract + validate a YouTube video id. Exact host match (evil-youtube.com is rejected). */
 function extractYoutubeId(url: string): string | null {
   try {
     const u = new URL(url.trim())
-    if (u.hostname.includes('youtu.be')) {
-      const id = u.pathname.replace(/^\//, '').split('/')[0]
-      return id || null
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    const host = u.hostname.toLowerCase()
+    if (!isYoutubeHost(host)) return null
+    let id: string | null = null
+    if (host.endsWith('youtu.be')) {
+      id = u.pathname.replace(/^\//, '').split('/')[0]
+    } else {
+      id = u.searchParams.get('v')
+      if (!id) {
+        const parts = u.pathname.split('/').filter(Boolean)
+        const embedIdx = parts.indexOf('embed')
+        if (embedIdx >= 0 && parts[embedIdx + 1]) id = parts[embedIdx + 1]
+        const shortsIdx = parts.indexOf('shorts')
+        if (!id && shortsIdx >= 0 && parts[shortsIdx + 1]) id = parts[shortsIdx + 1]
+      }
     }
-    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtube-nocookie.com')) {
-      const v = u.searchParams.get('v')
-      if (v) return v
-      const parts = u.pathname.split('/').filter(Boolean)
-      const embedIdx = parts.indexOf('embed')
-      if (embedIdx >= 0 && parts[embedIdx + 1]) return parts[embedIdx + 1]
-      const shortsIdx = parts.indexOf('shorts')
-      if (shortsIdx >= 0 && parts[shortsIdx + 1]) return parts[shortsIdx + 1]
-    }
+    if (!id) return null
+    id = id.split(/[/?#]/)[0]
+    return YOUTUBE_ID_RE.test(id) ? id : null
   } catch {
-    /* ignore */
+    return null
   }
-  return null
+}
+
+/** Canonical watch URL for a validated YouTube link, or null (rejects injection/foreign hosts). */
+export function normalizeYoutubeUrl(input: string): string | null {
+  const id = extractYoutubeId(input)
+  return id ? `https://www.youtube.com/watch?v=${id}` : null
 }
 
 export function youtubeEmbedUrl(watchUrl: string): string | null {
@@ -473,6 +499,7 @@ export function buildYtDlpSubtitleArgs(
     path.join(tmpDir, '%(title)s.%(ext)s'),
     '--no-warnings',
     ...extraArgs,
+    '--',
     url,
   ]
 }
@@ -506,8 +533,14 @@ export function describeYtDlpFailure(
 }
 
 export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<MediaIngestResult> {
-  const url = input.url.trim()
-  if (!url) throw new Error('YouTube URL is required')
+  const raw = input.url.trim()
+  if (!raw) throw new Error('YouTube URL is required')
+  const url = normalizeYoutubeUrl(raw)
+  if (!url) {
+    throw new Error(
+      'Invalid YouTube URL — paste a youtube.com / youtu.be watch, share, or embed link'
+    )
+  }
 
   const providedCaptions = input.captionsPath?.trim()
   if (providedCaptions) {
@@ -523,7 +556,7 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
       if (ytdlp) {
         const titleProbe = await runYtDlp(
           ytdlp.cmd,
-          [...ytdlp.argsPrefix, '--skip-download', '--print', '%(title)s', '--no-warnings', url],
+          [...ytdlp.argsPrefix, '--skip-download', '--print', '%(title)s', '--no-warnings', '--', url],
           { timeoutMs: 60_000 }
         )
         if (titleProbe.status === 0) {
@@ -572,7 +605,7 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
     let track: CaptionTrack | undefined
     const meta = await runYtDlp(
       ytdlp.cmd,
-      [...ytdlp.argsPrefix, '-J', '--skip-download', '--no-warnings', ...extraArgs, url],
+      [...ytdlp.argsPrefix, '-J', '--skip-download', '--no-warnings', ...extraArgs, '--', url],
       { timeoutMs: 60_000, maxBuffer: 64 * 1024 * 1024 }
     )
     if (meta.status === 0 && meta.stdout) {

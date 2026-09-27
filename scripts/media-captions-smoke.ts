@@ -18,6 +18,7 @@ import {
   buildYtDlpSubtitleArgs,
   describeYtDlpFailure,
   ingestYoutubeMedia,
+  normalizeYoutubeUrl,
   pickCaptionTrack,
   ingestLocalMedia,
   ensureMediaReaderPrompt,
@@ -118,7 +119,28 @@ assert(ytArgs.includes('--retries') && ytArgs.includes('--retry-sleep'), 'retrie
 const langs = ytArgs[ytArgs.indexOf('--sub-langs') + 1]
 assert(/\ben\b/.test(langs) && langs.includes('en-US') && langs.includes('en-GB'), `sub-langs: ${langs}`)
 assert(ytArgs[ytArgs.length - 1] === 'https://www.youtube.com/watch?v=abc', 'URL is last')
+assert(ytArgs[ytArgs.length - 2] === '--', '-- separates options from the URL (no injection)')
 assert(ytArgs.indexOf('--cookies-from-browser') < ytArgs.length - 1, 'extra args before URL')
+
+// URL validation (#22): exact YouTube hosts only, video id must match ^[\w-]{11}$.
+assert(
+  normalizeYoutubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ') ===
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'normalizes a watch URL'
+)
+assert(
+  normalizeYoutubeUrl('https://youtu.be/dQw4w9WgXcQ') === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'normalizes a youtu.be share link'
+)
+assert(
+  normalizeYoutubeUrl('https://www.youtube.com/shorts/dQw4w9WgXcQ') ===
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'normalizes a shorts link'
+)
+assert(normalizeYoutubeUrl('https://evil-youtube.com/watch?v=dQw4w9WgXcQ') === null, 'rejects evil-youtube.com')
+assert(normalizeYoutubeUrl('--exec=rm -rf /') === null, 'rejects an option-injection string')
+assert(normalizeYoutubeUrl('https://www.youtube.com/watch?v=short') === null, 'rejects an invalid video id')
+assert(normalizeYoutubeUrl('not a url') === null, 'rejects non-URL input')
 
 const rateLimited = describeYtDlpFailure(
   "ERROR: Unable to download video subtitles for 'en': HTTP Error 429: Too Many Requests",
