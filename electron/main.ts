@@ -1,7 +1,7 @@
 /**
  * Electron main process — app lifecycle + IPC handlers.
  */
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell, type OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { pathToFileURL } from 'url'
@@ -141,6 +141,38 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+
+/**
+ * Packaged builds load the renderer via file://, so the youtube-nocookie embed
+ * iframe is sent with a `null` origin and no Referer, which YouTube rejects with
+ * player error 153. Rewrite those requests to carry the embed page's own origin
+ * (https://www.youtube-nocookie.com) and a strict-origin Referer, mirroring what
+ * a browser sends when the embed is loaded from a real page. Dev (localhost) is
+ * unaffected and needs no rewrite.
+ */
+function fixYoutubeEmbedHeaders(): void {
+  const filter = {
+    urls: [
+      'https://*.youtube.com/embed/*',
+      'https://*.youtube-nocookie.com/embed/*',
+      'https://www.youtube.com/embed/*',
+      'https://www.youtube-nocookie.com/embed/*',
+    ],
+  }
+  const rewrite = (details: Electron.OnBeforeSendHeadersListenerDetails) => {
+    try {
+      const u = new URL(details.url)
+      // Only rewrite when the embedding page is our file:// renderer (the packaged case).
+      if (!(details.referrer === '' || details.referrer.startsWith('file://'))) return
+      details.requestHeaders['Referer'] = `${u.origin}/`
+      details.requestHeaders['Origin'] = u.origin
+    } catch {
+      /* leave headers untouched */
+    }
+  }
+  // defaultSession covers the main window (no partition is used anywhere).
+  session.defaultSession.webRequest.onBeforeSendHeaders(filter, rewrite)
+}
 
 function dbPath(): string {
   const dir = app.getPath('userData')
@@ -572,6 +604,7 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  fixYoutubeEmbedHeaders()
   protocol.handle('lkvmedia', async (request) => {
     try {
       const u = new URL(request.url)
