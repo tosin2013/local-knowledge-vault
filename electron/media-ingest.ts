@@ -23,7 +23,9 @@ import {
   deleteItem,
   listChatProfiles,
   listItems,
+  listItemsByProjectExact,
   listPrompts,
+  runInTransaction,
   updateChatProfile,
   updatePrompt,
 } from './db'
@@ -119,11 +121,8 @@ function upsertMediaProfile(project: string, promptId: string, displayTitle: str
     }
     return existing
   }
-  // Also match by name for re-ingest
-  const byName = listChatProfiles().find((p) => p.name === name)
-  if (byName) {
-    return updateChatProfile(byName.id, { name, promptId, project })!
-  }
+  // Match by exact project only — reusing a profile by display name would leak
+  // it across two sources whose projects happen to share a title.
   return createChatProfile({ name, promptId, project })
 }
 
@@ -131,21 +130,60 @@ function stemFromPath(filePath: string): string {
   return path.basename(filePath, path.extname(filePath)) || 'Media'
 }
 
-function replaceProjectTranscripts(project: string): number {
-  const items = listItems({ project, kind: 'transcript' })
+/** A media source identity: absolute local path, or canonical YouTube watch URL. */
+export interface MediaSource {
+  sourcePath?: string
+  sourceUrl?: string
+}
+
+export function itemSource(it: Item): { sourcePath?: string; sourceUrl?: string } {
+  const pathM = it.body.match(/^\s*source_path:\s*(.+)\s*$/m)
+  const urlM = it.body.match(/^\s*source_url:\s*(.+)\s*$/m)
+  return { sourcePath: pathM?.[1].trim(), sourceUrl: urlM?.[1].trim() }
+}
+
+/** true = this source, false = a different source, null = no source marker (legacy note). */
+export function matchesSource(it: Item, src: MediaSource): boolean | null {
+  const s = itemSource(it)
+  if (s.sourcePath === undefined && s.sourceUrl === undefined) return null
+  return (
+    (src.sourcePath !== undefined && s.sourcePath === src.sourcePath) ||
+    (src.sourceUrl !== undefined && s.sourceUrl === src.sourceUrl)
+  )
+}
+
+/**
+ * Resolve the project name for an ingest. A name is reused only when every
+ * transcript note under it belongs to this source (or is legacy/marker-less);
+ * if another source already uses it, the name gets a "(2)", "(3)", … suffix so
+ * two different files/videos never share a project — and can never wipe or mix
+ * each other's notes.
+ */
+export function projectNameFor(base: string, source: MediaSource): string {
+  for (let i = 1; i < 200; i++) {
+    const name = i === 1 ? base : `${base.slice(0, 116)} (${i})`
+    const notes = listItemsByProjectExact(name, 'transcript')
+    if (notes.length === 0) return name
+    if (notes.some((it) => matchesSource(it, source) === false)) continue
+    return name
+  }
+  throw new Error(`Could not find a free project name for "${base}"`)
+}
+
+/**
+ * Delete transcript notes under `project` that belong to `source` (plus legacy
+ * marker-less notes, safe because projectNameFor guarantees no other source uses
+ * this project). Another source's notes in a colliding project are never touched.
+ */
+export function replaceProjectTranscripts(project: string, source: MediaSource): number {
+  const candidates = listItemsByProjectExact(project).filter(
+    (it) => it.kind === 'transcript' || /kind_tag:\s*transcript/i.test(it.body)
+  )
   let n = 0
-  for (const it of items) {
+  for (const it of candidates) {
+    if (matchesSource(it, source) === false) continue
     deleteItem(it.id)
     n += 1
-  }
-  // Also remove legacy notes tagged kind_tag: transcript under this project
-  const all = listItems({ project })
-  for (const it of all) {
-    if (it.kind === 'transcript') continue
-    if (/kind_tag:\s*transcript/i.test(it.body) || /^Media — /.test(it.title)) {
-      deleteItem(it.id)
-      n += 1
-    }
   }
   return n
 }
@@ -208,24 +246,23 @@ export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
     throw new Error('No caption cues found in SRT/VTT file')
   }
   const chunks = chunkCues(cues)
-  const title = stemFromPath(mediaPath)
-  const project = (input.project?.trim() || title).slice(0, 120)
+  const source: MediaSource = { sourcePath: mediaPath }
+  const baseName = (input.project?.trim() || stemFromPath(mediaPath)).slice(0, 120)
+  const project = projectNameFor(baseName, source)
 
-  if (input.replaceExisting !== false) {
-    replaceProjectTranscripts(project)
-  }
-
-  const created = writeChunksAsNotes(chunks, {
-    project,
-    sourcePath: mediaPath,
+  // Delete + create in one transaction: a mid-ingest failure can no longer
+  // leave the project empty.
+  const created = runInTransaction(() => {
+    if (input.replaceExisting !== false) replaceProjectTranscripts(project, source)
+    return writeChunksAsNotes(chunks, { project, sourcePath: mediaPath })
   })
 
   const prompt = ensureMediaReaderPrompt()
-  const profile = upsertMediaProfile(project, prompt.id, title)
+  const profile = upsertMediaProfile(project, prompt.id, project)
 
   return {
     project,
-    title,
+    title: project,
     noteCount: created.length,
     itemIds: created.map((c) => c.id),
     promptId: prompt.id,
@@ -572,11 +609,15 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
       /* ignore */
     }
     title = title.slice(0, 120)
-    const project = (input.project?.trim() || title).slice(0, 120)
-    if (input.replaceExisting !== false) replaceProjectTranscripts(project)
-    const created = writeChunksAsNotes(chunks, { project, sourceUrl: url })
+    const source: MediaSource = { sourceUrl: url }
+    const baseName = (input.project?.trim() || title).slice(0, 120)
+    const project = projectNameFor(baseName, source)
+    const created = runInTransaction(() => {
+      if (input.replaceExisting !== false) replaceProjectTranscripts(project, source)
+      return writeChunksAsNotes(chunks, { project, sourceUrl: url })
+    })
     const prompt = ensureMediaReaderPrompt()
-    const profile = upsertMediaProfile(project, prompt.id, title)
+    const profile = upsertMediaProfile(project, prompt.id, project)
     return {
       project,
       title,
@@ -676,19 +717,22 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
     // Stem often looks like "Title.en-XXXX"; drop trailing lang tags for display.
     const stem = stemFromPath(captionFile).replace(/\.(en(?:-[^.]+)?)$/i, '')
     const title = (printedTitle || stem || 'YouTube').slice(0, 120)
-    const project = (input.project?.trim() || title).slice(0, 120)
+    const source: MediaSource = { sourceUrl: url }
+    const baseName = (input.project?.trim() || title).slice(0, 120)
+    const project = projectNameFor(baseName, source)
 
-    if (input.replaceExisting !== false) {
-      replaceProjectTranscripts(project)
-    }
-
-    const created = writeChunksAsNotes(chunks, {
-      project,
-      sourceUrl: url,
+    const created = runInTransaction(() => {
+      if (input.replaceExisting !== false) {
+        replaceProjectTranscripts(project, source)
+      }
+      return writeChunksAsNotes(chunks, {
+        project,
+        sourceUrl: url,
+      })
     })
 
     const prompt = ensureMediaReaderPrompt()
-    const profile = upsertMediaProfile(project, prompt.id, title)
+    const profile = upsertMediaProfile(project, prompt.id, project)
 
     return {
       project,

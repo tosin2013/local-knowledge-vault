@@ -14,7 +14,7 @@ import {
   parseSrt,
   parseTStartFromBody,
 } from '../electron/media-captions'
-import { closeDb, initDb, listItems } from '../electron/db'
+import { closeDb, createItem, getItem, initDb, listItems, listItemsByProjectExact, runInTransaction } from '../electron/db'
 import {
   buildYtDlpSubtitleArgs,
   describeYtDlpFailure,
@@ -256,6 +256,65 @@ void (async () => {
     t_start: t0,
     mediaProtocolUrl: result.mediaProtocolUrl,
   })
+
+  // ---- #28: re-ingest collision isolation + atomic delete/create ----
+  const dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-collision-a-'))
+  const mediaA = path.join(dirA, 'intro.mp4')
+  const capsA = path.join(dirA, 'intro.srt')
+  fs.writeFileSync(mediaA, 'video-a')
+  fs.copyFileSync(fixture, capsA)
+  const rA = ingestLocalMedia({ mediaPath: mediaA, captionsPath: capsA })
+  assert(rA.project === 'intro', `first file gets project "intro" (got "${rA.project}")`)
+
+  const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-collision-b-'))
+  const mediaB = path.join(dirB, 'intro.mp4')
+  const capsB = path.join(dirB, 'intro.srt')
+  fs.writeFileSync(mediaB, 'video-b')
+  fs.copyFileSync(fixture, capsB)
+  const rB = ingestLocalMedia({ mediaPath: mediaB, captionsPath: capsB })
+  assert(
+    rB.project === 'intro (2)',
+    `second file with the same stem gets a suffixed project (got "${rB.project}")`
+  )
+  assert(
+    listItemsByProjectExact('intro', 'transcript').length === rA.noteCount,
+    "file A's notes survive file B's ingest"
+  )
+
+  // A hand-written "Media — " note in the same-named project must never be deleted.
+  const handNote = createItem({
+    title: 'Media — my ideas',
+    body: 'personal notes',
+    para: 'resources',
+    kind: 'note',
+    project: 'intro',
+  })
+
+  // Re-ingesting file A replaces only its own notes.
+  const rA2 = ingestLocalMedia({ mediaPath: mediaA, captionsPath: capsA })
+  assert(rA2.project === 'intro', 're-ingest of A keeps project "intro"')
+  assert(
+    listItemsByProjectExact('intro', 'transcript').length === rA.noteCount,
+    "re-ingest replaces A's notes (same count)"
+  )
+  assert(
+    listItemsByProjectExact('intro (2)', 'transcript').length === rB.noteCount,
+    "B's notes untouched by A's re-ingest"
+  )
+  assert(getItem(handNote.id) !== null, 'hand-written "Media — …" note survives re-ingest')
+
+  // The delete+create transaction rolls back on failure.
+  const beforeTx = listItems({}).length
+  let rolledBack = false
+  try {
+    runInTransaction(() => {
+      createItem({ title: 'tx-temp', body: 'x', para: 'resources' })
+      throw new Error('boom')
+    })
+  } catch {
+    rolledBack = true
+  }
+  assert(rolledBack && listItems({}).length === beforeTx, 'transaction rolls back on failure')
 
   // ---- #25: yt-dlp must run async (no main-process freeze) and surface timeout/error clearly ----
 
