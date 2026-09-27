@@ -568,7 +568,14 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
         {active?.mediaUrl && (
           <Typography variant="caption" color="text.secondary">
             Watch:{' '}
-            <Link href={active.mediaUrl} target="_blank" rel="noreferrer">
+            <Link
+              component="button"
+              type="button"
+              onClick={() => {
+                const u = active?.mediaUrl
+                if (u) void window.lkv?.app?.openExternal(u)
+              }}
+            >
               {active.mediaUrl}
             </Link>
           </Typography>
