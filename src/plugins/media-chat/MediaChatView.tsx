@@ -61,23 +61,59 @@ function isAudioPath(p?: string): boolean {
   return /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(p)
 }
 
-function youtubeIdFromUrl(url: string): string | null {
-  try {
-    const u = new URL(url)
-    if (u.hostname.includes('youtu.be')) {
-      return u.pathname.replace(/^\//, '').split('/')[0] || null
+/** Minimal YouTube IFrame API surface used by Media chat. */
+interface YTPlayer {
+  seekTo(seconds: number, allowSeekAhead: boolean): void
+  getCurrentTime(): number
+  getPlayerState(): number
+  destroy(): void
+}
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (
+        el: HTMLIFrameElement,
+        opts: {
+          events?: { onReady?: () => void; onStateChange?: (e: { data: number }) => void }
+        }
+      ) => YTPlayer
     }
-    const v = u.searchParams.get('v')
-    if (v) return v
-    const parts = u.pathname.split('/').filter(Boolean)
-    const i = parts.indexOf('embed')
-    if (i >= 0 && parts[i + 1]) return parts[i + 1]
-    const s = parts.indexOf('shorts')
-    if (s >= 0 && parts[s + 1]) return parts[s + 1]
-  } catch {
-    /* ignore */
+    onYouTubeIframeAPIReady?: () => void
   }
-  return null
+}
+
+const YT_IFRAME_API = 'https://www.youtube.com/iframe_api'
+let ytApiPromise: Promise<void> | null = null
+
+/** Load the YouTube IFrame API once (no-op when already present or unavailable). */
+function loadYouTubeIframeApi(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
+  if (window.YT?.Player) return Promise.resolve()
+  if (ytApiPromise) return ytApiPromise
+  ytApiPromise = new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('YouTube IFrame API timed out')), 15000)
+    window.onYouTubeIframeAPIReady = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const script = document.createElement('script')
+    script.src = YT_IFRAME_API
+    script.async = true
+    script.onerror = () => {
+      clearTimeout(timer)
+      ytApiPromise = null
+      reject(new Error('Could not load the YouTube player API'))
+    }
+    document.head.appendChild(script)
+  })
+  return ytApiPromise
+}
+
+/** Video id from a youtube-nocookie embed URL produced by media:youtubeEmbedUrl. */
+function videoIdFromEmbedUrl(embedUrl: string): string | null {
+  const m = embedUrl.match(/\/embed\/([\w-]{11})/)
+  return m ? m[1] : null
 }
 
 type ActiveMedia = {
@@ -118,6 +154,10 @@ function writeStoredVoiceName(name: string) {
 
 export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
   const videoRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null)
+  const ytFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const ytPlayerRef = useRef<YTPlayer | null>(null)
+  const ytPlayingRef = useRef(false)
+  const notesNearAtRef = useRef(0)
   const currentTimeRef = useRef(0)
   const [projects, setProjects] = useState<MediaProjectInfo[]>([])
   const [active, setActive] = useState<ActiveMedia | null>(null)
@@ -131,6 +171,8 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [embedUrl, setEmbedUrl] = useState<string | null>(null)
+  const [ytVideoId, setYtVideoId] = useState<string | null>(null)
+  const [ytReady, setYtReady] = useState(false)
   const [nearCount, setNearCount] = useState<number | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [voices, setVoices] = useState<MediaVoiceOption[]>([])
@@ -213,12 +255,17 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
     return () => el.removeEventListener('timeupdate', onTime)
   }, [active?.mediaProtocolUrl, active?.mediaPath, fullscreen])
 
-  // Near-playhead note count (informational)
+  // Near-playhead note count (informational). Throttled: playback fires
+  // timeupdate ~4/s and the YouTube poll fires 1/s, but each tick is an IPC
+  // round-trip + full project scan, so at most one scan every 2 s.
   useEffect(() => {
     if (!active || !window.lkv?.media?.notesNear) {
       setNearCount(null)
       return
     }
+    const now = Date.now()
+    if (now - notesNearAtRef.current < 2000) return
+    notesNearAtRef.current = now
     let cancelled = false
     const tick = async () => {
       try {
@@ -238,24 +285,99 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
     }
   }, [active, currentTime])
 
+  // YouTube embed URL comes from the main process (single hardened parser), and the
+  // IFrame API player is created once the iframe exists.
   useEffect(() => {
-    if (!active?.mediaUrl) {
+    let cancelled = false
+    ytPlayerRef.current?.destroy()
+    ytPlayerRef.current = null
+    ytPlayingRef.current = false
+    setYtReady(false)
+    setYtVideoId(null)
+    if (!active?.mediaUrl || !window.lkv?.media?.youtubeEmbedUrl) {
       setEmbedUrl(null)
       return
     }
-    const id = youtubeIdFromUrl(active.mediaUrl)
-    if (id) {
-      // origin= (strict) + referrerpolicy keep the embed working in packaged
-      // builds, where the renderer is file:// and would otherwise send a null
-      // origin (YouTube player error 153). The main process also rewrites
-      // Referer/Origin for these requests; see fixYoutubeEmbedHeaders().
-      setEmbedUrl(
-        `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1&origin=https%3A%2F%2Fwww.youtube-nocookie.com`
-      )
-    } else {
-      setEmbedUrl(null)
+    void window.lkv.media
+      .youtubeEmbedUrl(active.mediaUrl)
+      .then((url) => {
+        if (cancelled) return
+        if (!url) {
+          setEmbedUrl(null)
+          return
+        }
+        // origin= (strict) keeps the embed working in packaged builds, where the
+        // renderer is file:// and would otherwise send a null origin (player
+        // error 153). The main process also rewrites Referer/Origin; see
+        // fixYoutubeEmbedHeaders().
+        const sep = url.includes('?') ? '&' : '?'
+        const withOrigin = `${url}${sep}origin=${encodeURIComponent(
+          'https://www.youtube-nocookie.com'
+        )}`
+        setEmbedUrl(withOrigin)
+        setYtVideoId(videoIdFromEmbedUrl(url))
+      })
+      .catch(() => {
+        if (!cancelled) setEmbedUrl(null)
+      })
+    return () => {
+      cancelled = true
     }
   }, [active?.mediaUrl])
+
+  // Create the YT player once the iframe is mounted; poll the playhead while playing.
+  useEffect(() => {
+    if (!embedUrl || !ytVideoId) return
+    let cancelled = false
+    let poll: ReturnType<typeof setInterval> | null = null
+    const mount = async () => {
+      try {
+        await loadYouTubeIframeApi()
+      } catch {
+        return // embed still plays; seek/follow-playhead stay unavailable
+      }
+      if (cancelled || !ytFrameRef.current || !window.YT?.Player) return
+      try {
+        ytPlayerRef.current?.destroy()
+      } catch {
+        /* ignore */
+      }
+      const player = new window.YT.Player(ytFrameRef.current, {
+        events: {
+          onReady: () => {
+            if (!cancelled) setYtReady(true)
+          },
+          onStateChange: (e) => {
+            // 1 = playing
+            ytPlayingRef.current = e.data === 1
+          },
+        },
+      })
+      ytPlayerRef.current = player
+      poll = setInterval(() => {
+        if (cancelled || !ytPlayingRef.current) return
+        try {
+          const t = player.getCurrentTime()
+          if (Number.isFinite(t)) setCurrentTime(t)
+        } catch {
+          /* player gone */
+        }
+      }, 1000)
+    }
+    void mount()
+    return () => {
+      cancelled = true
+      if (poll) clearInterval(poll)
+      try {
+        ytPlayerRef.current?.destroy()
+      } catch {
+        /* ignore */
+      }
+      ytPlayerRef.current = null
+      ytPlayingRef.current = false
+      setYtReady(false)
+    }
+  }, [embedUrl, ytVideoId])
 
   const resolveVoicePrompt = (
     opts: MediaVoiceOption[],
@@ -387,8 +509,18 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
       setCurrentTime(sec)
       return
     }
-    // YouTube iframe: cannot seek without IFrame API wiring — show hint
-    setStatus(`Seek target ${formatClock(sec)} — open the watch URL or use local media for click-to-seek.`)
+    const yt = ytPlayerRef.current
+    if (yt && ytReady) {
+      try {
+        yt.seekTo(sec, true)
+        setCurrentTime(sec)
+        return
+      } catch {
+        /* fall through to the hint */
+      }
+    }
+    // YouTube player not ready (or API blocked) — show hint
+    setStatus(`Seek target ${formatClock(sec)} — play the video first, or use local media for click-to-seek.`)
   }
 
   const onCitationClick = async (id: string) => {
@@ -541,6 +673,7 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
             }}
           >
             <iframe
+              ref={ytFrameRef}
               title="YouTube"
               src={embedUrl}
               referrerPolicy="strict-origin-when-cross-origin"
@@ -591,9 +724,11 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
         {renderPlayerControls()}
         {active?.sourceType === 'youtube' && (
           <Typography variant="caption" color="text.secondary">
+            {ytReady
+              ? 'Click a citation to seek; “Ask about this moment” uses the playhead.'
+              : 'Loading the YouTube player… citation seek activates once it is ready.'}{' '}
             If the embedded player fails to load, use the “Watch” link above to open the video in your
-            browser. YouTube embed may restrict seeking from citations. Use “Ask about this moment” with
-            a manual time, or prefer local media for full seek sync.
+            browser, or prefer local media for full seek sync.
           </Typography>
         )}
       </Paper>
