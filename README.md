@@ -1,5 +1,7 @@
 # Vault
 
+[![codecov](https://codecov.io/gh/tosin2013/local-knowledge-vault/graph/badge.svg)](https://app.codecov.io/gh/tosin2013/local-knowledge-vault)
+
 **Chat with your notes on your own computer. Every answer cites the note it came from, or says it doesn't know.**
 
 Vault (Local Knowledge Vault) is a desktop app for macOS, Windows and Linux. Your notes stay in a

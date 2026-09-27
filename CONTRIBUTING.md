@@ -57,15 +57,17 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request, so run them lo
 ```bash
 npm run typecheck
 npm run build
-npm run test:mvp
-npm run test:providers
-npm run test:media
-npm run test:citation-pack
+npm run coverage   # runs test:mvp, test:providers, test:media and test:citation-pack under c8
 ```
 
 There is no test framework. Each `test:*` script is a headless smoke script in `scripts/` that exits
 non-zero on failure. If you change behaviour, extend the matching script. `test:providers:live` and
 `test:mcp-discovery` use the network and are not part of CI.
+
+CI uploads `coverage/lcov.info` to [Codecov](https://app.codecov.io/gh/tosin2013/local-knowledge-vault).
+Gates are in `codecov.yml`: total coverage may not drop more than 1% below `main`, and lines a pull
+request adds or changes need 70% coverage. The goal for the main process (`electron/`) is 60% or more.
+Open `coverage/lcov-report/index.html` after `npm run coverage` to see which lines your change left untested.
 
 UI changes also need a manual check in `npm run dev`, because no test mounts the renderer yet.
 

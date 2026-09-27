@@ -1,0 +1,44 @@
+# Coverage gates for pull requests. Coverage comes from `npm run coverage` (c8 over the offline smoke
+# tests in scripts/), uploaded by .github/workflows/ci.yml.
+#
+# Goal: main process (electron/) >= 60% lines, raised as tests land (#43). The renderer (src/) has no
+# tests that mount it yet, so its component is informational.
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 1
+  round: down
+  range: "40...80"
+  status:
+    project:
+      default:
+        # No regressions: total coverage may not drop more than 1% below the base commit.
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        # Lines added or changed by a PR must be tested.
+        target: 70%
+
+component_management:
+  individual_components:
+    - component_id: main-process
+      name: main process
+      paths:
+        - electron/**
+    - component_id: renderer
+      name: renderer
+      paths:
+        - src/**
+      statuses:
+        - type: project
+          target: auto
+          informational: true
+
+ignore:
+  - "electron/types.ts"
+  - "scripts/**"
+
+comment:
+  layout: "diff, components, files"
