@@ -150,6 +150,73 @@ function dbPath(): string {
   return path.join(dir, 'lkv.sqlite')
 }
 
+/** Append a startup failure to <userData>/startup-error.log (best-effort). */
+function logStartupError(message: string): void {
+  try {
+    const dir = app.getPath('userData')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.appendFileSync(
+      path.join(dir, 'startup-error.log'),
+      `[${new Date().toISOString()}] ${message}\n`,
+      'utf8'
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Move lkv.sqlite (+ WAL/SHM) aside so a fresh vault can be created. */
+function backUpDbFiles(): void {
+  const dir = app.getPath('userData')
+  const ts = Date.now()
+  for (const suffix of ['', '-wal', '-shm']) {
+    const p = path.join(dir, `lkv.sqlite${suffix}`)
+    if (!fs.existsSync(p)) continue
+    try {
+      fs.renameSync(p, path.join(dir, `lkv.sqlite.backup-${ts}${suffix}`))
+    } catch {
+      /* leave in place; the next initDb will report it */
+    }
+  }
+}
+
+/**
+ * Initialize the database, recovering from failure with a dialog instead of a
+ * silent no-window startup. Returns false when the user chooses to quit.
+ */
+async function initializeDbWithRecovery(): Promise<boolean> {
+  const dir = app.getPath('userData')
+  for (;;) {
+    try {
+      initDb(dbPath())
+      return true
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logStartupError(msg)
+      const { response } = await dialog.showMessageBox({
+        type: 'error',
+        title: 'Vault could not open its database',
+        message: 'Vault failed to open the local database.',
+        detail:
+          `${msg}\n\nYour notes are not lost. "Back up & reset" renames the database file ` +
+          `and starts a fresh, empty vault. "Open data folder" shows the files on disk so you ` +
+          `can inspect them.`,
+        buttons: ['Back up & reset', 'Open data folder', 'Quit'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      })
+      if (response === 0) {
+        backUpDbFiles()
+      } else if (response === 1) {
+        void shell.openPath(dir)
+      } else {
+        return false
+      }
+    }
+  }
+}
+
 /** Window/taskbar icon: project build/ in dev; extraResources icon.png when packaged. */
 function resolveAppIcon(): string | undefined {
   const candidates = app.isPackaged
@@ -488,7 +555,7 @@ function registerIpc(): void {
 
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   protocol.handle('lkvmedia', (request) => {
     try {
       const u = new URL(request.url)
@@ -503,7 +570,10 @@ app.whenReady().then(() => {
     }
   })
 
-  initDb(dbPath())
+  if (!(await initializeDbWithRecovery())) {
+    app.quit()
+    return
+  }
   try {
     ensureMediaReaderPrompt()
   } catch {
