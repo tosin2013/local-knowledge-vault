@@ -13,7 +13,7 @@ import { ollamaGenerate, ollamaHealth, pickModel } from './ollama'
 import { openAiChat, openAiListModels } from './providers/openai-compatible'
 import { anthropicChat, anthropicListModels } from './providers/anthropic'
 import type { GenerateInput, GenerateResult } from './providers/http'
-import { RECOMMENDED_LOCAL_MODEL, isSmallModel, isCloudModel } from './providers/presets'
+import { RECOMMENDED_LOCAL_MODEL, isSmallModel, isCloudModel, getBuiltinPreset } from './providers/presets'
 import {
   getProviderConfig,
   getProviderKey,
@@ -237,10 +237,22 @@ function draftToConfig(d: ProviderDraft): ProviderConfig {
   }
 }
 
+/** The base URL a stored key is tied to: the saved provider's, or the preset default. */
+function trustedBaseUrl(d: ProviderDraft): string | null {
+  const existing = d.id ? getProviderConfig(d.id) : undefined
+  if (existing) return existing.baseUrl.replace(/\/+$/, '')
+  const preset = d.presetId ? getBuiltinPreset(d.presetId) : undefined
+  return preset ? preset.baseUrl.replace(/\/+$/, '') : null
+}
+
 function draftKey(d: ProviderDraft, cfg: ProviderConfig): string | null {
   if (typeof d.apiKey === 'string' && d.apiKey.trim()) return d.apiKey.trim()
   if (d.apiKey === null) return null
-  // Blank field: use the saved key (by id) or an env key for the preset.
+  // Blank field: reuse the saved/env key ONLY when the draft baseUrl still points at the
+  // provider's known base URL (saved or preset default). Otherwise the key would be sent to
+  // an arbitrary URL, breaking the write-only-keys guarantee.
+  const trusted = trustedBaseUrl(d)
+  if (trusted && cfg.baseUrl !== trusted) return null
   return keyFor(cfg)
 }
 

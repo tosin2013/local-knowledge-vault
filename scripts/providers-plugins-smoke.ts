@@ -178,6 +178,33 @@ async function main() {
   assert(removeProvider(saved.id) && !fs.existsSync(kp), 'remove deletes provider + its own key file')
   assert(getSelection() === 'auto', 'removing the selected provider falls back to Auto')
 
+  console.log('\n#21: stored key reuse is gated on the draft baseUrl')
+  const keyA = await mockServer((req, res) => {
+    if (req.url === '/v1/models') return json(res, 200, { data: [{ id: 'm-a' }] })
+    return json(res, 404, {})
+  })
+  const keyB = await mockServer((req, res) => {
+    if (req.url === '/v1/models') return json(res, 200, { data: [{ id: 'm-b' }] })
+    return json(res, 404, {})
+  })
+  const sp = upsertProvider({
+    kind: 'openai-compatible',
+    label: 'Keyed',
+    baseUrl: `${keyA.url}/v1`,
+    model: 'm-a',
+    apiKey: 'sk-secret-1',
+    local: false,
+  })
+  // Unchanged baseUrl + blank key → the stored key is reused.
+  await fetchProviderModels({ id: sp.id, kind: 'openai-compatible', label: 'Keyed', baseUrl: `${keyA.url}/v1`, model: 'm-a', apiKey: '' })
+  assert(keyA.seen.some((s) => s.headers.authorization === 'Bearer sk-secret-1'), 'unchanged baseUrl reuses the stored key')
+  // Changed baseUrl + blank key → the stored key must NOT be sent to the new host.
+  await fetchProviderModels({ id: sp.id, kind: 'openai-compatible', label: 'Keyed', baseUrl: `${keyB.url}/v1`, model: 'm-a', apiKey: '' })
+  assert(!JSON.stringify(keyB.seen).includes('sk-secret-1'), 'changed baseUrl never receives the stored key')
+  removeProvider(sp.id)
+  await keyA.close()
+  await keyB.close()
+
   console.log('\nAnthropic adapter shape (mock server)')
   const an = await mockServer((req, res) => {
     if (req.url === '/v1/messages') return json(res, 200, { content: [{ type: 'text', text: 'OK' }] })
