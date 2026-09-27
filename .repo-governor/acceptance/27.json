@@ -1,0 +1,12 @@
+{
+  "$comment": "Completion bar for #27: enablejsapi=1 was set but no IFrame API/postMessage code existed, so currentTime stayed 0, 'Ask about this moment' always sent [At 00:00], and citation clicks only showed a hint. Fix: load the IFrame API once, create a YT.Player on the embed iframe, poll getCurrentTime 1/s while playing, seekTo via the player (HTML5 path unchanged), throttle notesNear scans to one per 2s, and use media:youtubeEmbedUrl IPC instead of the renderer's duplicate parser. script-src gains https://www.youtube.com (origin-level CSP cannot express the iframe_api path; everything else from #17 stays strict). Criteria 1-3 fail before; 4-6 guard typecheck/build/tests. The live player handshake needs a real YouTube session in a packaged build (same caveat as #24), so manual verification is noted in the PR.",
+  "authority_id": "27",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"loadYouTubeIframeApi\" src/plugins/media-chat/MediaChatView.tsx" },
+    { "check": "command_exit", "target": "! grep -q \"youtubeIdFromUrl\" src/plugins/media-chat/MediaChatView.tsx" },
+    { "check": "command_exit", "target": "grep -q \"notesNearAtRef\" src/plugins/media-chat/MediaChatView.tsx" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp && npm run test:media" }
+  ]
+}
