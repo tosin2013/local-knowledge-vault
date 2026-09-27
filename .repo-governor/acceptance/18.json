@@ -1,0 +1,12 @@
+{
+  "$comment": "Completion bar for #18: the lkvmedia:// protocol handler passed `?path=` straight to net.fetch(file://) with no allowlist/type/directory check, and the scheme was registered with bypassCSP/supportFetchAPI/corsEnabled — so renderer code (or a remote page via the missing window guards) could read any file on disk (keys, JSON, ~/.ssh/id_rsa). Fix: serve only files registered under opaque ids (media-protocol.ts), allowlist media extensions, reject directories and non-media files, drop bypassCSP/corsEnabled/supportFetchAPI, and set correct MIME types. Criteria 1-2 fail before the change (bypassCSP was present; resolveMediaFile did not exist); 3 covers the registry unit tests; 4-5 guard typecheck, build, and the rest of the suite.",
+  "authority_id": "18",
+  "criteria": [
+    { "check": "command_exit", "target": "! grep -q \"bypassCSP\" electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q \"resolveMediaFile\" electron/main.ts" },
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}

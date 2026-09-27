@@ -28,6 +28,7 @@ import {
   updatePrompt,
 } from './db'
 import { resolveUserDataDir } from './user-data'
+import { mediaProtocolUrlForPath } from './media-protocol'
 import type { ChatProfile, Item, Prompt } from './types'
 
 export const MEDIA_READER_NAME = 'Media reader'
@@ -193,9 +194,7 @@ export function findCompanionCaptions(mediaPath: string): string | null {
   return null
 }
 
-export function mediaProtocolUrlForPath(absPath: string): string {
-  return `lkvmedia://local/?path=${encodeURIComponent(absPath)}`
-}
+export { mediaProtocolUrlForPath }
 
 export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
   const mediaPath = path.resolve(input.mediaPath)
@@ -233,7 +232,7 @@ export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
     profileId: profile.id,
     sourceType: 'local',
     mediaPath,
-    mediaProtocolUrl: mediaProtocolUrlForPath(mediaPath),
+    mediaProtocolUrl: mediaProtocolUrlForPath(mediaPath) ?? undefined,
   }
 }
 
@@ -692,7 +691,7 @@ function sourceMetaFromItems(items: Item[]): {
         sourceType: 'local',
         mediaPath,
         mediaProtocolUrl: fs.existsSync(mediaPath)
-          ? mediaProtocolUrlForPath(mediaPath)
+          ? (mediaProtocolUrlForPath(mediaPath) ?? undefined)
           : undefined,
       }
     }

@@ -23,9 +23,49 @@ import {
   ensureMediaReaderPrompt,
   runYtDlp,
 } from '../electron/media-ingest'
+import {
+  registerMediaFile,
+  resolveMediaFile,
+  mediaMimeType,
+  mediaProtocolUrlForPath,
+} from '../electron/media-protocol'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)
+}
+
+// ---- #18: media protocol registry (opaque ids, extension allowlist, no traversal) ----
+{
+  const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-media-'))
+  const goodMp4 = path.join(mediaDir, 'clip.mp4')
+  const badTxt = path.join(mediaDir, 'notes.txt')
+  const noExt = path.join(mediaDir, 'id_rsa')
+  const keyFile = path.join(mediaDir, 'secret.key')
+  const jsonFile = path.join(mediaDir, 'lkv-providers.json')
+  fs.writeFileSync(goodMp4, 'mp4-bytes')
+  fs.writeFileSync(badTxt, 'txt')
+  fs.writeFileSync(noExt, 'ssh-key')
+  fs.writeFileSync(keyFile, 'key')
+  fs.writeFileSync(jsonFile, '{}')
+
+  assert(registerMediaFile(goodMp4) != null, 'registers a .mp4 file')
+  assert(registerMediaFile(badTxt) === null, 'rejects non-media extension (.txt)')
+  assert(registerMediaFile(noExt) === null, 'rejects extension-less path (e.g. ~/.ssh/id_rsa)')
+  assert(registerMediaFile(keyFile) === null, 'rejects .key files (provider keys)')
+  assert(registerMediaFile(jsonFile) === null, 'rejects .json files (settings)')
+  assert(registerMediaFile(mediaDir) === null, 'rejects a directory')
+  assert(registerMediaFile(path.join(mediaDir, 'missing.mp4')) === null, 'rejects non-existent file')
+
+  const id = registerMediaFile(goodMp4)!
+  assert(resolveMediaFile(id) === goodMp4, 'resolves opaque id to registered path')
+  assert(resolveMediaFile('deadbeef') === null, 'unknown id resolves to null')
+  assert(mediaMimeType(goodMp4) === 'video/mp4', 'MIME type for .mp4')
+  const url = mediaProtocolUrlForPath(goodMp4)!
+  assert(/^lkvmedia:\/\/media\//.test(url), `opaque media URL (${url})`)
+  assert(!url.includes('clip.mp4') && !url.includes(mediaDir), 'media URL never leaks the filesystem path')
+  assert(mediaProtocolUrlForPath(badTxt) === null, 'non-media path yields no URL')
+
+  fs.rmSync(mediaDir, { recursive: true, force: true })
 }
 
 const fixture = path.join(__dirname, '..', 'fixtures', 'sample.srt')
