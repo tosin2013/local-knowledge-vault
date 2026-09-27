@@ -1,0 +1,14 @@
+{
+  "$comment": "Completion bar for #30: only UTF-8 was read (UTF-16 SRT failed to import), a blank line inside an SRT cue dropped the rest, bad timestamps collapsed to 0, chunkCues assumed sorted input (end<start spans), and companion discovery missed .en-US.vtt/.eng.srt/upper-case extensions. Fix: decodeCaptions (UTF-16LE/BE BOM + NUL heuristic) wired into all three caption reads; parseTimestamp returns null on invalid input (invalid start skips the cue, invalid end becomes zero-duration at the valid start); parseSrt/parseVtt preserve in-cue blank lines; chunkCues sorts first; findCompanionCaptions covers regional/.eng/upper-case extensions and returns the true on-disk name. Criterion 1 fails before (decodeCaptions did not exist); 2 runs the media smoke fixtures; 3-4 guard typecheck and build. notesNear throttling (#30's last sub-item) is deferred: it needs renderer-side timeupdate changes that cannot be verified headlessly.",
+  "authority_id": "30",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"decodeCaptions\" electron/media-captions.ts" },
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ],
+  "covers": {
+    "declared": "Caption decoding, timestamp validation, in-cue blank lines, cue sorting, companion discovery (+fixtures).",
+    "uncovered": "notesNear scan-on-every-timeupdate throttling needs renderer-side changes unverifiable headlessly."
+  }
+}

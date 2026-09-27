@@ -8,6 +8,7 @@ import os from 'os'
 import path from 'path'
 import {
   chunkCues,
+  decodeCaptions,
   dedupeRollingCues,
   formatTimestamp,
   parseCaptions,
@@ -31,6 +32,7 @@ import {
   mediaMimeType,
   mediaProtocolUrlForPath,
 } from '../electron/media-protocol'
+import { findCompanionCaptions } from '../electron/media-ingest'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)
@@ -150,6 +152,82 @@ assert(noOverlap.length === 2, 'non-overlapping cues untouched')
 
 const manyChunks = chunkCues(cues, { targetSec: 8, maxChars: 120 })
 assert(manyChunks.length >= 2, `small window should yield multiple chunks, got ${manyChunks.length}`)
+
+// ---- #30: caption parsing edge cases ----
+const utf16Body = '\uFEFF1\n00:00:00,000 --> 00:00:02,000\nHello world\n'
+const utf16le = Buffer.from(utf16Body, 'utf16le')
+utf16le[0] = 0xff
+utf16le[1] = 0xfe
+const decodedUtf16 = decodeCaptions(utf16le)
+const cues16 = parseCaptions(decodedUtf16, 'x.srt')
+assert(cues16.length === 1 && cues16[0].text === 'Hello world', 'UTF-16 SRT decodes and parses')
+const utf16NoBom = Buffer.from('1\n00:00:00,000 --> 00:00:02,000\nHi\n', 'utf16le')
+assert(decodeCaptions(utf16NoBom).includes('00:00:02,000'), 'UTF-16 without BOM detected via NUL bytes')
+
+const blankLineCue = `1
+00:00:00,000 --> 00:00:03,000
+first line
+
+second line
+`
+const blankCues = parseCaptions(blankLineCue, 'x.srt')
+assert(blankCues.length === 1, 'blank line inside cue does not split it')
+assert(
+  blankCues[0].text === 'first line second line',
+  `blank-line cue text joined (got: ${JSON.stringify(blankCues[0].text)})`
+)
+
+const badTs = `1
+00:00:00,000 --> 99:99:99,999
+valid text
+
+2
+xx:yy --> 00:00:05,000
+junk
+`
+const badTsCues = parseCaptions(badTs, 'x.srt')
+assert(
+  badTsCues.length === 1 && badTsCues[0].text === 'valid text',
+  'cues with invalid timestamps are skipped, not collapsed to 0'
+)
+
+const unordered = [
+  { startSec: 10, endSec: 12, text: 'second' },
+  { startSec: 0, endSec: 2, text: 'first' },
+]
+const orderedChunks = chunkCues(unordered, { targetSec: 60, maxChars: 1000 })
+assert(orderedChunks.length === 1, 'unsorted cues merge into one chunk')
+assert(
+  orderedChunks[0].startSec === 0 && orderedChunks[0].endSec === 12,
+  'chunk spans the sorted range (no end<start)'
+)
+assert(/first.*second/s.test(orderedChunks[0].text), 'chunk text follows time order')
+
+{
+  const compDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-companion-'))
+  fs.writeFileSync(path.join(compDir, 'clip.mp4'), 'x')
+  for (const name of ['clip.en-US.vtt', 'clip2.eng.srt', 'clip3.SRT']) {
+    fs.writeFileSync(path.join(compDir, name), 'x')
+  }
+  assert(
+    findCompanionCaptions(path.join(compDir, 'clip.mp4')) === path.join(compDir, 'clip.en-US.vtt'),
+    'regional .en-US.vtt found for the same stem'
+  )
+  assert(
+    findCompanionCaptions(path.join(compDir, 'clip2.mp4')) ===
+      path.join(compDir, 'clip2.eng.srt'),
+    'companion .eng.srt found'
+  )
+  assert(
+    findCompanionCaptions(path.join(compDir, 'clip3.mp4')) === path.join(compDir, 'clip3.SRT'),
+    'upper-case .SRT found'
+  )
+  assert(
+    findCompanionCaptions(path.join(compDir, 'other.mp4')) === null,
+    'no companion for an unrelated stem'
+  )
+  fs.rmSync(compDir, { recursive: true, force: true })
+}
 
 // yt-dlp subtitle invocation (#26): no forced android client (it returns no automatic
 // captions and 429s on PO-token-gated caption URLs), title in the same run, retries,
