@@ -1,0 +1,23 @@
+{
+  "all": true,
+  "src": [
+    "electron",
+    "src"
+  ],
+  "include": [
+    "electron/**",
+    "src/**"
+  ],
+  "exclude": [
+    "**/*.d.ts",
+    "electron/types.ts"
+  ],
+  "extension": [
+    ".ts",
+    ".tsx"
+  ],
+  "reporter": [
+    "lcov",
+    "text-summary"
+  ]
+}

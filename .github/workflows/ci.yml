@@ -30,8 +30,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
-      # Offline smoke tests. They run under ELECTRON_RUN_AS_NODE=1, so no display is needed.
-      - run: npm run test:mvp
-      - run: npm run test:providers
-      - run: npm run test:media
-      - run: npm run test:citation-pack
+      # Offline smoke tests under c8. They run under ELECTRON_RUN_AS_NODE=1, so no display is needed.
+      - run: npm run coverage
+
+      # Fork PRs have no CODECOV_TOKEN; the upload failing must not fail CI.
+      - uses: codecov/codecov-action@v7
+        with:
+          files: coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

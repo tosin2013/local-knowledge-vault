@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #71: Codecov coverage reporting. 1) codecov.yml declares the project/patch gates and components. 2) npm run coverage runs the offline CI smoke tests under c8 and writes an lcov report whose entries map back to electron/*.ts sources (proves the Electron-as-Node child emitted coverage and tsx source maps resolved). 3) CI runs coverage and uploads it with codecov-action. 4) Types still check. The Codecov upload and PR statuses are verified on the PR itself (needs the CODECOV_TOKEN secret).",
+  "authority_id": "71",
+  "criteria": [
+    { "check": "file_exists", "target": "codecov.yml" },
+    { "check": "command_exit", "target": "rm -rf coverage && npm run coverage && grep -q '^SF:.*electron/db.ts$' coverage/lcov.info" },
+    { "check": "command_exit", "target": "grep -q 'npm run coverage' .github/workflows/ci.yml && grep -q 'codecov/codecov-action' .github/workflows/ci.yml" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
