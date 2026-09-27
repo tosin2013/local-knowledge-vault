@@ -1,0 +1,12 @@
+{
+  "$comment": "Completion bar for #22: the YouTube URL field was passed to yt-dlp as a bare positional argument (no `--`) and host checks used `includes('youtube.com')` (matching evil-youtube.com), so input like `--exec=<cmd>` was parsed as an option and run as a command. Fix: parse with URL, allowlist YouTube hosts exactly, validate the video id (^[\\w-]{11}$), and pass `--` before the URL in every yt-dlp invocation. Criteria 1-2 fail before the change (normalizeYoutubeUrl did not exist; the loose `includes('youtube.com')` host check was present); 3 covers the URL-validation + `--` unit tests; 4-6 guard typecheck, build, and the rest of the suite.",
+  "authority_id": "22",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"normalizeYoutubeUrl\" electron/media-ingest.ts" },
+    { "check": "command_exit", "target": "! grep -q \"includes('youtube.com')\" electron/media-ingest.ts" },
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}
