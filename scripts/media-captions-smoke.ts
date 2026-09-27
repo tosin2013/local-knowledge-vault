@@ -8,6 +8,7 @@ import os from 'os'
 import path from 'path'
 import {
   chunkCues,
+  dedupeRollingCues,
   formatTimestamp,
   parseCaptions,
   parseSrt,
@@ -102,6 +103,50 @@ const vttCues = parseCaptions(vtt, 'x.vtt')
 assert(vttCues.length === 2, 'vtt cues')
 assert(vttCues[0].text === 'Alpha line', 'vtt strip tags / text')
 assert(vttCues[1].text === 'Beta line', 'vtt italic stripped')
+
+// ---- #29: YouTube auto-caption rolling cues are deduplicated ----
+const rolling = `WEBVTT
+
+00:00:00.000 --> 00:00:02.000
+welcome to the show
+
+00:00:02.000 --> 00:00:04.000
+welcome to the show today we talk about
+
+00:00:04.000 --> 00:00:04.010
+welcome to the show today we talk about
+
+00:00:04.010 --> 00:00:06.000
+today we talk about inflation
+
+00:00:06.000 --> 00:00:08.000
+inflation and rates
+`
+const rollingCues = parseCaptions(rolling, 'auto.vtt')
+assert(
+  JSON.stringify(rollingCues.map((c) => c.text)) ===
+    JSON.stringify([
+      'welcome to the show',
+      'today we talk about',
+      'inflation',
+      'inflation and rates',
+    ]),
+  `rolling cues deduplicated (got: ${JSON.stringify(rollingCues.map((c) => c.text))})`
+)
+const rollingText = rollingCues.map((c) => c.text).join(' ')
+assert(!/welcome to the show welcome/.test(rollingText), 'no repeated line in the rolling transcript')
+assert(!/today we talk about today/.test(rollingText), 'no repeated mid-line in the rolling transcript')
+assert(dedupeRollingCues([]).length === 0, 'dedupe handles empty input')
+const plainRepeat = dedupeRollingCues([
+  { startSec: 0, endSec: 2, text: 'hello' },
+  { startSec: 2, endSec: 4, text: 'hello' },
+])
+assert(plainRepeat.length === 1 && plainRepeat[0].text === 'hello', 'exact-repeat cue dropped')
+const noOverlap = dedupeRollingCues([
+  { startSec: 0, endSec: 2, text: 'alpha' },
+  { startSec: 2, endSec: 4, text: 'beta' },
+])
+assert(noOverlap.length === 2, 'non-overlapping cues untouched')
 
 const manyChunks = chunkCues(cues, { targetSec: 8, maxChars: 120 })
 assert(manyChunks.length >= 2, `small window should yield multiple chunks, got ${manyChunks.length}`)

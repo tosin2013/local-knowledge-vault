@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #29: YouTube auto-captions use rolling cues (each cue repeats the previous line plus the new one, with ~10ms transition cues), and the parser never deduplicated, so transcript notes contained every line 2-3x, degrading retrieval ranking and citation quality. Fix: parseCaptions now runs dedupeRollingCues — drops near-zero-duration (<=50ms) cues, strips prefix repeats of the previous cue, and strips whole-line (>=2 word) suffix overlaps — so each line lands once. Criterion 1 fails before the change (dedupeRollingCues did not exist); 2 runs the media smoke test, which now includes a YouTube-style rolling-cue fixture; 3-4 guard typecheck and build.",
+  "authority_id": "29",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"dedupeRollingCues\" electron/media-captions.ts" },
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

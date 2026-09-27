@@ -133,15 +133,54 @@ export function parseVtt(content: string): CaptionCue[] {
 export function parseCaptions(content: string, filenameHint?: string): CaptionCue[] {
   const hint = (filenameHint ?? '').toLowerCase()
   const head = content.slice(0, 32).toLowerCase()
-  if (hint.endsWith('.vtt') || head.includes('webvtt')) {
-    return parseVtt(content)
+  const cues =
+    hint.endsWith('.vtt') || head.includes('webvtt')
+      ? parseVtt(content)
+      : hint.endsWith('.srt')
+        ? parseSrt(content)
+        : /^\s*webvtt/i.test(content)
+          ? parseVtt(content)
+          : parseSrt(content)
+  return dedupeRollingCues(cues)
+}
+
+/**
+ * YouTube auto-captions use "rolling" cues: each cue repeats the previous line
+ * plus the new one, with ~10 ms transition cues. Without deduplication every
+ * line lands in the transcript 2–3x. Drop near-zero-duration cues and strip
+ * whatever the previous cue already covered (the overlap can be a prefix or a
+ * suffix of the previous cue's text).
+ */
+export function dedupeRollingCues(cues: CaptionCue[]): CaptionCue[] {
+  const out: CaptionCue[] = []
+  let prevText = ''
+  for (const cue of cues) {
+    // Transition cues: ~10 ms, carry no new content.
+    if (cue.endSec - cue.startSec <= 0.05) continue
+    let text = cue.text
+    if (prevText) {
+      if (text.startsWith(prevText)) {
+        text = text.slice(prevText.length).trim()
+      } else {
+        // Rolling overlap: the new line usually shares a whole line (≥2 words)
+        // with the tail of the previous cue. Single-word matches are too common
+        // in natural language and would eat real content.
+        const words = prevText.split(' ')
+        for (let take = Math.min(words.length, 8); take >= 2; take--) {
+          const tail = words.slice(words.length - take).join(' ')
+          if (text.startsWith(tail)) {
+            text = text.slice(tail.length).trim()
+            break
+          }
+        }
+      }
+      if (!text) continue // pure repeat of the previous cue
+    }
+    prevText = cue.text
+    if (!text) continue
+    out.push({ ...cue, text })
   }
-  if (hint.endsWith('.srt')) {
-    return parseSrt(content)
-  }
-  // Fallback: VTT if header present, else SRT
-  if (/^\s*webvtt/i.test(content)) return parseVtt(content)
-  return parseSrt(content)
+  return out
 }
 
 /**
