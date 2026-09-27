@@ -9,6 +9,7 @@ import path from 'path'
 import {
   buildTranscriptNoteBody,
   chunkCues,
+  decodeCaptions,
   formatTimestamp,
   mediaNoteTitle,
   parseCaptions,
@@ -224,11 +225,33 @@ function writeChunksAsNotes(
 export function findCompanionCaptions(mediaPath: string): string | null {
   const dir = path.dirname(mediaPath)
   const stem = path.basename(mediaPath, path.extname(mediaPath))
-  for (const ext of ['.srt', '.vtt', '.en.srt', '.en.vtt']) {
-    const candidate = path.join(dir, stem + ext)
-    if (fs.existsSync(candidate)) return candidate
+  let entries: Set<string> | null = null
+  const onDisk = (p: string): string | null => {
+    if (fs.existsSync(p)) {
+      // Case-insensitive filesystems (macOS/Windows) match either case; return
+      // the true on-disk name so the path works everywhere.
+      if (entries === null) {
+        try {
+          entries = new Set(fs.readdirSync(dir))
+        } catch {
+          return p
+        }
+      }
+      const base = path.basename(p)
+      for (const e of entries) {
+        if (e === base) return path.join(dir, e)
+        if (e.toLowerCase() === base.toLowerCase()) return path.join(dir, e)
+      }
+    }
+    return null
   }
-  // Also try stem without language suffix patterns already covered
+  for (const ext of ['.srt', '.vtt', '.en.srt', '.en.vtt', '.en-US.srt', '.en-US.vtt', '.en-GB.srt', '.en-GB.vtt', '.eng.srt', '.eng.vtt']) {
+    const hit = onDisk(path.join(dir, stem + ext))
+    if (hit) return hit
+    // companion files often carry upper-case extensions on legacy media
+    const hitUpper = onDisk(path.join(dir, stem + ext.toUpperCase()))
+    if (hitUpper) return hitUpper
+  }
   return null
 }
 
@@ -240,7 +263,7 @@ export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
   if (!fs.existsSync(mediaPath)) throw new Error(`Media file not found: ${mediaPath}`)
   if (!fs.existsSync(captionsPath)) throw new Error(`Captions file not found: ${captionsPath}`)
 
-  const raw = fs.readFileSync(captionsPath, 'utf8')
+  const raw = decodeCaptions(fs.readFileSync(captionsPath))
   const cues = parseCaptions(raw, captionsPath)
   if (cues.length === 0) {
     throw new Error('No caption cues found in SRT/VTT file')
@@ -583,7 +606,7 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
   if (providedCaptions) {
     const captionsPath = path.resolve(providedCaptions)
     if (!fs.existsSync(captionsPath)) throw new Error(`Captions file not found: ${captionsPath}`)
-    const raw = fs.readFileSync(captionsPath, 'utf8')
+    const raw = decodeCaptions(fs.readFileSync(captionsPath))
     const cues = parseCaptions(raw, captionsPath)
     if (cues.length === 0) throw new Error('Downloaded captions contained no cues')
     const chunks = chunkCues(cues)
@@ -708,7 +731,7 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
     }
 
     const captionsPath = path.join(tmpDir, captionFile)
-    const raw = fs.readFileSync(captionsPath, 'utf8')
+    const raw = decodeCaptions(fs.readFileSync(captionsPath))
     const cues = parseCaptions(raw, captionsPath)
     if (cues.length === 0) {
       throw new Error('Downloaded captions contained no cues')
