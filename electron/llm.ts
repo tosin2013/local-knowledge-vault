@@ -13,7 +13,7 @@ import { ollamaGenerate, ollamaHealth, pickModel } from './ollama'
 import { openAiChat, openAiListModels } from './providers/openai-compatible'
 import { anthropicChat, anthropicListModels } from './providers/anthropic'
 import type { GenerateInput, GenerateResult } from './providers/http'
-import { RECOMMENDED_LOCAL_MODEL, isSmallModel } from './providers/presets'
+import { RECOMMENDED_LOCAL_MODEL, isSmallModel, isCloudModel } from './providers/presets'
 import {
   getProviderConfig,
   getProviderKey,
@@ -77,13 +77,14 @@ export function providerReadiness(p: ProviderConfig): { ready: boolean; model: s
 
 function activeInfo(c: ResolvedCandidate): ActiveProviderInfo {
   const size = c.provider.health?.modelSizes?.[c.model]
+  const local = c.provider.local && !isCloudModel(c.model)
   return {
     id: c.provider.id,
     label: c.provider.label,
     kind: c.provider.kind,
-    local: c.provider.local,
+    local,
     model: c.model,
-    smallModel: c.provider.local ? isSmallModel(c.model, size) : false,
+    smallModel: local ? isSmallModel(c.model, size) : false,
   }
 }
 
@@ -115,13 +116,14 @@ export function resolveFromProviders(selected: ProviderSelection, providers: Pro
   }
   if (candidates.length) {
     const c = candidates[0]
+    const ai = activeInfo(c)
     return {
       candidates,
       status: {
         ...base,
-        active: activeInfo(c),
+        active: ai,
         needsSetup: false,
-        message: `${c.provider.local ? 'Local' : 'Cloud'} · ${c.provider.label} · ${c.model}`,
+        message: `${ai.local ? 'Local' : 'Cloud'} · ${c.provider.label} · ${c.model}`,
       },
     }
   }

@@ -217,3 +217,8 @@ export function isSmallModel(name: string, parameterSize?: string): boolean {
   const b = inferParamsB(name, parameterSize)
   return b !== null && b < 3
 }
+
+/** Ollama `:cloud` / `-cloud` tags run on ollama.com, not locally. */
+export function isCloudModel(name: string): boolean {
+  return /[:_-]cloud\b/i.test(name)
+}
