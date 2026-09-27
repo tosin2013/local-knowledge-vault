@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #28: replaceExisting defaulted to true and the UI never passed false; project names came from the filename stem/video title (two intro.mp4s collide); deletes ran before creates with no transaction; and upsertMediaProfile matched by display name while the legacy cleanup clause deleted any 'Media — …' note in the project. Fix: projectNameFor keys projects by source (path resolution / canonical YouTube URL) and suffixes '(2)' when the name is taken by a different source; replaceProjectTranscripts deletes only transcript-kind or kind_tag:transcript notes matching this source; the profile reuse-by-name fallback is gone; delete+create runs in a runInTransaction; and db listItemsByProjectExact gives media paths exact project matching (the LIKE filter is search UX). Criterion 1 fails before (projectNameFor did not exist); 2 runs the collision/rollback tests in test:media; 3-4 guard typecheck and build.",
+  "authority_id": "28",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"projectNameFor\" electron/media-ingest.ts" },
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

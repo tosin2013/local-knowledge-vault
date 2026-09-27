@@ -190,6 +190,21 @@ export function listItems(filters?: ItemFilters): Item[] {
   return rows.map(rowToItem)
 }
 
+/**
+ * Exact project match (the substring LIKE in listItems is for search UX; media
+ * ingest/replace must distinguish "intro" from "intro (2)").
+ */
+export function listItemsByProjectExact(project: string, kind?: string): Item[] {
+  const database = getDb()
+  const sql = kind
+    ? 'SELECT * FROM items WHERE project = ? AND kind = ? ORDER BY updated_at DESC'
+    : 'SELECT * FROM items WHERE project = ? ORDER BY updated_at DESC'
+  const rows = (kind
+    ? database.prepare(sql).all(project, kind)
+    : database.prepare(sql).all(project)) as Record<string, unknown>[]
+  return rows.map(rowToItem)
+}
+
 export function getItem(id: string): Item | null {
   const database = getDb()
   const row = database.prepare('SELECT * FROM items WHERE id = ?').get(id) as
@@ -251,6 +266,20 @@ export function updateItem(id: string, patch: UpdateItemPatch): Item | null {
 export function deleteItem(id: string): boolean {
   const result = getDb().prepare('DELETE FROM items WHERE id = ?').run(id)
   return result.changes > 0
+}
+
+/** Run a function in a transaction. On success commits; on error rolls back and re-throws. */
+export function runInTransaction<T>(fn: () => T): T {
+  const db = getDb()
+  db.prepare('BEGIN').run()
+  try {
+    const result = fn()
+    db.prepare('COMMIT').run()
+    return result
+  } catch (err) {
+    db.prepare('ROLLBACK').run()
+    throw err
+  }
 }
 
 export function countItems(): number {
