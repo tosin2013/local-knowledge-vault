@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #24: packaged builds load the renderer via file://, so the youtube-nocookie embed iframe was sent with a null origin and no Referer, and YouTube rejected it with player error 153 (dev worked because the page is http://localhost). Fix: fixYoutubeEmbedHeaders() rewrites Referer/Origin on *.youtube(|-nocookie).com/embed/* requests whose referrer is empty or file:// (the packaged case; dev is untouched), the embed URL carries origin=, and the iframe sets referrerpolicy='strict-origin-when-cross-origin'. The existing 'Watch' link (opens externally) is documented as the fallback. Criteria 1-2 fail before the change; 3-5 guard typecheck, build, and the rest of the suite. The header rewrite itself is only observable in a packaged app (headless CI loads from file:// without a real YouTube session), so the bar asserts the code path exists and everything still builds/tests; manual verification in a packaged build is noted in the PR.",
+  "authority_id": "24",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"fixYoutubeEmbedHeaders\" electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q \"referrerPolicy\" src/plugins/media-chat/MediaChatView.tsx" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp && npm run test:media" }
+  ]
+}

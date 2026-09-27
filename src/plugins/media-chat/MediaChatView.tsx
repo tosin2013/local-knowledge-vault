@@ -245,7 +245,13 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
     }
     const id = youtubeIdFromUrl(active.mediaUrl)
     if (id) {
-      setEmbedUrl(`https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1`)
+      // origin= (strict) + referrerpolicy keep the embed working in packaged
+      // builds, where the renderer is file:// and would otherwise send a null
+      // origin (YouTube player error 153). The main process also rewrites
+      // Referer/Origin for these requests; see fixYoutubeEmbedHeaders().
+      setEmbedUrl(
+        `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1&origin=https%3A%2F%2Fwww.youtube-nocookie.com`
+      )
     } else {
       setEmbedUrl(null)
     }
@@ -537,6 +543,7 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
             <iframe
               title="YouTube"
               src={embedUrl}
+              referrerPolicy="strict-origin-when-cross-origin"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
               style={
@@ -584,8 +591,9 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
         {renderPlayerControls()}
         {active?.sourceType === 'youtube' && (
           <Typography variant="caption" color="text.secondary">
-            YouTube embed may restrict seeking from citations. Use “Ask about this moment” with a manual
-            time, or prefer local media for full seek sync.
+            If the embedded player fails to load, use the “Watch” link above to open the video in your
+            browser. YouTube embed may restrict seeking from citations. Use “Ask about this moment” with
+            a manual time, or prefer local media for full seek sync.
           </Typography>
         )}
       </Paper>
