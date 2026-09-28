@@ -15,7 +15,6 @@ export default defineConfig({
       exclude: [
         'src/vite-env.d.ts',
         'src/main.tsx',
-        'src/plugins/**',
       ],
       reporter: ['lcov', 'text'],
       reportsDirectory: 'coverage/renderer',

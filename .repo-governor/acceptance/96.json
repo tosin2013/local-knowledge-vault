@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #96: stop excluding src/plugins/** (2,714 lines) from renderer coverage, so the plugin views count (at their real %, 0 where untested) instead of vanishing from the Codecov denominator. Criterion 1 fails while the exclude is present; 2 fails unless an untested plugin view actually appears in the renderer lcov (proves the files are reported, not merely un-excluded); 3 keeps the merged pipeline green. The renderer Codecov status stays informational here; making it blocking is #85.",
+  "authority_id": "96",
+  "criteria": [
+    { "check": "command_exit", "target": "! grep -q 'src/plugins' vitest.config.ts" },
+    { "check": "command_exit", "target": "npm run coverage:renderer >/dev/null 2>&1 && grep -q '^SF:.*src/plugins/media-chat/MediaChatView.tsx' coverage/renderer/lcov.info" },
+    { "check": "command_exit", "target": "npm run coverage" }
+  ]
+}
