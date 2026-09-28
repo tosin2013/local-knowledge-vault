@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #88: end-to-end renderer flows through <App /> with window.lkv mocked at the IPC boundary (the harness #44 established). The flows exercise the orchestrator wiring the component/hook unit tests do not: Ask round-trips (answer + citations, the grounded 'couldn't find' reply, provider errors, offline notice), notes-rail CRUD and filters, the note-peek editor, and the Simple/Advanced toggle. Criteria: 1 fails before the work (the flow test file does not exist); 2 runs the full renderer suite; 3 runs the merged coverage pipeline (electron + renderer).",
+  "authority_id": "88",
+  "criteria": [
+    { "check": "file_exists", "target": "tests/renderer/App.flows.test.tsx" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run coverage" }
+  ]
+}

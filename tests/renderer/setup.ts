@@ -41,6 +41,7 @@ window.confirm = vi.fn(() => true)
 
 // --- window.lkv: a fresh default mock per test ---
 beforeEach(() => {
+  localStorage.clear()
   const lkv = createLkvMock()
   Object.defineProperty(window, 'lkv', {
     value: lkv,
