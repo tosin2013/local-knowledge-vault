@@ -1,345 +1,59 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Alert,
-  AppBar,
-  Box,
-  Button,
-  Chip,
-  Collapse,
-  CssBaseline,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  FormControl,
-  FormControlLabel,
-  IconButton,
-  InputAdornment,
-  InputLabel,
-  List,
-  ListItemButton,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Drawer,
-  Paper,
-  Select,
-  Stack,
-  Switch,
-  TextField,
-  ThemeProvider,
-  Toolbar,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
-import SendIcon from '@mui/icons-material/Send'
-import AddIcon from '@mui/icons-material/Add'
-import LightModeIcon from '@mui/icons-material/LightMode'
-import DarkModeIcon from '@mui/icons-material/DarkMode'
-import CloseIcon from '@mui/icons-material/Close'
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
-import FileDownloadIcon from '@mui/icons-material/FileDownload'
-import ExtensionIcon from '@mui/icons-material/Extension'
+import { Box, CssBaseline, Paper, ThemeProvider, Typography } from '@mui/material'
 import { createM3Theme } from './theme/m3Theme'
-import { listPlugins, getPlugin } from './plugins/registry'
-import { MANAGE_PLUGINS_ID } from './plugins/manage'
+import { listPlugins } from './plugins/registry'
 import { PLUGINS_CHANGED_EVENT, usePluginContributions } from './plugins/contrib'
-import { FirstRunLocalCard, SmallModelHint, aiChipLabel } from './components/ai/FirstRunLocalCard'
-import { ProvidersPanel } from './components/ai/ProvidersPanel'
 import { ProviderDialog } from './components/ai/ProviderDialog'
-import { BridgeSettings } from './components/ai/BridgeSettings'
+import { aiChipLabel } from './components/ai/FirstRunLocalCard'
+import {
+  applyTheme,
+  askEmptyStateCopy,
+  BUILTIN_PROFILES,
+  emptyFilters,
+  findGroundedDefaultPrompt,
+  GORGIAS_PROJECT,
+  isBuiltinProfileId,
+  isGorgiasReaderPrompt,
+  isValidHttpUrl,
+  loadLastProfile,
+  loadTheme,
+  loadUiMode,
+  makeNewDraftItem,
+  matchProfileId,
+  NEW_DRAFT_ID,
+  paraLabel,
+  personalityDisplayName,
+  resolveProfilePromptId,
+  saveLastProfile,
+  THEME_KEY,
+  titleFromFirstQuestion,
+  UI_MODE_KEY,
+  type ChatProfileId,
+  type Mode,
+  type ThemeMode,
+  type UiMode,
+} from './domain'
+import { TopBar } from './features/TopBar'
+import { NotesRail } from './features/NotesRail'
+import { FindPanel } from './features/FindPanel'
+import { ChatView } from './features/ChatView'
+import { PromptsView } from './features/PromptsView'
+import { NotePeek } from './features/NotePeek'
+import { AiSettingsDialog } from './features/AiSettingsDialog'
+import { ContentChrome } from './features/ContentChrome'
 import type {
   AskGroundedResult,
   ChatMessage,
   ChatProfile,
   ChatSession,
-  Citation,
   Item,
   ItemFilters,
   LlmStatus,
+  Prompt,
   ProviderConfig,
   ProviderPresetInfo,
-  Para,
-  Prompt,
   SearchHit,
 } from '../electron/types'
-
-type Mode = 'search' | 'chat' | 'prompts'
-type UiMode = 'simple' | 'advanced'
-
-const PARA_OPTIONS: Array<Para | ''> = ['', 'projects', 'areas', 'resources', 'archives']
-const KIND_OPTIONS = ['', 'note', 'book', 'article', 'docs', 'blog', 'reference', 'transcript']
-const STATUS_OPTIONS = ['', 'active', 'archived']
-
-const PARA_LABELS: Record<string, string> = {
-  projects: 'Projects',
-  areas: 'Areas',
-  resources: 'Resources',
-  archives: 'Archive',
-}
-
-const UI_MODE_KEY = 'lkv.uiMode'
-const THEME_KEY = 'lkv.theme'
-const LAST_PROFILE_KEY = 'lkv.lastProfile'
-
-/** Built-in chat profiles: Personality + Notes from (+ optional bind). */
-type BuiltinChatProfileId = 'grounded-helper' | 'gorgias'
-/** Builtins, Custom, or a user profile id (`prf_…`). */
-type ChatProfileId = BuiltinChatProfileId | 'custom' | string
-
-type LastProfileState = {
-  profileId: ChatProfileId
-  promptId: string
-  project: string
-}
-
-type BuiltinProfile = {
-  id: BuiltinChatProfileId
-  name: string
-  /** Fixed prompt id when known (Gorgias reader). */
-  promptId?: string
-  /** Match seeded grounded prompt by name. */
-  promptNames?: string[]
-  project: string
-}
-
-const BUILTIN_PROFILE_IDS: BuiltinChatProfileId[] = ['grounded-helper', 'gorgias']
-
-function isBuiltinProfileId(id: string): id is BuiltinChatProfileId {
-  return (BUILTIN_PROFILE_IDS as string[]).includes(id)
-}
-
-const BUILTIN_PROFILES: BuiltinProfile[] = [
-  {
-    id: 'grounded-helper',
-    name: 'Grounded helper',
-    promptNames: ['Grounded default', 'Grounded helper'],
-    project: '',
-  },
-  {
-    id: 'gorgias',
-    name: 'Gorgias',
-    promptId: 'prm_56ba1ab41bfe4042',
-    promptNames: ['Gorgias reader'],
-    project: 'Gorgias',
-  },
-]
-
-/** Legacy localStorage values: blink = dark, blink-light = light. */
-type ThemeMode = 'blink' | 'blink-light'
-
-function loadUiMode(): UiMode {
-  try {
-    const v = localStorage.getItem(UI_MODE_KEY)
-    return v === 'advanced' ? 'advanced' : 'simple'
-  } catch {
-    return 'simple'
-  }
-}
-
-function loadTheme(): ThemeMode {
-  try {
-    const v = localStorage.getItem(THEME_KEY)
-    return v === 'blink-light' ? 'blink-light' : 'blink'
-  } catch {
-    return 'blink'
-  }
-}
-
-function applyTheme(theme: ThemeMode) {
-  const scheme = theme === 'blink-light' ? 'light' : 'dark'
-  document.documentElement.setAttribute('data-color-scheme', scheme)
-  document.documentElement.style.colorScheme = scheme
-}
-
-function paraLabel(para: string): string {
-  return PARA_LABELS[para] ?? para
-}
-
-const emptyFilters = (): ItemFilters => ({
-  para: '',
-  kind: '',
-  status: '',
-  project: '',
-})
-
-/** Local-only id for an unsaved new note (no DB row yet). */
-const NEW_DRAFT_ID = '__draft_new__'
-
-function isValidHttpUrl(raw: string): boolean {
-  const s = raw.trim()
-  if (!/^https?:\/\//i.test(s)) return false
-  try {
-    const u = new URL(s)
-    return u.protocol === 'http:' || u.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-function makeNewDraftItem(): Item {
-  const ts = new Date().toISOString()
-  return {
-    id: NEW_DRAFT_ID,
-    title: '',
-    summary: null,
-    body: '',
-    para: 'resources',
-    kind: 'note',
-    status: 'active',
-    project: null,
-    created_at: ts,
-    updated_at: ts,
-  }
-}
-
-function parseCitations(json: string | null): Citation[] {
-  if (!json) return []
-  try {
-    const parsed = JSON.parse(json) as Citation[]
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-const GORGIAS_READER_PROMPT_ID = 'prm_56ba1ab41bfe4042'
-const GORGIAS_PROJECT = 'Gorgias'
-const GORGIAS_READER_NAME = 'Gorgias reader'
-const GROUNDED_DEFAULT_NAMES = ['Grounded default', 'Grounded helper']
-
-function isGorgiasReaderPrompt(promptId: string, prompts: Prompt[]): boolean {
-  if (!promptId) return false
-  if (promptId === GORGIAS_READER_PROMPT_ID) return true
-  return prompts.some((p) => p.id === promptId && p.name === GORGIAS_READER_NAME)
-}
-
-function findGroundedDefaultPrompt(prompts: Prompt[]): Prompt | undefined {
-  return prompts.find((p) => GROUNDED_DEFAULT_NAMES.includes(p.name)) ?? prompts[0]
-}
-
-function resolveProfilePromptId(profile: BuiltinProfile, prompts: Prompt[]): string | undefined {
-  if (profile.promptId && prompts.some((p) => p.id === profile.promptId)) {
-    return profile.promptId
-  }
-  if (profile.promptNames?.length) {
-    const byName = prompts.find((p) => profile.promptNames!.includes(p.name))
-    if (byName) return byName.id
-  }
-  if (profile.promptId) return profile.promptId
-  return findGroundedDefaultPrompt(prompts)?.id
-}
-
-function personalityDisplayName(p: Prompt): string {
-  if (p.name === 'Grounded default') return 'Grounded helper'
-  return p.name
-}
-
-
-function titleFromFirstQuestion(text: string): string {
-  const cleaned = text.replace(/\s+/g, ' ').trim()
-  if (!cleaned) return 'New chat'
-  const cut = cleaned.split(/[?!.\n]/)[0]?.trim() || cleaned
-  const base = cut.length >= 12 ? cut : cleaned
-  return base.length > 48 ? base.slice(0, 45).trimEnd() + '…' : base
-}
-
-function askEmptyStateCopy(
-  profileId: ChatProfileId,
-  prompts: Prompt[],
-  selectedPromptId: string,
-  project: string,
-  userProfiles: ChatProfile[] = [],
-): { title: string; body: string } {
-  const proj = (project ?? '').trim()
-  if (
-    profileId === 'gorgias' ||
-    (proj === GORGIAS_PROJECT && isGorgiasReaderPrompt(selectedPromptId, prompts))
-  ) {
-    return {
-      title: "You're talking with Gorgias",
-      body: 'Answers come only from those notes.',
-    }
-  }
-  if (profileId === 'grounded-helper') {
-    return {
-      title: 'Ask anything grounded in your notes',
-      body: 'Example: What did I write about habits?',
-    }
-  }
-  const user = userProfiles.find((p) => p.id === profileId)
-  if (user) {
-    const prompt = prompts.find((p) => p.id === selectedPromptId)
-    const persona = prompt ? personalityDisplayName(prompt) : 'missing personality'
-    const scope = proj ? `notes from “${proj}”` : 'all notes'
-    const broken = !prompt
-    return {
-      title: broken ? `${user.name} · personality missing` : user.name,
-      body: broken
-        ? 'This profile’s personality was deleted — pick another or delete the profile.'
-        : `Answers use the “${persona}” personality and ${scope}.`,
-    }
-  }
-  const prompt = prompts.find((p) => p.id === selectedPromptId)
-  const name = prompt ? personalityDisplayName(prompt) : 'Custom'
-  const scope = proj ? `notes from “${proj}”` : 'all notes'
-  return {
-    title: `Custom · ${name}`,
-    body: `Answers use the “${name}” personality and ${scope}.`,
-  }
-}
-
-function matchProfileId(
-  promptId: string,
-  project: string,
-  prompts: Prompt[],
-  userProfiles: ChatProfile[] = [],
-): ChatProfileId {
-  const proj = (project ?? '').trim()
-  for (const profile of BUILTIN_PROFILES) {
-    const resolved = resolveProfilePromptId(profile, prompts)
-    if (!resolved || resolved !== promptId) continue
-    if ((profile.project ?? '').trim() === proj) return profile.id
-  }
-  for (const profile of userProfiles) {
-    if (profile.prompt_id === promptId && (profile.project ?? '').trim() === proj) {
-      return profile.id
-    }
-  }
-  return 'custom'
-}
-
-function loadLastProfile(): LastProfileState | null {
-  try {
-    const raw = localStorage.getItem(LAST_PROFILE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<LastProfileState>
-    if (!parsed || typeof parsed !== 'object') return null
-    const profileId = parsed.profileId
-    if (typeof profileId !== 'string' || !profileId.trim()) return null
-    // Builtins, custom, or user profile ids (e.g. prf_…)
-    return {
-      profileId,
-      promptId: typeof parsed.promptId === 'string' ? parsed.promptId : '',
-      project: typeof parsed.project === 'string' ? parsed.project : '',
-    }
-  } catch {
-    return null
-  }
-}
-
-function saveLastProfile(state: LastProfileState) {
-  try {
-    localStorage.setItem(LAST_PROFILE_KEY, JSON.stringify(state))
-  } catch {
-    /* ignore */
-  }
-}
 
 export default function App() {
   const [items, setItems] = useState<Item[]>([])
@@ -731,7 +445,6 @@ export default function App() {
     }
   }
 
-
   const onSave = async () => {
     if (!window.lkv || !draft) return
     setBusy(true)
@@ -895,7 +608,6 @@ export default function App() {
     }
     await refreshSessions()
   }
-
 
   const onExportCitationPack = async () => {
     if (!window.lkv || !activeSessionId) return
@@ -1295,6 +1007,7 @@ export default function App() {
     () => createM3Theme(theme === 'blink-light' ? 'light' : 'dark'),
     [theme],
   )
+
   if (!hasApi) {
     return (
       <ThemeProvider theme={muiTheme}>
@@ -1322,1462 +1035,244 @@ export default function App() {
     )
   }
 
-  const showExtraFilters = advanced || filtersOpen
-
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
       <Box className={`app ${advanced ? 'ui-advanced' : 'ui-simple'}`} sx={{ bgcolor: 'background.default' }}>
-        <AppBar position="sticky" sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', color: 'text.primary' }}>
-          <Toolbar variant="dense" sx={{ gap: 1.5, minHeight: 56, px: 1.5 }}>
-            <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexShrink: 0 }}>
-              <Box
-                className="vault-mark"
-                aria-hidden
-                sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}
-              >
-                <svg width="22" height="22" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="3.5" y="5" width="21" height="18" rx="3.5" stroke="currentColor" strokeWidth="1.75" />
-                  <path d="M9 5v18M14 10.5h6.5M14 14.5h5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-                </svg>
-              </Box>
-              <Box sx={{ minWidth: 0, lineHeight: 1.15 }}>
-                <Typography variant="subtitle1" fontWeight={600} noWrap>
-                  Vault
-                </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap sx={{ letterSpacing: 0.4 }}>
-                  Local knowledge
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Box sx={{ flex: 1, minWidth: 0, px: 1, display: 'flex', justifyContent: 'center' }}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Search your notes…"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) void runSearch()
-                }}
-                aria-label="Search notes"
-                sx={{ maxWidth: 560, '& .MuiOutlinedInput-root': { borderRadius: 999 } }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" color="action" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => void runSearch()}
-                        disabled={busy}
-                        sx={{ mr: -0.5, borderRadius: 999 }}
-                      >
-                        Search
-                      </Button>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
-              <Chip
-                size="small"
-                label={aiStatusText}
-                color={llmStatus == null ? 'default' : aiReady ? (llmStatus.active?.local ? 'success' : 'info') : 'warning'}
-                variant={llmStatus == null ? 'outlined' : 'filled'}
-                title={`${llmStatus?.message ?? 'AI status'} — click for AI providers`}
-                onClick={() => {
-                  setAiSettingsOpen(true)
-                  void recheckLlm()
-                }}
-                sx={{ maxWidth: 280 }}
-                data-testid="ai-chip"
-              />
-              {advanced && (
-                <Button
-                  size="small"
-                  variant={mode === 'prompts' ? 'contained' : 'outlined'}
-                  color="primary"
-                  onClick={() => {
-                    setActivePluginId(null)
-                    setMode('prompts')
-                  }}
-                >
-                  Personalities
-                </Button>
-              )}
-              <Button
-                size="small"
-                variant={activePluginId ? 'contained' : 'outlined'}
-                color="primary"
-                startIcon={<ExtensionIcon fontSize="small" />}
-                onClick={(e) => setPluginsMenuAnchor(e.currentTarget)}
-                aria-haspopup="true"
-                aria-expanded={Boolean(pluginsMenuAnchor)}
-              >
-                Plugins
-              </Button>
-              <Menu
-                anchorEl={pluginsMenuAnchor}
-                open={Boolean(pluginsMenuAnchor)}
-                onClose={() => setPluginsMenuAnchor(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              >
-                {visiblePlugins.map((plug) => (
-                  <MenuItem
-                    key={plug.id}
-                    selected={activePluginId === plug.id}
-                    onClick={() => {
-                      setPluginsMenuAnchor(null)
-                      setActivePluginId(plug.id)
-                      setMode('chat')
-                    }}
-                  >
-                    <Box>
-                      <Typography variant="body2" fontWeight={600}>
-                        {plug.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 280 }}>
-                        {plug.description}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-                <Divider />
-                <MenuItem
-                  selected={activePluginId === MANAGE_PLUGINS_ID}
-                  onClick={() => {
-                    setPluginsMenuAnchor(null)
-                    setActivePluginId(MANAGE_PLUGINS_ID)
-                    setMode('chat')
-                  }}
-                >
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>
-                      Manage plugins…
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 280 }}>
-                      Install plugin.json packs, enable or remove plugins
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              </Menu>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={advanced}
-                    onChange={(e) => setUiModePersist(e.target.checked ? 'advanced' : 'simple')}
-                    size="small"
-                  />
-                }
-                label={<Typography variant="caption" color="text.secondary">Advanced</Typography>}
-                title="Show developer details and fuller filters"
-                sx={{ m: 0, ml: 0.5 }}
-              />
-              <IconButton
-                size="small"
-                onClick={() => setThemePersist(theme === 'blink' ? 'blink-light' : 'blink')}
-                title={theme === 'blink' ? 'Switch to light' : 'Switch to dark'}
-                aria-label="Toggle color theme"
-                sx={{ border: 1, borderColor: 'divider', borderRadius: 3 }}
-              >
-                {theme === 'blink' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
-              </IconButton>
-            </Stack>
-          </Toolbar>
-        </AppBar>
+        <TopBar
+          advanced={advanced}
+          mode={mode}
+          activePluginId={activePluginId}
+          pluginsMenuAnchor={pluginsMenuAnchor}
+          visiblePlugins={visiblePlugins}
+          aiStatusText={aiStatusText}
+          llmStatus={llmStatus}
+          aiReady={aiReady}
+          theme={theme}
+          searchText={searchText}
+          busy={busy}
+          onSearchText={setSearchText}
+          onRunSearch={() => void runSearch()}
+          onAiSettings={() => setAiSettingsOpen(true)}
+          onRecheck={() => void recheckLlm()}
+          onPersonalities={() => {
+            setActivePluginId(null)
+            setMode('prompts')
+          }}
+          onPluginsMenu={setPluginsMenuAnchor}
+          onSelectPlugin={(id) => {
+            setPluginsMenuAnchor(null)
+            setActivePluginId(id)
+            setMode('chat')
+          }}
+          onAdvanced={(v) => setUiModePersist(v ? 'advanced' : 'simple')}
+          onTheme={() => setThemePersist(theme === 'blink' ? 'blink-light' : 'blink')}
+        />
 
         <Box className="main">
-          <Paper
-            component="aside"
-            className="sidebar"
-            square
-            sx={{ bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', borderRadius: 0 }}
-          >
-            <Stack spacing={1.25} sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => onNewNote()}
-              >
-                New note
-              </Button>
-
-              {advanced && (
-                <Stack spacing={0.5}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                    Add from URL
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
-                    Public https pages / articles. Import enables when the URL looks like https://… — may take a few seconds.
-                  </Typography>
-                  <Stack direction="row" spacing={0.75}>
-                    <TextField
-                      size="small"
-                      fullWidth
-                      type="url"
-                      placeholder="https://…"
-                      value={importUrl}
-                      disabled={importBusy || busy}
-                      onChange={(e) => setImportUrl(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          if (isValidHttpUrl(importUrl)) void onImportFromUrl()
-                        }
-                      }}
-                      aria-label="URL to import"
-                    />
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      disabled={importBusy || busy || !isValidHttpUrl(importUrl)}
-                      onClick={() => void onImportFromUrl()}
-                      sx={{ flexShrink: 0 }}
-                      title={
-                        isValidHttpUrl(importUrl)
-                          ? 'Fetch and save as a note'
-                          : 'Paste a full http:// or https:// URL to enable Import'
-                      }
-                    >
-                      {importBusy ? '…' : 'Import'}
-                    </Button>
-                  </Stack>
-                </Stack>
-              )}
-
-              <FormControl fullWidth size="small">
-                <InputLabel id="project-filter-label">Project</InputLabel>
-                <Select
-                  labelId="project-filter-label"
-                  label="Project"
-                  value={filters.project ?? ''}
-                  onChange={(e) => onNotesFromChange(String(e.target.value))}
-                  aria-label="Filter notes by project"
-                >
-                  <MenuItem value="">All projects</MenuItem>
-                  {projectOptions.map((name) => (
-                    <MenuItem key={name} value={name}>
-                      {name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {advanced && (
-                <Stack direction="row" flexWrap="wrap" gap={0.75} role="group" aria-label="Note group">
-                  <Chip
-                    size="small"
-                    label="All"
-                    color={!filters.para ? 'primary' : 'default'}
-                    variant={!filters.para ? 'filled' : 'outlined'}
-                    onClick={() => setFilters((f) => ({ ...f, para: '' }))}
-                  />
-                  {(['projects', 'areas', 'resources', 'archives'] as Para[]).map((p) => (
-                    <Chip
-                      key={p}
-                      size="small"
-                      label={paraLabel(p)}
-                      color={filters.para === p ? 'primary' : 'default'}
-                      variant={filters.para === p ? 'filled' : 'outlined'}
-                      onClick={() => setFilters((f) => ({ ...f, para: f.para === p ? '' : p }))}
-                    />
-                  ))}
-                </Stack>
-              )}
-
-              {!advanced && (
-                <Button
-                  size="small"
-                  variant="text"
-                  onClick={() => setFiltersOpen((o) => !o)}
-                  aria-expanded={filtersOpen}
-                  startIcon={filtersOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                  sx={{ justifyContent: 'flex-start', opacity: 0.8 }}
-                >
-                  More filters
-                </Button>
-              )}
-
-              {showExtraFilters && (
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel id="kind-filter-label">Type</InputLabel>
-                    <Select
-                      labelId="kind-filter-label"
-                      label="Type"
-                      value={filters.kind ?? ''}
-                      onChange={(e) => setFilters((f) => ({ ...f, kind: String(e.target.value) }))}
-                    >
-                      {KIND_OPTIONS.map((k) => (
-                        <MenuItem key={k || 'any'} value={k}>
-                          {k ? k : 'any'}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel id="status-filter-label">Status</InputLabel>
-                    <Select
-                      labelId="status-filter-label"
-                      label="Status"
-                      value={filters.status ?? ''}
-                      onChange={(e) => setFilters((f) => ({ ...f, status: String(e.target.value) }))}
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <MenuItem key={s || 'any'} value={s}>
-                          {s ? s : 'any'}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  {advanced && (
-                    <FormControl size="small" fullWidth sx={{ gridColumn: '1 / -1' }}>
-                      <InputLabel id="para-filter-label">PARA</InputLabel>
-                      <Select
-                        labelId="para-filter-label"
-                        label="PARA"
-                        value={filters.para ?? ''}
-                        onChange={(e) =>
-                          setFilters((f) => ({
-                            ...f,
-                            para: e.target.value as ItemFilters['para'],
-                          }))
-                        }
-                      >
-                        {PARA_OPTIONS.map((p) => (
-                          <MenuItem key={p || 'any'} value={p}>
-                            {p ? p : 'any'}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                </Box>
-              )}
-
-              <Typography variant="caption" color="text.secondary">
-                {filterSummary} · {items.length} notes
-              </Typography>
-            </Stack>
-
-            <Box className="note-list" sx={{ p: 1 }}>
-              {items.length === 0 && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', p: 2 }}>
-                  No notes match filters.
-                </Typography>
-              )}
-              <List dense disablePadding>
-                {items.map((it) => (
-                  <ListItemButton
-                    key={it.id}
-                    selected={selectedId === it.id}
-                    onClick={() => selectItem(it.id)}
-                    onDoubleClick={() => selectItem(it.id, { edit: true })}
-                    sx={{
-                      mb: 0.5,
-                      flexDirection: 'column',
-                      alignItems: 'stretch',
-                      borderRadius: 3,
-                      borderLeft: selectedId === it.id ? 3 : 0,
-                      borderColor: 'primary.main',
-                    }}
-                  >
-                    <Typography variant="body2" fontWeight={600} noWrap>
-                      {it.title}
-                    </Typography>
-                    <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
-                      <Chip size="small" label={paraLabel(it.para)} color="primary" variant="outlined" />
-                      <Chip size="small" label={it.kind} variant="outlined" />
-                      {it.project && <Chip size="small" label={it.project} variant="outlined" />}
-                    </Stack>
-                  </ListItemButton>
-                ))}
-              </List>
-            </Box>
-          </Paper>
+          <NotesRail
+            advanced={advanced}
+            items={items}
+            selectedId={selectedId}
+            filters={filters}
+            projectOptions={projectOptions}
+            filterSummary={filterSummary}
+            filtersOpen={filtersOpen}
+            importUrl={importUrl}
+            importBusy={importBusy}
+            busy={busy}
+            onNewNote={onNewNote}
+            onImportUrl={setImportUrl}
+            onImport={() => void onImportFromUrl()}
+            onProject={onNotesFromChange}
+            onFilters={setFilters}
+            onFiltersOpen={setFiltersOpen}
+            onSelect={selectItem}
+          />
 
           <Box
             component="section"
             className="content"
             sx={{ bgcolor: 'background.default', position: 'relative' }}
           >
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ m: 1.5, alignSelf: 'flex-start', flexWrap: 'wrap' }}>
-              <ToggleButtonGroup
-                exclusive
-                size="small"
-                value={mode === 'search' || mode === 'chat' ? mode : null}
-                onChange={(_e, v) => {
-                  if (v === 'search' || v === 'chat') {
-                    setActivePluginId(null)
-                    setMode(v)
-                  }
-                }}
-                aria-label="Primary mode"
-                sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 999, p: 0.25 }}
-              >
-                <ToggleButton value="search" aria-label="Find">
-                  Find
-                </ToggleButton>
-                <ToggleButton value="chat" aria-label="Ask">
-                  Ask
-                </ToggleButton>
-              </ToggleButtonGroup>
-              {mode === 'prompts' && <Chip size="small" variant="outlined" label="Personalities" />}
-              {activePluginId && (
-                <Chip
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  label={getPlugin(activePluginId)?.name ?? 'Plugin'}
-                  onDelete={() => setActivePluginId(null)}
-                />
-              )}
-            </Stack>
-
-            {statusMsg && (
-              <Box sx={{ px: 2, pt: 1 }}>
-                <Alert
-                  severity="success"
-                  action={
-                    <IconButton size="small" aria-label="Dismiss" onClick={() => setStatusMsg(null)}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  }
-                >
-                  {statusMsg}
-                </Alert>
-              </Box>
-            )}
-
-            {error && (
-              <Box sx={{ px: 2, pt: 1 }}>
-                <Alert
-                  severity="error"
-                  action={
-                    <IconButton size="small" aria-label="Dismiss error" onClick={() => setError(null)}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  }
-                >
-                  {error}
-                </Alert>
-              </Box>
-            )}
-
-            {activePluginId && (() => {
-              const plug = getPlugin(activePluginId)
-              if (!plug) {
-                return (
-                  <Alert severity="warning" sx={{ m: 2 }}>
-                    Unknown plugin
-                  </Alert>
-                )
-              }
-              const PluginView = plug.render
-              return (
-                <Box
-                  sx={{
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'auto',
-                  }}
-                >
-                  <PluginView
-                    onOpenNote={(id) => selectItem(id)}
-                    onClose={() => {
-                      setActivePluginId(null)
-                      setMode('chat')
-                    }}
-                  />
-                </Box>
-              )
-            })()}
+            <ContentChrome
+              mode={mode}
+              activePluginId={activePluginId}
+              statusMsg={statusMsg}
+              error={error}
+              onToggleMode={(v) => {
+                setActivePluginId(null)
+                setMode(v)
+              }}
+              onClearPlugin={() => setActivePluginId(null)}
+              onClosePlugin={() => {
+                setActivePluginId(null)
+                setMode('chat')
+              }}
+              onDismissStatus={() => setStatusMsg(null)}
+              onDismissError={() => setError(null)}
+              onOpenNote={(id) => selectItem(id)}
+            />
 
             {!activePluginId && mode === 'search' && (
-              <Box className="panel" sx={{ p: 2 }}>
-                {askResult && (
-                  <>
-                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                      Answer
-                    </Typography>
-                    {askResult.offline && (
-                      <Alert severity="warning" sx={{ mb: 1.5 }}>
-                        AI unavailable — search hits still shown.
-                      </Alert>
-                    )}
-                    <Paper sx={{ p: 2, mb: 1.5, borderRadius: 4, bgcolor: 'background.paper', whiteSpace: 'pre-wrap' }}>
-                      <Typography variant="body2">{askResult.answer}</Typography>
-                    </Paper>
-                    {askResult.citations.length > 0 && (
-                      <>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          From your notes
-                        </Typography>
-                        <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
-                          {askResult.citations.map((c) => (
-                            <Chip
-                              key={c.id}
-                              label={c.title}
-                              color="primary"
-                              variant="outlined"
-                              onClick={() => selectItem(c.id)}
-                              title={advanced ? c.id : c.title}
-                            />
-                          ))}
-                        </Stack>
-                      </>
-                    )}
-                  </>
-                )}
-
-                <Typography variant="subtitle1" fontWeight={600} sx={{ mt: askResult ? 1 : 0, mb: 0.5 }}>
-                  {hits.length > 0 ? `Results (${hits.length})` : 'Results'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
-                  {filterSummary === 'All notes'
-                    ? 'All notes'
-                    : `Filtering by ${filterSummary}`}
-                </Typography>
-                {hits.length === 0 ? (
-                  <Stack alignItems="center" spacing={1.5} sx={{ p: 4, color: 'text.secondary' }}>
-                    <Typography variant="body2">
-                      {searchText.trim() || filters.para || filters.kind || filters.status || filters.project
-                        ? 'No notes match these filters'
-                        : 'Search to find notes, or switch to Ask with your question.'}
-                    </Typography>
-                    <Button variant="contained" onClick={goAskAi}>
-                      Ask instead
-                    </Button>
-                  </Stack>
-                ) : (
-                  <Stack spacing={1}>
-                    {hits.map((h) => (
-                      <Paper
-                        key={h.id}
-                        component="button"
-                        onClick={() => selectItem(h.id)}
-                        sx={{
-                          p: 1.5,
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          borderRadius: 4,
-                          border: 1,
-                          borderColor: 'divider',
-                          bgcolor: 'background.paper',
-                          '&:hover': { borderColor: 'primary.main' },
-                        }}
-                      >
-                        <Typography variant="body2" fontWeight={600}>
-                          {h.title}{' '}
-                          <Typography component="span" variant="caption" color="text.secondary" fontWeight={400}>
-                            {advanced && <>score {h.score.toFixed(2)} · </>}
-                            {paraLabel(h.para)}
-                          </Typography>
-                        </Typography>
-                        <Typography className="snippet" variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                          {h.snippet}
-                        </Typography>
-                      </Paper>
-                    ))}
-                  </Stack>
-                )}
-              </Box>
+              <FindPanel
+                advanced={advanced}
+                askResult={askResult}
+                hits={hits}
+                searchText={searchText}
+                filters={filters}
+                filterSummary={filterSummary}
+                onSelect={selectItem}
+                onAskInstead={goAskAi}
+              />
             )}
 
             {!activePluginId && mode === 'chat' && (
-              <Box className="chat-layout">
-                <Box className="chat-main">
-                  {advanced && llmStatus && (
-                    <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-                      <details>
-                        <summary
-                          style={{
-                            cursor: 'pointer',
-                            padding: '8px 12px',
-                            fontSize: 12,
-                            listStyle: 'none',
-                          }}
-                        >
-                          AI providers
-                          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                            · {llmStatus.message}
-                          </Typography>
-                        </summary>
-                        <Box sx={{ px: 1.5, pb: 1.5 }}>
-                          <ProvidersPanel
-                            status={llmStatus}
-                            checking={llmChecking}
-                            onRefresh={() => void recheckLlm()}
-                            onAdd={() => openAddProvider()}
-                            onEdit={(p) => {
-                              setEditingProvider(p)
-                              setProviderDialogOpen(true)
-                            }}
-                            onError={(m) => setError(m)}
-                          />
-                        </Box>
-                      </details>
-                    </Box>
-                  )}
-
-                  <Box className="chat-thread" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, bgcolor: 'background.default' }}>
-                    {showFirstRun && llmStatus && (
-                      <FirstRunLocalCard
-                        status={llmStatus}
-                        checking={llmChecking}
-                        onRecheck={() => void recheckLlm()}
-                        onUseCloud={() => openAddProvider('openrouter')}
-                      />
-                    )}
-                    {showSmallHint && llmStatus?.active && (
-                      <SmallModelHint
-                        active={llmStatus.active}
-                        recommended={llmStatus.recommendedLocalModel?.name}
-                        onDismiss={() => setSmallHintDismissed(true)}
-                      />
-                    )}
-                    {messages.length === 0 && !showFirstRun && (
-                      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Paper sx={{ p: 4, maxWidth: 520, textAlign: 'center', borderRadius: 5 }}>
-                          <Typography variant="h6" color="primary" gutterBottom>
-                            {askEmpty.title}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {askEmpty.body}
-                          </Typography>
-                          {quickAsks.length > 0 && (
-                            <Stack direction="row" flexWrap="wrap" gap={0.75} justifyContent="center" sx={{ mt: 2 }} data-testid="quick-asks">
-                              {quickAsks.map(({ q, pack }) => (
-                                <Chip
-                                  key={`${pack}:${q}`}
-                                  size="small"
-                                  variant="outlined"
-                                  label={q.length > 60 ? q.slice(0, 57) + '…' : q}
-                                  title={`${q} — from “${pack}”`}
-                                  onClick={() => setChatInput(q)}
-                                />
-                              ))}
-                            </Stack>
-                          )}
-                        </Paper>
-                      </Box>
-                    )}
-                    {messages.map((m) => {
-                      const cites = m.role === 'assistant' ? parseCitations(m.citations_json) : []
-                      const isUser = m.role === 'user'
-                      const isSystem = m.role === 'system'
-                      return (
-                        <Box
-                          key={m.id}
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: isUser ? 'flex-end' : 'flex-start',
-                            opacity: isSystem ? 0.85 : 1,
-                          }}
-                        >
-                          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, textTransform: 'capitalize' }}>
-                            {m.role}
-                          </Typography>
-                          <Paper
-                            sx={{
-                              px: 2,
-                              py: 1.25,
-                              maxWidth: '85%',
-                              borderRadius: 4,
-                              bgcolor: isUser
-                                ? 'primary.main'
-                                : isSystem
-                                  ? 'action.selected'
-                                  : 'background.paper',
-                              color: isUser ? 'primary.contrastText' : 'text.primary',
-                              border: isUser ? 0 : 1,
-                              borderColor: 'divider',
-                            }}
-                          >
-                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
-                              {m.content}
-                            </Typography>
-                            {cites.length > 0 && (
-                              <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 1 }}>
-                                {cites.map((c) => (
-                                  <Chip
-                                    key={c.id}
-                                    size="small"
-                                    label={c.title}
-                                    color="primary"
-                                    variant={isUser ? 'filled' : 'outlined'}
-                                    onClick={() => selectItem(c.id)}
-                                    title={advanced ? c.id : c.title}
-                                    sx={isUser ? { bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' } : undefined}
-                                  />
-                                ))}
-                              </Stack>
-                            )}
-                          </Paper>
-                        </Box>
-                      )
-                    })}
-                    {chatOffline && (
-                      <Alert severity="warning">
-                        AI unavailable — your message was saved; reply is a status notice.
-                      </Alert>
-                    )}
-                    <div ref={threadEndRef} />
-                  </Box>
-
-                  <Paper
-                    square
-                    className="chat-composer"
-                    sx={{
-                      borderTop: 1,
-                      borderColor: 'divider',
-                      bgcolor: 'background.paper',
-                      p: 1.5,
-                      borderRadius: 0,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Stack spacing={1.25}>
-                      <Stack direction="row" spacing={1} alignItems="flex-end" flexWrap="wrap">
-                        <FormControl size="small" sx={{ flex: 1, minWidth: 192, maxWidth: 320 }}>
-                          <InputLabel id="chat-profile-label">Profile</InputLabel>
-                          <Select
-                            labelId="chat-profile-label"
-                            label="Profile"
-                            value={
-                              selectedProfileId === 'custom' ||
-                              isBuiltinProfileId(selectedProfileId) ||
-                              userProfiles.some((p) => p.id === selectedProfileId)
-                                ? selectedProfileId
-                                : 'custom'
-                            }
-                            onChange={(e) => onProfileChange(String(e.target.value))}
-                            aria-label="Chat profile"
-                          >
-                            {BUILTIN_PROFILES.map((p) => (
-                              <MenuItem key={p.id} value={p.id}>
-                                {p.name}
-                              </MenuItem>
-                            ))}
-                            {userProfiles.map((p) => {
-                              const broken = !prompts.some((pr) => pr.id === p.prompt_id)
-                              return (
-                                <MenuItem key={p.id} value={p.id}>
-                                  {broken ? `${p.name} (broken)` : p.name}
-                                </MenuItem>
-                              )
-                            })}
-                            <MenuItem value="custom">Custom</MenuItem>
-                          </Select>
-                        </FormControl>
-                        {selectedUserProfile && !profileRenameOpen && (
-                          <Stack direction="row" spacing={0.5} sx={{ pb: 0.25 }}>
-                            <Button
-                              size="small"
-                              disabled={profileBusy}
-                              onClick={() => {
-                                setProfileRenameName(selectedUserProfile.name)
-                                setProfileRenameOpen(true)
-                                setProfileSaveOpen(false)
-                              }}
-                            >
-                              Rename
-                            </Button>
-                            <Button
-                              size="small"
-                              color="error"
-                              disabled={profileBusy}
-                              onClick={() => void onDeleteProfile()}
-                            >
-                              Delete
-                            </Button>
-                          </Stack>
-                        )}
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          aria-expanded={askCustomizeOpen}
-                          onClick={() => setAskCustomizeOpen((o) => !o)}
-                          endIcon={askCustomizeOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                        >
-                          Customize
-                        </Button>
-                        {advanced && (
-                          <Typography variant="caption" color="text.secondary" sx={{ pb: 1, whiteSpace: 'nowrap' }}>
-                            {filterSummary}
-                          </Typography>
-                        )}
-                      </Stack>
-
-                      {profileRenameOpen && selectedUserProfile && (
-                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                          <TextField
-                            size="small"
-                            sx={{ flex: 1, minWidth: 160 }}
-                            value={profileRenameName}
-                            onChange={(e) => setProfileRenameName(e.target.value)}
-                            placeholder="Profile name"
-                            aria-label="Rename profile"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                void onRenameProfile()
-                              }
-                              if (e.key === 'Escape') setProfileRenameOpen(false)
-                            }}
-                            autoFocus
-                          />
-                          <Button
-                            variant="contained"
-                            size="small"
-                            disabled={profileBusy || !profileRenameName.trim()}
-                            onClick={() => void onRenameProfile()}
-                          >
-                            Save
-                          </Button>
-                          <Button size="small" disabled={profileBusy} onClick={() => setProfileRenameOpen(false)}>
-                            Cancel
-                          </Button>
-                        </Stack>
-                      )}
-
-                      {(stayingInGorgias || scopeCoupleHint) && (
-                        <Typography variant="caption" color="text.secondary">
-                          {stayingInGorgias ? 'Staying in Gorgias notes' : scopeCoupleHint}
-                        </Typography>
-                      )}
-
-                      <Collapse in={askCustomizeOpen}>
-                        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
-                          <Stack spacing={1.25}>
-                            {scopeCoupleHint && (
-                              <Typography variant="caption" color="text.secondary">
-                                {scopeCoupleHint}
-                              </Typography>
-                            )}
-                            <Stack direction="row" spacing={1.5} alignItems="flex-end" flexWrap="wrap">
-                              <FormControl size="small" sx={{ flex: 1, minWidth: 160 }}>
-                                <InputLabel id="personality-label">Personality</InputLabel>
-                                <Select
-                                  labelId="personality-label"
-                                  label="Personality"
-                                  value={
-                                    selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || ''
-                                  }
-                                  onChange={(e) => onChatPromptChange(String(e.target.value))}
-                                >
-                                  {prompts.map((p) => (
-                                    <MenuItem key={p.id} value={p.id}>
-                                      {personalityDisplayName(p)}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                              <FormControl size="small" sx={{ flex: 1, minWidth: 160 }}>
-                                <InputLabel id="notes-from-label">Notes from</InputLabel>
-                                <Select
-                                  labelId="notes-from-label"
-                                  label="Notes from"
-                                  value={filters.project ?? ''}
-                                  onChange={(e) => onNotesFromChange(String(e.target.value))}
-                                >
-                                  <MenuItem value="">All</MenuItem>
-                                  {projectOptions.map((name) => (
-                                    <MenuItem key={name} value={name}>
-                                      {name}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </Stack>
-                            <Divider />
-                            {!profileSaveOpen ? (
-                              <Button
-                                size="small"
-                                disabled={profileBusy}
-                                onClick={() => {
-                                  const prompt = prompts.find((p) => p.id === selectedPromptId)
-                                  const persona = prompt ? personalityDisplayName(prompt) : 'Custom'
-                                  const proj = (filters.project ?? '').trim()
-                                  setProfileSaveName(proj ? `${persona} · ${proj}` : persona)
-                                  setProfileSaveOpen(true)
-                                  setProfileRenameOpen(false)
-                                }}
-                                sx={{ alignSelf: 'flex-start' }}
-                              >
-                                Save as profile…
-                              </Button>
-                            ) : (
-                              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                                <TextField
-                                  size="small"
-                                  sx={{ flex: 1, minWidth: 160 }}
-                                  value={profileSaveName}
-                                  onChange={(e) => setProfileSaveName(e.target.value)}
-                                  placeholder="Profile name"
-                                  aria-label="New profile name"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault()
-                                      void onSaveAsProfile()
-                                    }
-                                    if (e.key === 'Escape') setProfileSaveOpen(false)
-                                  }}
-                                  autoFocus
-                                />
-                                <Button
-                                  variant="contained"
-                                  size="small"
-                                  disabled={profileBusy || !profileSaveName.trim()}
-                                  onClick={() => void onSaveAsProfile()}
-                                >
-                                  Save
-                                </Button>
-                                <Button size="small" disabled={profileBusy} onClick={() => setProfileSaveOpen(false)}>
-                                  Cancel
-                                </Button>
-                              </Stack>
-                            )}
-                          </Stack>
-                        </Paper>
-                      </Collapse>
-
-                      <Stack direction="row" spacing={1} alignItems="flex-end">
-                        <TextField
-                          fullWidth
-                          multiline
-                          minRows={3}
-                          maxRows={8}
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          placeholder={chatPlaceholder}
-                          disabled={busy}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault()
-                              void onSendChat()
-                            }
-                          }}
-                        />
-                        <IconButton
-                          color="primary"
-                          disabled={busy || !chatInput.trim()}
-                          onClick={() => void onSendChat()}
-                          aria-label={busy ? 'Sending' : 'Send'}
-                          sx={{
-                            bgcolor: 'primary.main',
-                            color: 'primary.contrastText',
-                            borderRadius: 4,
-                            width: 48,
-                            height: 48,
-                            '&:hover': { bgcolor: 'primary.dark' },
-                            '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
-                          }}
-                        >
-                          <SendIcon />
-                        </IconButton>
-                      </Stack>
-                    </Stack>
-                  </Paper>
-                </Box>
-
-                <Paper
-                  component="aside"
-                  className="chat-sessions"
-                  square
-                  sx={{ bgcolor: 'background.paper', borderLeft: 1, borderColor: 'divider', borderRadius: 0 }}
-                >
-                  <Stack spacing={1} sx={{ p: 1, borderBottom: 1, borderColor: 'divider' }}>
-                    <Button
-                      fullWidth
-                      size="small"
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => void onNewChat()}
-                    >
-                      New chat
-                    </Button>
-                    {advanced ? (
-                      <Button
-                        fullWidth
-                        size="small"
-                        variant="outlined"
-                        startIcon={<FileDownloadIcon />}
-                        disabled={busy || !activeSessionId || messages.length === 0}
-                        onClick={() => void onExportCitationPack()}
-                        aria-label="Export citation pack"
-                      >
-                        Export citation pack
-                      </Button>
-                    ) : (
-                      <Button
-                        fullWidth
-                        size="small"
-                        variant="outlined"
-                        startIcon={<FileDownloadIcon />}
-                        disabled={busy || !activeSessionId || messages.length === 0}
-                        onClick={() => void onExportCitationPack()}
-                        aria-label="Export citation pack"
-                      >
-                        Export pack
-                      </Button>
-                    )}
-                    <Typography variant="caption" color="text.secondary" title="Brainstorm mode not in this slice">
-                      Answers from your notes
-                      {advanced && <span> · Coming soon: brainstorm</span>}
-                    </Typography>
-                  </Stack>
-                  <Box className="session-list" sx={{ p: 1 }}>
-                    {sessions.length === 0 && (
-                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', p: 1.5 }}>
-                        No chats yet.
-                      </Typography>
-                    )}
-                    <List dense disablePadding>
-                      {sessions.map((s) => (
-                        <ListItemButton
-                          key={s.id}
-                          selected={activeSessionId === s.id}
-                          onClick={() => void onSelectSession(s.id)}
-                          sx={{
-                            mb: 0.25,
-                            borderRadius: 3,
-                            borderLeft: activeSessionId === s.id ? 3 : 0,
-                            borderColor: 'primary.main',
-                            pr: 0.5,
-                          }}
-                        >
-                          <ListItemText
-                            primary={s.title}
-                            primaryTypographyProps={{ variant: 'body2', fontWeight: 600, noWrap: true }}
-                          />
-                          <IconButton
-                            size="small"
-                            aria-label="Delete session"
-                            title="Delete session"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void onDeleteSession(s.id)
-                            }}
-                          >
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </ListItemButton>
-                      ))}
-                    </List>
-                  </Box>
-                </Paper>
-              </Box>
+              <ChatView
+                advanced={advanced}
+                busy={busy}
+                llmStatus={llmStatus}
+                llmChecking={llmChecking}
+                showFirstRun={showFirstRun}
+                showSmallHint={showSmallHint}
+                askEmpty={askEmpty}
+                quickAsks={quickAsks}
+                messages={messages}
+                chatOffline={chatOffline}
+                threadEndRef={threadEndRef}
+                selectedProfileId={selectedProfileId}
+                userProfiles={userProfiles}
+                selectedUserProfile={selectedUserProfile}
+                prompts={prompts}
+                selectedPromptId={selectedPromptId}
+                projectOptions={projectOptions}
+                notesFrom={filters.project ?? ''}
+                profileRenameOpen={profileRenameOpen}
+                profileRenameName={profileRenameName}
+                profileSaveOpen={profileSaveOpen}
+                profileSaveName={profileSaveName}
+                profileBusy={profileBusy}
+                askCustomizeOpen={askCustomizeOpen}
+                filterSummary={filterSummary}
+                stayingInGorgias={stayingInGorgias}
+                scopeCoupleHint={scopeCoupleHint}
+                chatInput={chatInput}
+                chatPlaceholder={chatPlaceholder}
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onRecheck={() => void recheckLlm()}
+                onAddProvider={openAddProvider}
+                onEditProvider={(p) => {
+                  setEditingProvider(p)
+                  setProviderDialogOpen(true)
+                }}
+                onError={setError}
+                onDismissSmallHint={() => setSmallHintDismissed(true)}
+                onChatInput={setChatInput}
+                onSelectNote={selectItem}
+                onProfileChange={onProfileChange}
+                onOpenRename={() => {
+                  if (selectedUserProfile) {
+                    setProfileRenameName(selectedUserProfile.name)
+                    setProfileRenameOpen(true)
+                    setProfileSaveOpen(false)
+                  }
+                }}
+                onRenameName={setProfileRenameName}
+                onRename={() => void onRenameProfile()}
+                onRenameCancel={() => setProfileRenameOpen(false)}
+                onDeleteProfile={() => void onDeleteProfile()}
+                onAskCustomize={setAskCustomizeOpen}
+                onChatPrompt={onChatPromptChange}
+                onNotesFrom={onNotesFromChange}
+                onOpenProfileSave={() => {
+                  const prompt = prompts.find((p) => p.id === selectedPromptId)
+                  const persona = prompt ? personalityDisplayName(prompt) : 'Custom'
+                  const proj = (filters.project ?? '').trim()
+                  setProfileSaveName(proj ? `${persona} · ${proj}` : persona)
+                  setProfileSaveOpen(true)
+                  setProfileRenameOpen(false)
+                }}
+                onProfileSaveName={setProfileSaveName}
+                onSaveAsProfile={() => void onSaveAsProfile()}
+                onProfileSaveCancel={() => setProfileSaveOpen(false)}
+                onSend={() => void onSendChat()}
+                onNewChat={() => void onNewChat()}
+                onExportCitationPack={() => void onExportCitationPack()}
+                onSelectSession={(id) => void onSelectSession(id)}
+                onDeleteSession={(id) => void onDeleteSession(id)}
+              />
             )}
 
             {!activePluginId && mode === 'prompts' && (
-              <Box className="prompts-layout">
-                <Paper
-                  component="aside"
-                  className="prompt-list-pane"
-                  square
-                  sx={{ bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', borderRadius: 0 }}
-                >
-                  <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider' }}>
-                    <Button
-                      fullWidth
-                      size="small"
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={onNewPrompt}
-                    >
-                      New personality
-                    </Button>
-                  </Box>
-                  <Box className="session-list" sx={{ p: 1 }}>
-                    {prompts.length === 0 && (
-                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', p: 1.5 }}>
-                        No personalities yet.
-                      </Typography>
-                    )}
-                    <List dense disablePadding>
-                      {prompts.map((p) => (
-                        <ListItemButton
-                          key={p.id}
-                          selected={editingPrompt?.id === p.id}
-                          onClick={() => onSelectPrompt(p)}
-                          sx={{
-                            mb: 0.25,
-                            borderRadius: 3,
-                            flexDirection: 'column',
-                            alignItems: 'stretch',
-                            borderLeft: editingPrompt?.id === p.id ? 3 : 0,
-                            borderColor: 'primary.main',
-                          }}
-                        >
-                          <Typography variant="body2" fontWeight={600} noWrap>
-                            {personalityDisplayName(p)}
-                          </Typography>
-                          {p.description && (
-                            <Typography variant="caption" color="text.secondary">
-                              {p.description}
-                            </Typography>
-                          )}
-                        </ListItemButton>
-                      ))}
-                    </List>
-                  </Box>
-                </Paper>
-                <Box className="panel" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  {!editingPrompt && !promptBodyOpen ? (
-                    <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Paper sx={{ p: 4, maxWidth: 420, textAlign: 'center', borderRadius: 5 }}>
-                        <Typography variant="h6" color="primary" gutterBottom>
-                          Personalities
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Pick how Ask should answer. You can add your own personalities.
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  ) : (
-                    <>
-                      <Typography variant="h6">
-                        {editingPrompt ? personalityDisplayName(editingPrompt) : 'New personality'}
-                      </Typography>
-                      <TextField
-                        fullWidth
-                        label="Name"
-                        value={promptDraft.name}
-                        onChange={(e) => {
-                          setPromptDraft((d) => ({ ...d, name: e.target.value }))
-                          setPromptDirty(true)
-                        }}
-                        placeholder="e.g. Concise bullets"
-                      />
-                      <TextField
-                        fullWidth
-                        label="Description"
-                        value={promptDraft.description}
-                        onChange={(e) => {
-                          setPromptDraft((d) => ({ ...d, description: e.target.value }))
-                          setPromptDirty(true)
-                        }}
-                        placeholder="Optional short description"
-                      />
-
-                      {!advanced && !promptBodyOpen ? (
-                        <Box sx={{ mt: 1 }}>
-                          <Typography variant="body2" color="text.secondary" paragraph>
-                            {editingPrompt
-                              ? 'This personality is ready to use in Ask. Open Edit to change how it answers.'
-                              : 'Add a name, then Edit to write the personality instructions.'}
-                          </Typography>
-                          <Button variant="outlined" size="small" onClick={() => setPromptBodyOpen(true)}>
-                            Edit
-                          </Button>
-                          {editingPrompt && (
-                            <Button
-                              variant="contained"
-                              size="small"
-                              sx={{ ml: 1 }}
-                              onClick={() => {
-                                onChatPromptChange(editingPrompt.id)
-                                setMode('chat')
-                              }}
-                            >
-                              Use in Ask
-                            </Button>
-                          )}
-                        </Box>
-                      ) : (
-                        <>
-                          <TextField
-                            fullWidth
-                            multiline
-                            minRows={10}
-                            label="Instructions"
-                            value={promptDraft.body}
-                            onChange={(e) => {
-                              setPromptDraft((d) => ({ ...d, body: e.target.value }))
-                              setPromptDirty(true)
-                            }}
-                            placeholder="Additional guidance merged with grounded citation rules…"
-                            InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }}
-                          />
-                          <Typography variant="caption" color="text.secondary">
-                            Answers still come from your notes. These instructions only change tone and format.
-                          </Typography>
-                          <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
-                            {editingPrompt && (
-                              <Button color="error" variant="outlined" onClick={() => void onDeletePrompt()}>
-                                Delete
-                              </Button>
-                            )}
-                            {!advanced && (
-                              <Button onClick={() => setPromptBodyOpen(false)}>Done editing</Button>
-                            )}
-                            <Button
-                              variant="contained"
-                              disabled={
-                                busy || !promptDirty || !promptDraft.name.trim() || !promptDraft.body.trim()
-                              }
-                              onClick={() => void onSavePrompt()}
-                            >
-                              Save
-                            </Button>
-                          </Stack>
-                        </>
-                      )}
-                    </>
-                  )}
-                </Box>
-              </Box>
+              <PromptsView
+                advanced={advanced}
+                busy={busy}
+                prompts={prompts}
+                editingPrompt={editingPrompt}
+                promptBodyOpen={promptBodyOpen}
+                promptDraft={promptDraft}
+                promptDirty={promptDirty}
+                onNewPrompt={onNewPrompt}
+                onSelectPrompt={onSelectPrompt}
+                onDraft={setPromptDraft}
+                onDirty={setPromptDirty}
+                onBodyOpen={setPromptBodyOpen}
+                onUseInAsk={(promptId) => {
+                  onChatPromptChange(promptId)
+                  setMode('chat')
+                }}
+                onDeletePrompt={() => void onDeletePrompt()}
+                onSavePrompt={() => void onSavePrompt()}
+              />
             )}
 
-            {/* Note peek: Ask/Find stay home; note overlays center+sessions */}
-            <Drawer
-              anchor="right"
+            <NotePeek
               open={notePeekOpen}
-              onClose={() => closeNotePeek()}
-              variant="temporary"
-              ModalProps={{
-                keepMounted: true,
-                disablePortal: true,
-                sx: { position: 'absolute' },
-              }}
-              slotProps={{
-                backdrop: {
-                  sx: {
-                    position: 'absolute',
-                    bgcolor: 'rgba(0, 0, 0, 0.28)',
-                  },
-                },
-              }}
-              PaperProps={{
-                sx: {
-                  position: 'absolute',
-                  width: { xs: '100%', sm: 420, md: 480 },
-                  boxSizing: 'border-box',
-                  display: 'flex',
-                  flexDirection: 'column',
-                },
-              }}
-              aria-label="Note peek"
-            >
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
-              >
-                <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }} noWrap>
-                  {isNewDraft || draft?.id === NEW_DRAFT_ID
-                    ? 'New note'
-                    : peekEditing
-                      ? 'Editing note'
-                      : 'Viewing note'}
-                </Typography>
-                {!peekEditing && draft && (
-                  <Button
-                    size="small"
-                    startIcon={<EditOutlinedIcon />}
-                    onClick={() => setPeekEditing(true)}
-                  >
-                    Edit
-                  </Button>
-                )}
-                <IconButton size="small" aria-label="Close note peek" onClick={() => closeNotePeek()}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </Stack>
-
-              <Box className="panel" sx={{ p: 2, flex: 1, minHeight: 0, overflow: 'auto' }}>
-                {!draft ? (
-                  <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Loading note…
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Box className="editor">
-                    <TextField
-                      fullWidth
-                      value={draft.title}
-                      onChange={(e) => patchDraft('title', e.target.value)}
-                      placeholder="Title"
-                      InputProps={{ readOnly: !peekEditing }}
-                    />
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                      <FormControl fullWidth size="small" disabled={!peekEditing}>
-                        <InputLabel id="peek-para-label">Group</InputLabel>
-                        <Select
-                          labelId="peek-para-label"
-                          label="Group"
-                          value={draft.para}
-                          onChange={(e) => patchDraft('para', e.target.value as Para)}
-                        >
-                          {PARA_OPTIONS.filter(Boolean).map((p) => (
-                            <MenuItem key={p} value={p}>
-                              {paraLabel(p as string)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <TextField
-                        label="Type"
-                        size="small"
-                        value={draft.kind}
-                        onChange={(e) => patchDraft('kind', e.target.value)}
-                        InputProps={{ readOnly: !peekEditing }}
-                      />
-                      <TextField
-                        label="Status"
-                        size="small"
-                        value={draft.status}
-                        onChange={(e) => patchDraft('status', e.target.value)}
-                        InputProps={{ readOnly: !peekEditing }}
-                      />
-                      <TextField
-                        label="Project"
-                        size="small"
-                        value={draft.project ?? ''}
-                        onChange={(e) => patchDraft('project', e.target.value || null)}
-                        InputProps={{ readOnly: !peekEditing }}
-                      />
-                    </Box>
-                    <TextField
-                      fullWidth
-                      label="Summary"
-                      size="small"
-                      value={draft.summary ?? ''}
-                      onChange={(e) => patchDraft('summary', e.target.value || null)}
-                      InputProps={{ readOnly: !peekEditing }}
-                    />
-                    <TextField
-                      className="body-field"
-                      fullWidth
-                      multiline
-                      minRows={12}
-                      value={draft.body}
-                      onChange={(e) => patchDraft('body', e.target.value)}
-                      placeholder="Write your note…"
-                      InputProps={{ readOnly: !peekEditing }}
-                      sx={{ flex: 1, '& .MuiInputBase-root': { alignItems: 'flex-start' } }}
-                    />
-                    <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center" flexWrap="wrap">
-                      <Typography variant="body2" color="text.secondary" sx={{ mr: 'auto' }}>
-                        {advanced && !isNewDraft && draft.id !== NEW_DRAFT_ID && (
-                          <>
-                            <Box component="code" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
-                              {draft.id}
-                            </Box>
-                            <Button size="small" onClick={() => void copyItemId(draft.id)}>
-                              Copy id
-                            </Button>
-                            {' · '}
-                          </>
-                        )}
-                        {isNewDraft || draft.id === NEW_DRAFT_ID
-                          ? dirty
-                            ? 'Draft — not saved yet'
-                            : 'Draft — save to add to your vault'
-                          : peekEditing
-                            ? dirty
-                              ? 'Unsaved changes'
-                              : 'Saved'
-                            : 'Read-only'}
-                      </Typography>
-                      {peekEditing && (
-                        <>
-                          {!isNewDraft && draft.id !== NEW_DRAFT_ID && (
-                            <Button color="error" variant="outlined" onClick={() => void onDelete()}>
-                              Delete
-                            </Button>
-                          )}
-                          <Button
-                            variant="contained"
-                            disabled={busy || (!dirty && !isNewDraft && draft.id !== NEW_DRAFT_ID)}
-                            onClick={() => void onSave()}
-                          >
-                            Save
-                          </Button>
-                        </>
-                      )}
-                    </Stack>
-                  </Box>
-                )}
-              </Box>
-            </Drawer>
+              isNewDraft={isNewDraft}
+              draft={draft}
+              peekEditing={peekEditing}
+              dirty={dirty}
+              busy={busy}
+              advanced={advanced}
+              onClose={closeNotePeek}
+              onEdit={setPeekEditing}
+              onPatch={patchDraft}
+              onSave={() => void onSave()}
+              onDelete={() => void onDelete()}
+              onCopyId={(id) => void copyItemId(id)}
+            />
           </Box>
         </Box>
+
+        <ProviderDialog
+          open={providerDialogOpen}
+          presets={providerPresets}
+          editing={editingProvider}
+          initialPresetId={providerInitialPreset}
+          onClose={() => setProviderDialogOpen(false)}
+          onSaved={(cfg) => {
+            setProviderDialogOpen(false)
+            setStatusMsg(`Saved provider “${cfg.label}”.`)
+            void recheckLlm()
+          }}
+        />
+        <AiSettingsDialog
+          open={aiSettingsOpen}
+          advanced={advanced}
+          llmStatus={llmStatus}
+          llmChecking={llmChecking}
+          onClose={() => setAiSettingsOpen(false)}
+          onRefresh={() => void recheckLlm()}
+          onAddProvider={openAddProvider}
+          onEditProvider={(p) => {
+            setEditingProvider(p)
+            setProviderDialogOpen(true)
+          }}
+          onError={setError}
+          onUseAdvanced={() => setUiModePersist('advanced')}
+        />
       </Box>
-      <ProviderDialog
-        open={providerDialogOpen}
-        presets={providerPresets}
-        editing={editingProvider}
-        initialPresetId={providerInitialPreset}
-        onClose={() => setProviderDialogOpen(false)}
-        onSaved={(cfg) => {
-          setProviderDialogOpen(false)
-          setStatusMsg(`Saved provider “${cfg.label}”.`)
-          void recheckLlm()
-        }}
-      />
-      <Dialog open={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} fullWidth maxWidth={advanced ? 'md' : 'sm'}>
-        <DialogTitle>AI providers</DialogTitle>
-        <DialogContent>
-          {llmStatus && advanced && (
-            <ProvidersPanel
-              status={llmStatus}
-              checking={llmChecking}
-              onRefresh={() => void recheckLlm()}
-              onAdd={() => openAddProvider()}
-              onEdit={(p) => {
-                setEditingProvider(p)
-                setProviderDialogOpen(true)
-              }}
-              onError={(m) => setError(m)}
-            />
-          )}
-          {llmStatus && !advanced && (
-            <Stack spacing={1.5} sx={{ pt: 0.5 }}>
-              <Typography variant="body2">{llmStatus.message}</Typography>
-              {llmStatus.needsSetup && (
-                <FirstRunLocalCard
-                  status={llmStatus}
-                  checking={llmChecking}
-                  onRecheck={() => void recheckLlm()}
-                  onUseCloud={() => openAddProvider('openrouter')}
-                />
-              )}
-              {llmStatus.active?.smallModel && (
-                <SmallModelHint active={llmStatus.active} recommended={llmStatus.recommendedLocalModel?.name} onDismiss={() => undefined} />
-              )}
-              <Stack direction="row" spacing={1}>
-                <Button size="small" onClick={() => void recheckLlm()} disabled={llmChecking}>
-                  {llmChecking ? 'Checking…' : 'Re-check'}
-                </Button>
-                <Button size="small" onClick={() => openAddProvider()}>
-                  Add provider
-                </Button>
-                <Button size="small" onClick={() => setUiModePersist('advanced')}>
-                  All providers (Advanced)
-                </Button>
-              </Stack>
-            </Stack>
-          )}
-          <BridgeSettings />
-        </DialogContent>
-      </Dialog>
     </ThemeProvider>
   )
 }
