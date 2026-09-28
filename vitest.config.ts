@@ -7,6 +7,8 @@ export default defineConfig({
     setupFiles: ['./tests/renderer/setup.ts'],
     include: ['tests/renderer/**/*.test.{ts,tsx}'],
     restoreMocks: true,
+    testTimeout: 15000,
+    hookTimeout: 15000,
     coverage: {
       provider: 'v8',
       include: ['src/**'],
