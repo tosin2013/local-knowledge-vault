@@ -1,5 +1,5 @@
 {
-  "$comment": "Completion bar for #44: src/App.tsx held the Ask home, notes rail, note peek, chat and settings in one 2,781-line component with ~20 effects. The split extracts the pure helpers/constants/types into src/domain.ts and each UI feature into its own presentational component under src/features/ (TopBar, NotesRail, FindPanel, ChatView, PromptsView, NotePeek, AiSettingsDialog, ContentChrome), with App.tsx left as the state-owning orchestrator that composes them. Criteria 1-9 fail before the split (the files do not exist); 10 asserts App.tsx actually shrank below 1,300 lines (it was 2,783); 11-12 guard the renderer typecheck and build (the CI gates). Behaviour is unchanged; no test mounts the renderer yet (CONTRIBUTING), so a manual npm run dev pass is stated in the PR. Extracting the shared state into hooks is a follow-up increment, out of scope here.",
+  "$comment": "Completion bar for #44: src/App.tsx held the Ask home, notes rail, note peek, chat and settings in one 2,781-line component with ~20 effects. The split extracts the pure helpers/constants/types into src/domain.ts, each UI feature into its own presentational component under src/features/ (TopBar, NotesRail, FindPanel, ChatView, PromptsView, NotePeek, AiSettingsDialog, ContentChrome), and the state-owning logic into hooks under src/hooks/ (useUi, useProviders, useNotes, usePrompts, useChat). App.tsx is left as a thin orchestrator that composes them. Criteria 1-14 fail before the split (the files do not exist); 15 asserts App.tsx actually shrank below 500 lines (it was 2,783); 16-17 guard the renderer typecheck and build (the CI gates). Behaviour is unchanged; no test mounts the renderer yet (CONTRIBUTING), so a manual npm run dev pass is stated in the PR.",
   "authority_id": "44",
   "criteria": [
     { "check": "file_exists", "target": "src/domain.ts" },
@@ -11,8 +11,21 @@
     { "check": "file_exists", "target": "src/features/NotePeek.tsx" },
     { "check": "file_exists", "target": "src/features/AiSettingsDialog.tsx" },
     { "check": "file_exists", "target": "src/features/ContentChrome.tsx" },
-    { "check": "command_exit", "target": "test \"$(wc -l < src/App.tsx)\" -lt 1300" },
+    { "check": "file_exists", "target": "src/hooks/useUi.ts" },
+    { "check": "file_exists", "target": "src/hooks/useProviders.ts" },
+    { "check": "file_exists", "target": "src/hooks/useNotes.ts" },
+    { "check": "file_exists", "target": "src/hooks/usePrompts.ts" },
+    { "check": "file_exists", "target": "src/hooks/useChat.ts" },
+    { "check": "command_exit", "target": "test \"$(wc -l < src/App.tsx)\" -lt 500" },
     { "check": "command_exit", "target": "npm run typecheck" },
     { "check": "command_exit", "target": "npm run build" }
+  ],
+  "amendments": [
+    {
+      "cites": ["src/App.tsx", "src/hooks/useUi.ts"],
+      "effect": "strengthened",
+      "date": "2026-09-28",
+      "reason": "The first bar declared only the component split (features + domain) and a <1300-line App.tsx. The issue's fix direction also names hooks, so the bar is extended to require the state extraction into src/hooks/* and tightened to require App.tsx below 500 lines, now that the orchestrator is fully split."
+    }
   ]
 }
