@@ -46,7 +46,7 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron',
-            rollupOptions: {
+            rolldownOptions: {
               external: ['better-sqlite3', 'electron'],
             },
           },
@@ -57,7 +57,7 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron',
-            rollupOptions: {
+            rolldownOptions: {
               external: ['electron'],
             },
           },
