@@ -1,0 +1,15 @@
+{
+  "$comment": "Completion bar for #87: renderer tests for the built-in plugin views (src/plugins/*, ~2,500 lines, previously 0%). MediaChatView covers ingest (local + YouTube), chat with transcript citations, voice chips, fullscreen and citation seek; McpConnectionsView covers connect/OAuth states and add/remove/disconnect; MediaPersonasView and ManagePluginsView cover install + reject-reason surfacing; contrib.tsx + registry cover declarative-pack contributions and the plugin menu. The src/plugins/** coverage exclude was already lifted (#96), so these now count toward the milestone. Criteria 1-6 fail before the work (the test files do not exist); 7 runs the renderer suite; 8 runs the merged coverage pipeline; 9 guards types.",
+  "authority_id": "87",
+  "criteria": [
+    { "check": "file_exists", "target": "tests/renderer/MediaChatView.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/McpConnectionsView.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/MediaPersonasView.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/ManagePluginsView.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/contrib.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/registry.test.ts" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

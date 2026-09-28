@@ -8,6 +8,13 @@ import type {
   ImportFromUrlResult,
   Item,
   LlmStatus,
+  McpServerSummary,
+  McpToolSummary,
+  MediaIngestResult,
+  MediaProjectInfo,
+  MediaVoicePackInfo,
+  PluginInfo,
+  PluginListResult,
   ProviderConfig,
   ProviderPresetInfo,
   Prompt,
@@ -163,6 +170,80 @@ export function makeCitationPackResult(overrides: Partial<CitationPackExportResu
   }
 }
 
+export function makeMediaProject(project = 'My podcast', overrides: Partial<MediaProjectInfo> = {}): MediaProjectInfo {
+  return {
+    project,
+    noteCount: 10,
+    sourceType: 'local',
+    mediaProtocolUrl: `lkvmedia://${project}`,
+    updatedAt: '2026-09-28T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+export function makeVoicePack(promptId: string, name = 'Desk cohost', overrides: Partial<MediaVoicePackInfo> = {}): MediaVoicePackInfo {
+  return {
+    name,
+    promptId,
+    description: 'Media voice pack',
+    builtin: true,
+    ...overrides,
+  }
+}
+
+export function makeIngestResult(overrides: Partial<MediaIngestResult> = {}): MediaIngestResult {
+  return {
+    project: 'My podcast',
+    title: 'My podcast',
+    noteCount: 10,
+    itemIds: ['itm_1'],
+    promptId: 'prm_media_reader',
+    profileId: 'prf_1',
+    sourceType: 'local',
+    mediaPath: '/tmp/audio.mp3',
+    mediaProtocolUrl: 'lkvmedia://audio',
+    ...overrides,
+  }
+}
+
+export function makeMcpServer(id: string, overrides: Partial<McpServerSummary> = {}): McpServerSummary {
+  return {
+    id,
+    name: 'Mock MCP',
+    url: 'https://example.com/mcp',
+    status: 'disconnected',
+    preset: null,
+    ...overrides,
+  }
+}
+
+export function makeMcpTool(name: string, overrides: Partial<McpToolSummary> = {}): McpToolSummary {
+  return { name, description: 'A tool', ...overrides }
+}
+
+export function makePluginInfo(id: string, overrides: Partial<PluginInfo> = {}): PluginInfo {
+  return {
+    id,
+    name: id,
+    version: '1.0.0',
+    description: 'A declarative plugin',
+    source: 'installed',
+    enabled: true,
+    contributes: ['2 providers'],
+    ...overrides,
+  }
+}
+
+export function makePluginListResult(overrides: Partial<PluginListResult> = {}): PluginListResult {
+  return {
+    plugins: [],
+    errors: [],
+    pluginsDir: '/tmp/plugins',
+    disabled: [],
+    ...overrides,
+  }
+}
+
 export interface LkvMock {
   [key: string]: unknown
 }
@@ -258,7 +339,37 @@ export function createLkvMock(): LkvMock {
       getToken: vi.fn().mockResolvedValue('test-token'),
       rotateToken: vi.fn().mockResolvedValue('test-token'),
     },
-    mcp: {},
+    media: {
+      pickLocal: vi.fn().mockResolvedValue({ canceled: true }),
+      ingestLocal: vi.fn().mockResolvedValue(makeIngestResult()),
+      ingestYoutube: vi.fn().mockResolvedValue(makeIngestResult({ sourceType: 'youtube' })),
+      listProjects: vi.fn().mockResolvedValue([]),
+      notesNear: vi.fn().mockResolvedValue([]),
+      youtubeEmbedUrl: vi.fn().mockResolvedValue(null),
+      ensurePersonas: vi.fn().mockResolvedValue({ promptIds: [], names: [], created: [], updated: [] }),
+      applyPersona: vi.fn().mockResolvedValue({
+        promptId: 'prm_1',
+        profileId: 'prf_1',
+        personaName: 'Desk cohost',
+        profileName: 'Desk cohost · My podcast',
+      }),
+      createPersona: vi.fn().mockImplementation((input: { name: string }) =>
+        Promise.resolve({ promptId: 'prm_new', name: input.name }),
+      ),
+      listVoicePacks: vi.fn().mockResolvedValue([]),
+    },
+    mcp: {
+      listServers: vi.fn().mockResolvedValue([]),
+      addServer: vi.fn().mockImplementation((input: { name: string; url: string }) =>
+        Promise.resolve(makeMcpServer('mcp_1', { name: input.name, url: input.url })),
+      ),
+      ensureNotion: vi.fn().mockResolvedValue(makeMcpServer('notion', { preset: 'notion', name: 'Notion' })),
+      removeServer: vi.fn().mockResolvedValue(true),
+      connect: vi.fn().mockResolvedValue({ server: makeMcpServer('mcp_1', { status: 'connected' }), tools: [] }),
+      disconnect: vi.fn().mockResolvedValue(makeMcpServer('mcp_1', { status: 'disconnected' })),
+      cancelAuth: vi.fn().mockResolvedValue(null),
+      listTools: vi.fn().mockResolvedValue([]),
+    },
   }
 }
 
