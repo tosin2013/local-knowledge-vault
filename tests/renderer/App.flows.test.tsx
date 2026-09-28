@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from '../../src/App'
 import { makeItem, makeMessage, makePrompt, makeSession } from './lkv'
 
@@ -29,7 +28,6 @@ async function renderApp() {
   await waitFor(() =>
     expect(screen.getByText(/Ask anything grounded in your notes/)).toBeInTheDocument(),
   )
-  return userEvent.setup()
 }
 
 describe('App flows — Ask', () => {
@@ -48,10 +46,12 @@ describe('App flows — Ask', () => {
       session: makeSession('s_1', 'What is PARA?'),
       offline: false,
     })
-    const user = await renderApp()
+    await renderApp()
 
-    await user.type(screen.getByPlaceholderText(/Ask about your notes/), 'What is PARA?')
-    await user.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.change(screen.getByPlaceholderText(/Ask about your notes/), {
+      target: { value: 'What is PARA?' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() => expect(screen.getByText('PARA is a note-organising method.')).toBeInTheDocument())
     expect(screen.getByText('Cited note')).toBeInTheDocument()
@@ -70,10 +70,12 @@ describe('App flows — Ask', () => {
       session: makeSession('s_1'),
       offline: false,
     })
-    const user = await renderApp()
+    await renderApp()
 
-    await user.type(screen.getByPlaceholderText(/Ask about your notes/), 'banana')
-    await user.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.change(screen.getByPlaceholderText(/Ask about your notes/), {
+      target: { value: 'banana' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() =>
       expect(screen.getByText(/I couldn't find that in your notes/)).toBeInTheDocument(),
@@ -83,10 +85,12 @@ describe('App flows — Ask', () => {
   it('shows a provider error when sending fails', async () => {
     const lkv = seed()
     lkv.chat.send.mockRejectedValue(new Error('Provider unavailable'))
-    const user = await renderApp()
+    await renderApp()
 
-    await user.type(screen.getByPlaceholderText(/Ask about your notes/), 'hello')
-    await user.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.change(screen.getByPlaceholderText(/Ask about your notes/), {
+      target: { value: 'hello' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() => expect(screen.getByText('Provider unavailable')).toBeInTheDocument())
   })
@@ -98,10 +102,12 @@ describe('App flows — Ask', () => {
       session: makeSession('s_1'),
       offline: true,
     })
-    const user = await renderApp()
+    await renderApp()
 
-    await user.type(screen.getByPlaceholderText(/Ask about your notes/), 'hello')
-    await user.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.change(screen.getByPlaceholderText(/Ask about your notes/), {
+      target: { value: 'hello' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() =>
       expect(screen.getByText(/AI unavailable — your message was saved/)).toBeInTheDocument(),
@@ -110,12 +116,14 @@ describe('App flows — Ask', () => {
 
   it('pre-fills the Ask composer via "Ask instead" from Find', async () => {
     seed()
-    const user = await renderApp()
+    await renderApp()
 
-    await user.click(screen.getByRole('button', { name: 'Find' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Find' }))
     await waitFor(() => expect(screen.getByText('Ask instead')).toBeInTheDocument())
-    await user.type(screen.getByPlaceholderText('Search your notes…'), 'habits')
-    await user.click(screen.getByText('Ask instead'))
+    fireEvent.change(screen.getByPlaceholderText('Search your notes…'), {
+      target: { value: 'habits' },
+    })
+    fireEvent.click(screen.getByText('Ask instead'))
 
     await waitFor(() =>
       expect(screen.getByPlaceholderText(/Ask about your notes/)).toHaveValue('habits'),
@@ -133,15 +141,17 @@ describe('App flows — Notes rail + note peek', () => {
       items.push(item)
       return Promise.resolve(item)
     })
-    const user = await renderApp()
+    await renderApp()
 
-    await user.click(screen.getByText('New note'))
+    fireEvent.click(screen.getByText('New note'))
     const title = await screen.findByPlaceholderText('Title')
-    await user.type(title, 'My new note')
-    await user.type(screen.getByPlaceholderText('Write your note…'), 'Some body')
-    await user.click(screen.getByText('Save'))
+    fireEvent.change(title, { target: { value: 'My new note' } })
+    fireEvent.change(screen.getByPlaceholderText('Write your note…'), { target: { value: 'Some body' } })
+    fireEvent.click(screen.getByText('Save'))
 
-    await waitFor(() => expect(lkv.items.create).toHaveBeenCalledWith(expect.objectContaining({ title: 'My new note' })))
+    await waitFor(() =>
+      expect(lkv.items.create).toHaveBeenCalledWith(expect.objectContaining({ title: 'My new note' })),
+    )
     await waitFor(() => expect(screen.getAllByText('My new note').length).toBeGreaterThan(0))
   })
 
@@ -150,16 +160,14 @@ describe('App flows — Notes rail + note peek', () => {
     lkv.items.update.mockImplementation((id: string, patch: { title?: string }) =>
       Promise.resolve(makeItem(id, { title: patch.title ?? 'First note', body: 'Body text' })),
     )
-    const user = await renderApp()
+    await renderApp()
 
-    await user.click(screen.getByText('First note'))
-    const edit = await screen.findByText('Edit')
-    await user.click(edit)
+    fireEvent.click(screen.getByText('First note'))
+    fireEvent.click(await screen.findByText('Edit'))
 
     const title = await screen.findByPlaceholderText('Title')
-    await user.clear(title)
-    await user.type(title, 'Renamed note')
-    await user.click(screen.getByText('Save'))
+    fireEvent.change(title, { target: { value: 'Renamed note' } })
+    fireEvent.click(screen.getByText('Save'))
 
     await waitFor(() =>
       expect(lkv.items.update).toHaveBeenCalledWith(
@@ -171,11 +179,11 @@ describe('App flows — Notes rail + note peek', () => {
 
   it('deletes a note from the peek editor', async () => {
     const lkv = seed()
-    const user = await renderApp()
+    await renderApp()
 
-    await user.click(screen.getByText('First note'))
-    await user.click(await screen.findByText('Edit'))
-    await user.click(screen.getByText('Delete'))
+    fireEvent.click(screen.getByText('First note'))
+    fireEvent.click(await screen.findByText('Edit'))
+    fireEvent.click(screen.getByText('Delete'))
 
     await waitFor(() => expect(lkv.items.delete).toHaveBeenCalledWith('itm_1'))
   })
@@ -186,11 +194,10 @@ describe('App flows — Notes rail + note peek', () => {
       makeItem('itm_1', { title: 'First note', project: 'Work' }),
       makeItem('itm_2', { title: 'Second note', project: 'Home' }),
     ])
-    const user = await renderApp()
+    await renderApp()
 
-    // Open the project select and pick Work.
-    await user.click(screen.getByRole('combobox', { name: 'Project' }))
-    await user.click(screen.getByRole('option', { name: 'Work' }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Work' }))
 
     await waitFor(() => expect(lkv.items.list).toHaveBeenCalled())
   })
