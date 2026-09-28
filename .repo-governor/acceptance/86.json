@@ -1,0 +1,12 @@
+{
+  "$comment": "Completion bar for #86: tests for the AI settings components (src/components/ai/*, ~783 lines). ProviderDialog/ProvidersPanel cover add/edit/test provider and the write-only API key (never pre-filled from IPC); FirstRunLocalCard covers Ollama/LM Studio detected-vs-missing plus the aiChipLabel/SmallModelHint helpers; BridgeSettings covers token display and regenerate. The src/components/ai/* coverage exclude was lifted so these count toward the milestone. Criteria 1-4 fail before the work (the test files do not exist); 5 runs the renderer suite; 6 runs the merged coverage pipeline.",
+  "authority_id": "86",
+  "criteria": [
+    { "check": "file_exists", "target": "tests/renderer/ProviderDialog.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/ProvidersPanel.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/FirstRunLocalCard.test.tsx" },
+    { "check": "file_exists", "target": "tests/renderer/BridgeSettings.test.tsx" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run coverage" }
+  ]
+}

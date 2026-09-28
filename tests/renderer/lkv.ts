@@ -9,6 +9,7 @@ import type {
   Item,
   LlmStatus,
   ProviderConfig,
+  ProviderPresetInfo,
   Prompt,
   SearchHit,
 } from '../../electron/types'
@@ -102,6 +103,20 @@ export function makeProvider(id: string, overrides: Partial<ProviderConfig> = {}
     local: true,
     enabled: true,
     source: 'builtin',
+    ...overrides,
+  }
+}
+
+export function makePreset(id: string, overrides: Partial<ProviderPresetInfo> = {}): ProviderPresetInfo {
+  return {
+    id,
+    kind: 'openai-compatible',
+    label: id === 'custom' ? 'Custom (OpenAI-compatible)' : 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: '',
+    local: false,
+    requiresKey: true,
+    supportsModelList: false,
     ...overrides,
   }
 }
