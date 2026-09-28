@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #84, a research item whose output is a decision, not code. The decision is recorded in docs/adr/0001-renderer-test-harness.md. Criteria: 1 fails before the work (no ADR exists); 2 fails unless the ADR is marked Accepted; 3 fails unless the ADR links the gaps it leaves open (#95 typed mock, #96 plugins coverage, #97 vitest upgrade) instead of silently dropping them; 4 checks that the decided harness actually runs. Fixing the gaps is out of scope (covers: decision only).",
+  "authority_id": "84",
+  "criteria": [
+    { "check": "file_exists", "target": "docs/adr/0001-renderer-test-harness.md" },
+    { "check": "command_exit", "target": "grep -q '^Status: Accepted' docs/adr/0001-renderer-test-harness.md" },
+    { "check": "command_exit", "target": "grep -q '#95' docs/adr/0001-renderer-test-harness.md && grep -q '#96' docs/adr/0001-renderer-test-harness.md && grep -q '#97' docs/adr/0001-renderer-test-harness.md" },
+    { "check": "tests_pass", "target": "npm run test:renderer" }
+  ]
+}
