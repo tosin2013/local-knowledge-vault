@@ -1,0 +1,22 @@
+{
+  "$comment": "Completion bar for #97: upgrade vitest + @vitest/coverage-v8 so no Vite older than 8 is nested in the tree, clearing Dependabot #54 (vitest < 3.2.6, GHSA-5xrq-8626-4rwp), #27 (vite <= 6.4.2, GHSA-fx2h-pf6j-xcff) and the @vitest/mocker <= 4.1.10 moderate (GHSA-82fw-gwwq-j7x9). Criteria 1 and 2 fail on vitest 2.1.9 (nested vite@5.4.21; audit lists vitest/mocker/vite-node). 3 and 4 keep the renderer suite and the merged coverage pipeline working after a two-major bump. Criterion 1 anchors on the tree connector ('── vite@') so @tailwindcss/vite@4.x is not mistaken for Vite itself; the first draft matched it and could never pass.",
+  "authority_id": "97",
+  "criteria": [
+    {
+      "check": "command_exit",
+      "target": "! npm ls vite --all 2>/dev/null | grep -qE '── vite@[0-7]\\.'"
+    },
+    {
+      "check": "command_exit",
+      "target": "! npm audit --json 2>/dev/null | grep -qE '\"(vitest|@vitest/mocker|vite-node|@vitest/coverage-v8)\": \\{'"
+    },
+    {
+      "check": "tests_pass",
+      "target": "npm run test:renderer"
+    },
+    {
+      "check": "command_exit",
+      "target": "npm run coverage"
+    }
+  ]
+}
