@@ -1,8 +1,10 @@
-# Coverage gates for pull requests. Coverage comes from `npm run coverage` (c8 over the offline smoke
-# tests in scripts/), uploaded by .github/workflows/ci.yml.
+# Coverage gates for pull requests. `npm run coverage` merges two suites into one lcov
+# (scripts/merge-coverage.mjs): c8 over the offline smoke tests in scripts/ (electron/**) and vitest over
+# tests/renderer (src/**); see docs/adr/0001. .github/workflows/ci.yml uploads it.
 #
-# Goal: main process (electron/) >= 60% lines, raised as tests land (#43). The renderer (src/) has no
-# tests that mount it yet, so its component is informational.
+# Goals: main process (electron/) >= 80% lines (v0.2.x, #83); whole project >= 80% (v0.4.0, #89).
+# The project status and the renderer component status each block drops of more than 1% vs the base
+# commit; the main-process component is reported (not yet gated; that is #83).
 codecov:
   require_ci_to_pass: true
 
@@ -33,8 +35,9 @@ component_management:
         - src/**
       statuses:
         - type: project
+          # Blocking since #85: renderer tests mount <App /> and every src/ file is measured (#96).
           target: auto
-          informational: true
+          threshold: 1%
 
 ignore:
   - "electron/types.ts"
