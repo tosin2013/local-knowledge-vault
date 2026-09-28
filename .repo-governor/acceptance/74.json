@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #74: a headless smoke script (scripts/mcp-client-smoke.ts) that runs a local mock Streamable-HTTP + OAuth server (no network) and exercises electron/mcp-client.ts against it — discovery, the loopback OAuth flow (PKCE + dynamic registration + token exchange), tool listing/calls, and error + reconnect + refresh paths. Wired into test:ci so npm run coverage measures the 1,008-line client (largest main-process gap). Criteria: 1 fails before the work (the script does not exist); 2 runs the smoke directly; 3 runs the merged coverage pipeline; 4 guards types.",
+  "authority_id": "74",
+  "criteria": [
+    { "check": "file_exists", "target": "scripts/mcp-client-smoke.ts" },
+    { "check": "tests_pass", "target": "npm run test:mcp" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
