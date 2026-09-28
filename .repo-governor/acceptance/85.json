@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #85. Most of #85's scope was delivered before this bar existed and is recorded, not re-checked: harness (#90), window.lkv mock tests/renderer/lkv.ts (#90; typing it from LkvApi is split out to #95), <App /> mounted by tests/renderer/App.test.tsx and App.flows.test.tsx (#90/#92), renderer lcov merged into the Codecov upload by scripts/merge-coverage.mjs (#90). The remaining item is making the renderer Codecov status blocking. Criterion 1 fails while it is informational; 2 fails unless the renderer status has a regression threshold (so noise under 1% does not block); 3 fails if the edited codecov.yml is rejected by Codecov's validator (network).",
+  "authority_id": "85",
+  "criteria": [
+    { "check": "command_exit", "target": "! grep -q 'informational: true' codecov.yml" },
+    { "check": "command_exit", "target": "grep -A12 'component_id: renderer' codecov.yml | grep -q 'threshold: 1%'" },
+    { "check": "command_exit", "target": "curl -sf --data-binary @codecov.yml https://codecov.io/validate | grep -q '^Valid!'" }
+  ]
+}
