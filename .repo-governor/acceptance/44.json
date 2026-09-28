@@ -1,5 +1,5 @@
 {
-  "$comment": "Completion bar for #44: src/App.tsx held the Ask home, notes rail, note peek, chat and settings in one 2,781-line component with ~20 effects. The split extracts the pure helpers/constants/types into src/domain.ts, each UI feature into its own presentational component under src/features/ (TopBar, NotesRail, FindPanel, ChatView, PromptsView, NotePeek, AiSettingsDialog, ContentChrome), and the state-owning logic into hooks under src/hooks/ (useUi, useProviders, useNotes, usePrompts, useChat). App.tsx is left as a thin orchestrator that composes them. Criteria 1-14 fail before the split (the files do not exist); 15 asserts App.tsx actually shrank below 500 lines (it was 2,783); 16-17 guard the renderer typecheck and build (the CI gates). Behaviour is unchanged; no test mounts the renderer yet (CONTRIBUTING), so a manual npm run dev pass is stated in the PR.",
+  "$comment": "Completion bar for #44: src/App.tsx held the Ask home, notes rail, note peek, chat and settings in one 2,781-line component with ~20 effects. The split extracts the pure helpers/constants/types into src/domain.ts, each UI feature into its own presentational component under src/features/ (TopBar, NotesRail, FindPanel, ChatView, PromptsView, NotePeek, AiSettingsDialog, ContentChrome), and the state-owning logic into hooks under src/hooks/ (useUi, useProviders, useNotes, usePrompts, useChat). App.tsx is left as a thin orchestrator that composes them. A renderer test suite (vitest + Testing Library, tests/renderer/) mounts the components and hooks, so the split is verified rather than only compiling. Criteria 1-14 fail before the split (the files do not exist); 15 asserts App.tsx actually shrank below 500 lines (it was 2,783); 16 guards the renderer test suite; 17-18 guard the renderer typecheck and build (the CI gates).",
   "authority_id": "44",
   "criteria": [
     { "check": "file_exists", "target": "src/domain.ts" },
@@ -17,6 +17,7 @@
     { "check": "file_exists", "target": "src/hooks/usePrompts.ts" },
     { "check": "file_exists", "target": "src/hooks/useChat.ts" },
     { "check": "command_exit", "target": "test \"$(wc -l < src/App.tsx)\" -lt 500" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
     { "check": "command_exit", "target": "npm run typecheck" },
     { "check": "command_exit", "target": "npm run build" }
   ],
@@ -26,6 +27,12 @@
       "effect": "strengthened",
       "date": "2026-09-28",
       "reason": "The first bar declared only the component split (features + domain) and a <1300-line App.tsx. The issue's fix direction also names hooks, so the bar is extended to require the state extraction into src/hooks/* and tightened to require App.tsx below 500 lines, now that the orchestrator is fully split."
+    },
+    {
+      "cites": ["tests/renderer/domain.test.ts", "vitest.config.ts"],
+      "effect": "strengthened",
+      "date": "2026-09-28",
+      "reason": "Codecov's patch gate (70%) failed on the renderer-only refactor because no test mounted the renderer. A vitest + Testing Library suite (tests/renderer/) now mounts the components and hooks, so the bar requires the renderer tests to pass instead of relying on a manual npm run dev check."
     }
   ]
 }
