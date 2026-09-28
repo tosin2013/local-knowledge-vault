@@ -1,12 +1,10 @@
 {
   "all": true,
   "src": [
-    "electron",
-    "src"
+    "electron"
   ],
   "include": [
-    "electron/**",
-    "src/**"
+    "electron/**"
   ],
   "exclude": [
     "**/*.d.ts",
