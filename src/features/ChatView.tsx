@@ -29,6 +29,7 @@ import type {
   ChatMessage,
   ChatProfile,
   ChatSession,
+  Citation,
   LlmStatus,
   Prompt,
   ProviderConfig,
@@ -102,6 +103,7 @@ export interface ChatViewProps {
   onSend: () => void
   onNewChat: () => void
   onExportCitationPack: () => void
+  onSaveAsNote: (content: string, cites: Citation[]) => void
   onSelectSession: (id: string) => void
   onDeleteSession: (id: string) => void
 }
@@ -163,6 +165,7 @@ export function ChatView(props: ChatViewProps) {
     onSend,
     onNewChat,
     onExportCitationPack,
+    onSaveAsNote,
     onSelectSession,
     onDeleteSession,
   } = props
@@ -293,6 +296,15 @@ export function ChatView(props: ChatViewProps) {
                         />
                       ))}
                     </Stack>
+                  )}
+                  {m.role === 'assistant' && (
+                    <Button
+                      size="small"
+                      sx={{ mt: 1, ml: -0.5 }}
+                      onClick={() => onSaveAsNote(m.content, cites)}
+                    >
+                      Save as note
+                    </Button>
                   )}
                 </Paper>
               </Box>

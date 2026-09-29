@@ -137,6 +137,17 @@ export function useNotes(deps: UseNotesDeps) {
     setPeekEditing(true)
   }
 
+  /** Open the note editor pre-filled (e.g. "Save as note" from an answer/moment). */
+  const openPrefilledDraft = (fields: Partial<Item>) => {
+    const item = { ...makeNewDraftItem(), ...fields }
+    setIsNewDraft(true)
+    setDraft(item)
+    setSelectedId(NEW_DRAFT_ID)
+    setDirty(true)
+    setNotePeekOpen(true)
+    setPeekEditing(true)
+  }
+
   const onImportFromUrl = async () => {
     if (!window.lkv?.import?.fromUrl) return
     const url = importUrl.trim()
@@ -175,7 +186,11 @@ export function useNotes(deps: UseNotesDeps) {
     setBusy(true)
     setError(null)
     try {
-      if (isNewDraft || draft.id === NEW_DRAFT_ID) {
+      const isNew = isNewDraft || draft.id === NEW_DRAFT_ID
+      // Editing an already-saved AI draft confirms it (save as active). A brand-new
+      // "Save as note" draft keeps its ai-draft status until the user confirms it.
+      const status = !isNew && draft.status === 'ai-draft' && dirty ? 'active' : draft.status
+      if (isNew) {
         const title = draft.title.trim() || 'Untitled'
         const created = await window.lkv.items.create({
           title,
@@ -183,7 +198,7 @@ export function useNotes(deps: UseNotesDeps) {
           summary: draft.summary,
           para: draft.para,
           kind: draft.kind || 'note',
-          status: draft.status || 'active',
+          status: status || 'active',
           project: draft.project,
         })
         setIsNewDraft(false)
@@ -200,13 +215,28 @@ export function useNotes(deps: UseNotesDeps) {
         summary: draft.summary,
         para: draft.para,
         kind: draft.kind,
-        status: draft.status,
+        status,
         project: draft.project,
       })
       setDraft(updated)
       setDirty(false)
       await refreshList()
       void refreshProjects()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Promote an unconfirmed AI draft to a regular note (without editing). */
+  const confirmDraft = async () => {
+    if (!window.lkv || !draft || draft.status !== 'ai-draft' || draft.id === NEW_DRAFT_ID) return
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await window.lkv.items.update(draft.id, { status: 'active' })
+      setDraft(updated)
+      setDirty(false)
+      await refreshList()
     } finally {
       setBusy(false)
     }
@@ -314,8 +344,10 @@ export function useNotes(deps: UseNotesDeps) {
     refreshProjects,
     runSearch,
     onNewNote,
+    openPrefilledDraft,
     onImportFromUrl,
     onSave,
+    confirmDraft,
     onDelete,
     renameProject,
     mergeProject,

@@ -46,10 +46,14 @@ export function searchQuery(input: SearchQueryInput): SearchQueryResult {
   // Filter metadata first via subquery, then FTS on matching rowids
   const { sql: filterSql, params: filterParams } = buildFilterClause(filters)
 
-  // Notes-first (#138): when sourcesLast is set, transcript (source) chunks rank
-  // after the user's own notes. Media chat passes sourcesLast=false to stay
+  // Unconfirmed AI-draft notes (#137) never outrank confirmed notes or source
+  // passages, so model text does not become authority merely by being saved.
+  // Notes-first (#138): when sourcesLast is set, transcript (source) chunks also
+  // rank after the user's own notes. Media chat passes sourcesLast=false to stay
   // transcript-first (it is chat with the video).
-  const orderBy = input.sourcesLast ? '(i.kind = \'transcript\'), score' : 'score'
+  const orderBy = input.sourcesLast
+    ? "(i.kind = 'transcript' OR i.status = 'ai-draft'), score"
+    : "(i.status = 'ai-draft'), score"
 
   const rows = database
     .prepare(

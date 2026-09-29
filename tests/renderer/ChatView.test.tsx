@@ -60,6 +60,7 @@ function makeProps(overrides: Partial<ChatViewProps> = {}): ChatViewProps {
     onSend: vi.fn(),
     onNewChat: vi.fn(),
     onExportCitationPack: vi.fn(),
+    onSaveAsNote: vi.fn(),
     onSelectSession: vi.fn(),
     onDeleteSession: vi.fn(),
     ...overrides,
@@ -171,5 +172,14 @@ describe('ChatView', () => {
   it('labels the Ask composer for screen readers', () => {
     render(<ChatView {...makeProps()} />)
     expect(screen.getByLabelText('Ask a question')).toBeInTheDocument()
+  })
+
+  it('saves an assistant answer as a note', () => {
+    const props = makeProps({
+      messages: [makeMessage({ role: 'assistant', content: 'Habits compound over time.', citations_json: null })],
+    })
+    render(<ChatView {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save as note' }))
+    expect(props.onSaveAsNote).toHaveBeenCalledWith('Habits compound over time.', [])
   })
 })

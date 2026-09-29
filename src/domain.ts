@@ -102,6 +102,30 @@ export const emptyFilters = (): ItemFilters => ({
 /** Local-only id for an unsaved new note (no DB row yet). */
 export const NEW_DRAFT_ID = '__draft_new__'
 
+/** A note saved from an AI answer/moment, not yet confirmed by the user. */
+export const AI_DRAFT_STATUS = 'ai-draft'
+
+export interface NoteProvenance {
+  sourceUrl?: string
+  tStart?: number
+  tEnd?: number
+  citedIds?: string[]
+}
+
+/**
+ * Provenance header lines for a note saved from a source moment, written into
+ * the note body using the same `source_url:` marker convention as media ingest
+ * (`electron/media-ingest.ts`). Empty string when there is nothing to record.
+ */
+export function provenanceHeader(prov: NoteProvenance): string {
+  const lines: string[] = []
+  if (prov.sourceUrl) lines.push(`source_url: ${prov.sourceUrl}`)
+  if (prov.tStart !== undefined) lines.push(`t_start: ${prov.tStart}`)
+  if (prov.tEnd !== undefined) lines.push(`t_end: ${prov.tEnd}`)
+  if (prov.citedIds?.length) lines.push(`cited: ${prov.citedIds.join(', ')}`)
+  return lines.length ? `${lines.join('\n')}\n\n` : ''
+}
+
 export function isValidHttpUrl(raw: string): boolean {
   const s = raw.trim()
   if (!/^https?:\/\//i.test(s)) return false

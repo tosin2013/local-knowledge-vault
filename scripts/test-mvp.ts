@@ -160,6 +160,16 @@ async function main(): Promise<void> {
   assert(deletedProj.count === 3, 'deleteProject deletes 3 notes')
   assert(!listProjects().some((p) => p.name === 'Beta'), 'deleteProject removes the project')
 
+  // --- AI-draft notes never outrank confirmed notes/sources (#137) ---
+  console.log('\nAI draft demotion')
+  const draftNote = createItem({ title: 'Draft note', body: 'unique-ai-draft-token-qq', kind: 'note', status: 'ai-draft' })
+  const confirmedNote = createItem({ title: 'Confirmed note', body: 'unique-ai-draft-token-qq', kind: 'note', status: 'active' })
+  const draftSearch = searchQuery({ text: 'unique-ai-draft-token-qq', limit: 10 })
+  const draftIdx = draftSearch.hits.findIndex((h) => h.id === draftNote.id)
+  const confirmedIdx = draftSearch.hits.findIndex((h) => h.id === confirmedNote.id)
+  assert(draftIdx !== -1 && confirmedIdx !== -1, 'both the draft and confirmed note match')
+  assert(confirmedIdx < draftIdx, 'confirmed note ranks before the AI draft')
+
   // --- Citation validation ---
   console.log('\nCitation validation')
   const allowed = ['itm_aaa111', 'itm_bbb222']

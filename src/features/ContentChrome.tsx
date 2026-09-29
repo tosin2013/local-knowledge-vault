@@ -14,6 +14,7 @@ export interface ContentChromeProps {
   onDismissStatus: () => void
   onDismissError: () => void
   onOpenNote: (id: string) => void
+  onNewDraft: (fields: Partial<import('../../electron/types').Item>) => void
 }
 
 export function ContentChrome(props: ContentChromeProps) {
@@ -28,6 +29,7 @@ export function ContentChrome(props: ContentChromeProps) {
     onDismissStatus,
     onDismissError,
     onOpenNote,
+    onNewDraft,
   } = props
 
   return (
@@ -118,6 +120,7 @@ export function ContentChrome(props: ContentChromeProps) {
           >
             <PluginView
               onOpenNote={onOpenNote}
+              onNewDraft={onNewDraft}
               onClose={onClosePlugin}
             />
           </Box>

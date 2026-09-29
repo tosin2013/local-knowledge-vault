@@ -2,6 +2,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Chip,
   Drawer,
   FormControl,
   IconButton,
@@ -15,7 +16,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import type { Item, Para } from '../../electron/types'
-import { NEW_DRAFT_ID, PARA_OPTIONS, paraLabel } from '../domain'
+import { AI_DRAFT_STATUS, NEW_DRAFT_ID, PARA_OPTIONS, paraLabel } from '../domain'
 
 export interface NotePeekProps {
   open: boolean
@@ -31,6 +32,7 @@ export interface NotePeekProps {
   onPatch: <K extends keyof Item>(key: K, value: Item[K]) => void
   onSave: () => void
   onDelete: () => void
+  onConfirmDraft: () => void
   onCopyId: (id: string) => void
 }
 
@@ -49,6 +51,7 @@ export function NotePeek(props: NotePeekProps) {
     onPatch,
     onSave,
     onDelete,
+    onConfirmDraft,
     onCopyId,
   } = props
 
@@ -95,6 +98,9 @@ export function NotePeek(props: NotePeekProps) {
               ? 'Editing note'
               : 'Viewing note'}
         </Typography>
+        {draft && draft.status === AI_DRAFT_STATUS && (
+          <Chip size="small" color="warning" variant="outlined" label="AI draft" />
+        )}
         {!peekEditing && draft && (
           <Button
             size="small"
@@ -213,6 +219,11 @@ export function NotePeek(props: NotePeekProps) {
               </Typography>
               {peekEditing && (
                 <>
+                  {!isNewDraft && draft.id !== NEW_DRAFT_ID && draft.status === AI_DRAFT_STATUS && (
+                    <Button color="warning" variant="outlined" disabled={busy} onClick={onConfirmDraft}>
+                      Confirm draft
+                    </Button>
+                  )}
                   {!isNewDraft && draft.id !== NEW_DRAFT_ID && (
                     <Button color="error" variant="outlined" onClick={onDelete}>
                       Delete

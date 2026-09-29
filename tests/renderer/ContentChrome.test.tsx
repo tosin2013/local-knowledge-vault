@@ -14,6 +14,7 @@ function makeProps(overrides: Partial<ContentChromeProps> = {}): ContentChromePr
     onDismissStatus: vi.fn(),
     onDismissError: vi.fn(),
     onOpenNote: vi.fn(),
+    onNewDraft: vi.fn(),
     ...overrides,
   }
 }
