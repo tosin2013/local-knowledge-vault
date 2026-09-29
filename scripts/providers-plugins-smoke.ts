@@ -325,6 +325,52 @@ async function main() {
   assert(bundled.some((b) => b.id === 'study-buddy'), 'bundled examples include study-buddy')
   assert(bundled.some((b) => b.id === 'openrouter-free-models'), 'bundled examples include openrouter-free-models')
 
+  // preview error paths + a local+cloud provider mix
+  assert((previewPluginFrom(path.join(pdir, 'no-such-dir')).errors?.length ?? 0) > 0, 'preview of a missing path errors')
+  const txtPath = path.join(pdir, 'notaplugin.txt')
+  fs.writeFileSync(txtPath, 'hello')
+  assert(/Pick an add-on folder/.test((previewPluginFrom(txtPath).errors ?? []).join(' ')), 'preview of a non-plugin file errors')
+  const emptyDir = path.join(pdir, 'empty')
+  fs.mkdirSync(emptyDir, { recursive: true })
+  assert(/plugin\.json/.test((previewPluginFrom(emptyDir).errors ?? []).join(' ')), 'preview of a folder without plugin.json errors')
+
+  const mixedDir = path.join(pdir, 'mixed')
+  fs.mkdirSync(mixedDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(mixedDir, 'plugin.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      id: 'mixed',
+      name: 'Mixed',
+      version: '1.0.0',
+      contributes: {
+        providers: [
+          { id: 'local1', label: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', local: true },
+          { id: 'cloud1', label: 'Cloud', kind: 'openai-compatible', baseUrl: 'https://api.example.com/v1', defaultModel: 'x' },
+        ],
+      },
+    })
+  )
+  const prevMix = previewPluginFrom(mixedDir)
+  assert((prevMix.preview?.cloudProviders?.length ?? 0) === 1, 'mixed preview lists only the cloud provider')
+  assert((prevMix.preview?.localProviders?.length ?? 0) === 1, 'mixed preview lists the local provider')
+  assert((prevMix.preview?.adds ?? []).some((a) => /1 local AI provider and 1 cloud AI provider/.test(a)), 'mixed preview describes local and cloud')
+
+  let restoreThrew = false
+  try {
+    restorePlugin('../evil')
+  } catch {
+    restoreThrew = true
+  }
+  assert(restoreThrew, 'restorePlugin rejects a path-traversal key')
+  restoreThrew = false
+  try {
+    restorePlugin('missing-key-123')
+  } catch {
+    restoreThrew = true
+  }
+  assert(restoreThrew, 'restorePlugin errors for a missing key')
+
   await Promise.all([ollama.close(), oa.close(), an.close()])
   setLlmUserDataDir(null)
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`)
