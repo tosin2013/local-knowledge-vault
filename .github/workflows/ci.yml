@@ -33,6 +33,9 @@ jobs:
       # Offline smoke tests under c8. They run under ELECTRON_RUN_AS_NODE=1, so no display is needed.
       - run: npm run coverage
 
+      # Main-process gate (#83): electron/ must stay at or above 80% lines.
+      - run: npm run coverage:main
+
       # Fork PRs have no CODECOV_TOKEN; the upload failing must not fail CI.
       - uses: codecov/codecov-action@v7
         with:

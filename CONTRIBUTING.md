@@ -57,7 +57,7 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request, so run them lo
 ```bash
 npm run typecheck
 npm run build
-npm run coverage   # runs test:mvp, test:providers, test:media and test:citation-pack under c8
+npm run coverage   # runs every test:* suite wired into test:ci under c8, then the renderer suite, then merges both
 ```
 
 There is no test framework. Each `test:*` script is a headless smoke script in `scripts/` that exits
@@ -66,7 +66,8 @@ non-zero on failure. If you change behaviour, extend the matching script. `test:
 
 CI uploads `coverage/lcov.info` to [Codecov](https://app.codecov.io/gh/tosin2013/local-knowledge-vault).
 Gates are in `codecov.yml`: total coverage may not drop more than 1% below `main`, and lines a pull
-request adds or changes need 70% coverage. The goal for the main process (`electron/`) is 60% or more.
+request adds or changes need 70% coverage. The main process (`electron/`) is gated at 80% lines
+(`npm run coverage:main`, mirrored by the Codecov `main-process` component).
 Open `coverage/lcov-report/index.html` after `npm run coverage` to see which lines your change left untested.
 
 UI changes also need a manual check in `npm run dev`, because no test mounts the renderer yet.
