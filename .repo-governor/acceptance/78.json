@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #78: grounding & routing gaps smoke tests. Covers askGrounded (offline path, empty response, citation extraction/validation), sendChatTurn (greeting path, search query building, offline path, empty response), buildChatSearchQuery (FTS input with prior user turns), isGreetingOrSocial (greeting detection), pickModel (model selection logic), stripThinking (thinking tag removal). Mocks llmGenerate via Module._load. Runs headless under Electron-as-Node. Coverage: generate.ts 71% -> 100%, chat.ts 74% -> 93.6%, ollama.ts -> 93.9%, providers/http.ts -> 89.2%.",
+  "authority_id": "78",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:grounding-routing" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

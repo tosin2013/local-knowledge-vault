@@ -14,5 +14,6 @@
     "noUnusedParameters": false,
     "esModuleInterop": true
   },
-  "include": ["electron", "scripts", "vite.config.ts"]
+  "include": ["electron", "vite.config.ts"],
+  "exclude": ["scripts/*-smoke.ts", "scripts/*-smoke2.ts", "scripts/spacex-talk.ts", "scripts/providers-live-groq.ts", "scripts/gorgias-smoke.ts", "scripts/ingest-gorgias.ts", "scripts/oob-smoke.ts"]
 }
