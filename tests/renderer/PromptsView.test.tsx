@@ -78,4 +78,35 @@ describe('PromptsView', () => {
     fireEvent.click(screen.getByText('Use in Ask'))
     expect(props.onUseInAsk).toHaveBeenCalledWith('prm_1')
   })
+
+  it('shows guidance and starter templates in the editor', () => {
+    render(<PromptsView {...makeProps({ promptBodyOpen: true })} />)
+    expect(screen.getByText('What a personality can change')).toBeInTheDocument()
+    expect(screen.getByText(/grounding, citations and .I don.t know./)).toBeInTheDocument()
+    expect(screen.getByText('Concise bullets')).toBeInTheDocument()
+    expect(screen.getByText('Explain like a teacher')).toBeInTheDocument()
+    expect(screen.getByText('Meeting prep')).toBeInTheDocument()
+  })
+
+  it('fills name/description/instructions when a template is chosen', () => {
+    const props = makeProps({ promptBodyOpen: true })
+    render(<PromptsView {...props} />)
+    fireEvent.click(screen.getByText('Concise bullets'))
+    expect(props.onDraft).toHaveBeenCalled()
+    const updater = props.onDraft.mock.calls[0][0] as (d: PromptDraft) => PromptDraft
+    const filled = updater({ name: '', body: '', description: '' })
+    expect(filled.name).toBe('Concise bullets')
+    expect(filled.description).toBe('Short bullet-list answers')
+    expect(filled.body).toContain('bullet points')
+    expect(props.onDirty).toHaveBeenCalledWith(true)
+  })
+
+  it('copies the helper prompt to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window.navigator, 'clipboard', { value: { writeText }, configurable: true })
+    render(<PromptsView {...makeProps({ promptBodyOpen: true })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy helper prompt' }))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Vault answers only from my own notes'))
+    expect(await screen.findByText('Copied')).toBeInTheDocument()
+  })
 })
