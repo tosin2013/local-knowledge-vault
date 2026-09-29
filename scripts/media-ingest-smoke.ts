@@ -9,6 +9,7 @@
  * - ensureMediaReaderPrompt: stale-body update branch
  * - findCompanionCaptions: unreadable-dir fallback
  * - youtubeEmbedUrl, listMediaProjects (local/youtube/unknown), notesNearPlayhead
+ * - rewriteYoutubeEmbedHeaders: callback runs exactly once on every path (#116)
  *
  * Runs under Electron-as-Node, temp DB, no network (yt-dlp is a local stub).
  *
@@ -299,6 +300,38 @@ async function main(): Promise<void> {
     const near = notesNearPlayhead('AppendMe', 1, 45)
     assert(near.length > 0, 'notes near playhead found')
     assert(notesNearPlayhead('AppendMe', 99999, 1).length === 0, 'far playhead finds nothing')
+
+    console.log('rewriteYoutubeEmbedHeaders (#116: callback on every path)')
+    const { rewriteYoutubeEmbedHeaders } = require('../electron/youtube-embed-headers')
+    const runListener = (url: string, referrer: string) => {
+      const calls: { requestHeaders?: Record<string, string> }[] = []
+      rewriteYoutubeEmbedHeaders(
+        { url, referrer, requestHeaders: { Accept: 'text/html' } },
+        (r: { requestHeaders?: Record<string, string> }) => calls.push(r)
+      )
+      return calls
+    }
+    const EMBED = 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?enablejsapi=1'
+    for (const referrer of ['file:///app/dist/index.html', '']) {
+      const calls = runListener(EMBED, referrer)
+      assert(calls.length === 1, `callback called once (referrer ${JSON.stringify(referrer)})`)
+      const h = calls[0]?.requestHeaders ?? {}
+      assert(
+        h.Referer === 'https://www.youtube-nocookie.com/' &&
+          h.Origin === 'https://www.youtube-nocookie.com' &&
+          h.Accept === 'text/html',
+        `file:// renderer gets rewritten Referer/Origin (referrer ${JSON.stringify(referrer)})`
+      )
+    }
+    const dev = runListener(EMBED, 'http://localhost:5173/')
+    assert(dev.length === 1, 'callback called once for dev (localhost) referrer')
+    assert(
+      dev[0]?.requestHeaders?.Referer === undefined && dev[0]?.requestHeaders?.Origin === undefined,
+      'dev referrer headers left untouched'
+    )
+    const bad = runListener('not a url', 'file:///app/dist/index.html')
+    assert(bad.length === 1, 'callback called once when the URL cannot be parsed')
+    assert(bad[0]?.requestHeaders?.Origin === undefined, 'unparseable URL headers left untouched')
   } finally {
     if (savedYtdlp === undefined) delete process.env.LKV_YTDLP_PATH
     else process.env.LKV_YTDLP_PATH = savedYtdlp

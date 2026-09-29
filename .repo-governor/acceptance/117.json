@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #117: MediaChatView appended origin=https://www.youtube-nocookie.com to the embed URL; the IFrame API uses origin as the postMessage target for the embedding page, which is file:// in production, so onReady/onStateChange never fired and seek/follow-playhead did nothing. Research (production build, CDP, file:// renderer, with #116 fixed): with origin= the player never became ready; without it onReady fired, seekTo(30) worked (getCurrentTime ~35s) and no player error (incl. 153) occurred, because the main-process Referer/Origin rewrite already covers #24. Fix: drop origin=. Criterion 1 is behavioral and fails before the change: a renderer test ingests a YouTube URL and asserts the mounted iframe src equals the IPC embed URL with no origin param. 2-3 guard typecheck and build.",
+  "authority_id": "117",
+  "criteria": [
+    { "check": "tests_pass", "target": "npx vitest run tests/renderer/MediaChatView.test.tsx" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}
