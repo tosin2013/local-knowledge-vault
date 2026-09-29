@@ -230,7 +230,7 @@ async function main(): Promise<void> {
     'citationPack:export',
     // media
     'media:pickLocal', 'media:ingestLocal', 'media:ingestYoutube', 'media:listProjects',
-    'media:notesNear', 'media:youtubeEmbedUrl', 'media:ensurePersonas',
+    'media:findExistingProject', 'media:notesNear', 'media:youtubeEmbedUrl', 'media:ensurePersonas',
     'media:applyPersona', 'media:createPersona', 'media:listVoicePacks',
     // bridge
     'bridge:status', 'bridge:getToken', 'bridge:rotateToken',
@@ -295,6 +295,9 @@ async function main(): Promise<void> {
   const mediaProjects = await ipcRendererMock.invoke('media:listProjects') as unknown[]
   assert(Array.isArray(mediaProjects), 'media:listProjects returns array')
 
+  const noExisting = await ipcRendererMock.invoke('media:findExistingProject', { mediaPath: '/nonexistent.mp4' })
+  assert(noExisting === null, 'media:findExistingProject returns null for an unseen source')
+
   const voicePacks = await ipcRendererMock.invoke('media:listVoicePacks') as unknown[]
   assert(Array.isArray(voicePacks), 'media:listVoicePacks returns array')
 
@@ -329,6 +332,7 @@ async function main(): Promise<void> {
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
   assert(typeof (api.chat as Record<string, unknown>).send === 'function', 'chat.send is function')
   assert(typeof (api.media as Record<string, unknown>).listProjects === 'function', 'media.listProjects is function')
+  assert(typeof (api.media as Record<string, unknown>).findExistingProject === 'function', 'media.findExistingProject is function')
   assert(typeof (api.mcp as Record<string, unknown>).listServers === 'function', 'mcp.listServers is function')
 
   // Invoke the add-on preview/removed/bundled methods through the preload surface.

@@ -46,9 +46,11 @@ import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
 import {
   findCompanionCaptions,
+  findExistingProjectBySource,
   ingestLocalMedia,
   ingestYoutubeMedia,
   listMediaProjects,
+  normalizeYoutubeUrl,
   notesNearPlayhead,
   ensureMediaReaderPrompt,
   youtubeEmbedUrl,
@@ -127,6 +129,7 @@ import type {
   MediaNotesNearInput,
   MediaApplyPersonaInput,
   MediaCreatePersonaInput,
+  MediaFindExistingInput,
   McpAddServerInput,
   McpCallToolInput,
   MenuAction,
@@ -641,6 +644,18 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('media:listProjects', () => listMediaProjects())
+
+  ipcMain.handle('media:findExistingProject', (_e, input?: MediaFindExistingInput) => {
+    if (input?.mediaPath) {
+      return findExistingProjectBySource({ sourcePath: path.resolve(input.mediaPath) })
+    }
+    if (input?.url) {
+      const url = normalizeYoutubeUrl(input.url)
+      if (!url) return null
+      return findExistingProjectBySource({ sourceUrl: url })
+    }
+    return null
+  })
 
   ipcMain.handle('media:notesNear', (_e, input: MediaNotesNearInput) => {
     return notesNearPlayhead(input.project, input.centerSec, input.windowSec ?? 45)
