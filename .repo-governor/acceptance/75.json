@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #75: run the bridge server smoke in CI and extend it. test:bridge is wired into test:ci so npm run coverage measures electron/bridge-server.ts (was 0% despite scripts/bridge-smoke.ts existing). The smoke now also covers the /v1/ask happy path against a seeded DB (no-match 'couldn't find', no LLM needed), bad JSON → 400, missing text → 400, and unknown route → 404, on top of the existing auth/Host/JSON/body-cap/rotation checks. Criteria: 1 fails before the work; 2 runs the smoke directly; 3 runs the merged coverage pipeline; 4 guards types.",
+  "authority_id": "75",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:bridge" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
