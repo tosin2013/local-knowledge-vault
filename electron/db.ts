@@ -175,8 +175,9 @@ function buildFilterClause(filters?: ItemFilters): { sql: string; params: unknow
     params.push(filters.status)
   }
   if (filters.project && filters.project.trim()) {
-    clauses.push('project LIKE ?')
-    params.push(`%${filters.project.trim()}%`)
+    // Exact match (#127): a project filter must not leak "intro" into "intro (2)".
+    clauses.push('project = ?')
+    params.push(filters.project.trim())
   }
 
   if (clauses.length === 0) return { sql: '', params }
@@ -193,8 +194,9 @@ export function listItems(filters?: ItemFilters): Item[] {
 }
 
 /**
- * Exact project match (the substring LIKE in listItems is for search UX; media
- * ingest/replace must distinguish "intro" from "intro (2)").
+ * Exact project match. Media ingest/replace uses this to distinguish
+ * "intro" from "intro (2)" — listItems is also exact now, but this helper
+ * adds an optional kind filter and is kept for clarity.
  */
 export function listItemsByProjectExact(project: string, kind?: string): Item[] {
   const database = getDb()
