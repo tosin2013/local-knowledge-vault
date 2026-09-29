@@ -223,6 +223,11 @@ async function main(): Promise<void> {
   assert(noHitsChat.assistant.content.includes("couldn't find"), 'sendChatTurn no hits returns not-found message')
   assert(noHitsChat.offline === undefined || noHitsChat.offline === false, 'sendChatTurn no hits not offline')
 
+  // --- sendChatTurn: no hits, no project scope (covers the no-project message) ---
+  const noProjectSession = createSession({ title: 'No project' })
+  const noHitsNoProject = await sendChatTurn({ sessionId: noProjectSession.id, text: 'qqqzzzvvvwwwxxx', filters: {} })
+  assert(noHitsNoProject.assistant.content.includes('Project / Profile scope'), 'sendChatTurn no hits without project suggests Project / Profile')
+
   // --- sendChatTurn: offline path ---
   setMockLlmGenerate({ ok: false, error: 'Ollama not running', provider: 'ollama' })
   const offlineChat = await sendChatTurn({ sessionId: session.id, text: 'alpha beta', filters: { project: 'test' } })
