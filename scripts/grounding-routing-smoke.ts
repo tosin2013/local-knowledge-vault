@@ -1,11 +1,14 @@
 /**
- * Offline smoke tests for grounding & routing gaps:
+ * Offline smoke tests for grounding & routing gaps (#43, #78):
  * - askGrounded (generate.ts): offline path, empty response, citation extraction/validation
  * - sendChatTurn (chat.ts): greeting path, search query building, offline path, empty response
  * - buildChatSearchQuery (chat.ts): FTS input with prior user turns
  * - isGreetingOrSocial (chat.ts): greeting detection
  * - pickModel (ollama.ts): model selection logic
- * - stripThinking (providers/http.ts): thinking tag removal
+ * - stripThinking (providers/http.ts): thinking tag removal (incl. multiline,
+ *   case-insensitive, unclosed, multiple blocks)
+ * - buildFtsQuery/searchQuery (search.ts): tricky FTS input never throws
+ * - getDb/initDb/closeDb (db.ts): init-failure behaviour
  *
  * Runs under Electron-as-Node with mocked llmGenerate.
  *
@@ -56,7 +59,7 @@ async function main(): Promise<void> {
 
   // 1) Initialize DB
   const dbFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-gr-')), 'test.sqlite')
-  const { initDb, closeDb, createItem, createSession, createPrompt } = require('../electron/db')
+  const { initDb, closeDb, getDb, createItem, createSession, createPrompt } = require('../electron/db')
   initDb(dbFile)
 
   // Create some test items for citation testing
@@ -72,7 +75,7 @@ async function main(): Promise<void> {
   const prompt = createPrompt({ name: 'Test Prompt', body: 'You are a test assistant', description: 'Test' })
 
   // 2) NOW require electron modules that depend on llm (AFTER mock is installed)
-  const { searchQuery } = require('../electron/search')
+  const { searchQuery, buildFtsQuery } = require('../electron/search')
   const {
     askGrounded,
     buildGroundedMessages,
@@ -258,9 +261,124 @@ async function main(): Promise<void> {
 
   console.log('\nproviders/http.ts — stripThinking')
 
-  // --- stripThinking ---
+  // --- stripThinking (#43: reasoning models inline <think>…</think>) ---
   assert(stripThinking('Normal answer') === 'Normal answer', 'stripThinking leaves normal text')
-  assert(stripThinking('Okay answer') === 'Okay answer', 'stripThinking removes think tags')
+  assert(
+    stripThinking('<think>reasoning</think>Final answer') === 'Final answer',
+    'stripThinking removes a think block'
+  )
+  assert(
+    stripThinking('<think>\nline1\nline2\n</think>\nAnswer') === 'Answer',
+    'stripThinking removes multiline think block'
+  )
+  const upper = stripThinking('Prefix <THINK>upper</THINK> suffix')
+  assert(
+    !/upper/i.test(upper) && upper.includes('Prefix') && upper.includes('suffix'),
+    'stripThinking is case-insensitive'
+  )
+  assert(
+    stripThinking('<think>unclosed reasoning') === '',
+    'stripThinking drops leading unclosed think'
+  )
+  const multi = stripThinking('A <think>one</think> B <think>two</think> C')
+  assert(
+    multi.includes('A') && multi.includes('B') && multi.includes('C') &&
+      !multi.includes('one') && !multi.includes('two'),
+    'stripThinking removes multiple think blocks'
+  )
+  assert(stripThinking('<think>only</think>') === '', 'stripThinking empty after strip is empty')
+  assert(
+    stripThinking('  <think>spaced</think>  Trimmed  ') === 'Trimmed',
+    'stripThinking trims surrounding whitespace'
+  )
+
+  console.log('\nsearch.ts — tricky FTS input (#43)')
+
+  // --- buildFtsQuery: safe quoting, no bare FTS operators ---
+  assert(buildFtsQuery('') === '', 'buildFtsQuery empty returns empty')
+  assert(buildFtsQuery('   ') === '', 'buildFtsQuery whitespace returns empty')
+  assert(buildFtsQuery('"\'*(){}[]^:~') === '', 'buildFtsQuery only-special-chars returns empty')
+  assert(
+    buildFtsQuery('hello"world') === '"hello"* OR "world"*',
+    'buildFtsQuery splits on stripped quotes'
+  )
+  assert(
+    buildFtsQuery('a"b(c)d*e:f~g') === '"a"* OR "b"* OR "c"* OR "d"* OR "e"* OR "f"* OR "g"*',
+    'buildFtsQuery strips every FTS special char'
+  )
+  const orInjection = buildFtsQuery('foo OR bar')
+  assert(
+    orInjection === '"foo"* OR "OR"* OR "bar"*',
+    'buildFtsQuery quotes user OR so it cannot inject an operator'
+  )
+  assert(
+    buildFtsQuery('"unterminated') === '"unterminated"*',
+    'buildFtsQuery quotes an unbalanced quote'
+  )
+  assert(
+    buildFtsQuery('café naïve') === '"café"* OR "naïve"*',
+    'buildFtsQuery keeps unicode tokens'
+  )
+
+  // --- searchQuery: tricky input never throws, always returns hits array ---
+  const trickyInputs = [
+    '',
+    '   ',
+    '"\'*(){}[]^:~',
+    '*',
+    '((()))',
+    'foo:bar',
+    'foo OR bar',
+    'OR AND NOT',
+    '"unterminated',
+    '<script>alert(1)</script>',
+    'café naïve 日本語',
+    'foo-bar_baz.qux/quux',
+    'a '.repeat(2000).trim(),
+  ]
+  for (const t of trickyInputs) {
+    let threw = false
+    let hits: unknown[] | undefined
+    try {
+      const r = searchQuery({ text: t, limit: 5 })
+      hits = r.hits
+    } catch {
+      threw = true
+    }
+    assert(!threw && Array.isArray(hits), `searchQuery no-throw for ${JSON.stringify(t.slice(0, 24))}`)
+  }
+  // Tricky queries still retrieve when the content matches
+  const quoted = searchQuery({ text: 'hello"world', limit: 5 })
+  assert(Array.isArray(quoted.hits), 'searchQuery quoted input returns hits array')
+
+  console.log('\ndb.ts — init failure (#43)')
+
+  // --- DB init failure: callers must see a clear error, never a silent null ---
+  closeDb()
+  let getThrew = false
+  try {
+    getDb()
+  } catch (e) {
+    getThrew = /not initialized/i.test((e as Error).message)
+  }
+  assert(getThrew, 'getDb after closeDb throws not-initialized')
+  let doubleCloseThrew = false
+  try {
+    closeDb()
+  } catch {
+    doubleCloseThrew = true
+  }
+  assert(!doubleCloseThrew, 'closeDb is idempotent')
+  let badInitThrew = false
+  try {
+    initDb(path.dirname(dbFile))
+  } catch {
+    badInitThrew = true
+  }
+  assert(badInitThrew, 'initDb on a directory path throws')
+  // Re-open so cleanup below sees a live handle
+  initDb(dbFile)
+  assert(getDb() !== null, 'initDb re-opens after failure')
 
   // Cleanup
   closeDb()

@@ -100,5 +100,5 @@ personas, URL auto-tag and the HTTP bridge.
 - `better-sqlite3` and `electron` are Rollup externals in `vite.config.mts`. Keep new native modules external too.
 - The `*_RESULT.md` files at the repo root (BLINK, DAISYUI, FRIENDLY, CHAT_PROMPTS) are historical notes from UI
   experiments. They mention Tailwind/daisyUI themes, but the current UI is MUI; see `src/styles.css`.
-- `scripts/*.bundle.cjs` are prebuilt bundles of the matching `.ts` scripts, so edit the `.ts` source.
+- Run `scripts/*.ts` directly under Electron-as-Node; prebuilt `scripts/*.bundle.cjs` artefacts were removed (#43) and are gitignored.
 - The GitHub Actions release workflow described in `docs/release.md` is not committed yet.

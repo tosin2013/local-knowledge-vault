@@ -3,8 +3,6 @@
  * add a "Gorgias reader" chat persona, and smoke-test search + grounded Ask/Chat.
  *
  * Run (from repo root):
- *   ELECTRON_RUN_AS_NODE=1 ./node_modules/electron/dist/electron scripts/ingest-gorgias.bundle.cjs
- * Or without bundle:
  *   ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/ingest-gorgias.ts
  */
 import {

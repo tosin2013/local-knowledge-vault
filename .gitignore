@@ -49,3 +49,6 @@ tmp/
 
 # Coverage output (npm run coverage)
 coverage/
+
+# Prebuilt script bundles (removed per #43 — run scripts/*.ts directly)
+scripts/*.bundle.cjs
