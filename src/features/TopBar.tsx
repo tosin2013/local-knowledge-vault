@@ -23,6 +23,7 @@ import type { LlmStatus } from '../../electron/types'
 import type { Mode, ThemeMode } from '../domain'
 import type { VaultPlugin } from '../plugins/types'
 import { MANAGE_PLUGINS_ID } from '../plugins/manage'
+import type { RefObject } from 'react'
 
 export interface TopBarProps {
   advanced: boolean
@@ -36,6 +37,7 @@ export interface TopBarProps {
   theme: ThemeMode
   searchText: string
   busy: boolean
+  searchInputRef?: RefObject<HTMLInputElement | null>
   onSearchText: (v: string) => void
   onRunSearch: () => void
   onAiSettings: () => void
@@ -60,6 +62,7 @@ export function TopBar(props: TopBarProps) {
     theme,
     searchText,
     busy,
+    searchInputRef,
     onSearchText,
     onRunSearch,
     onAiSettings,
@@ -101,6 +104,7 @@ export function TopBar(props: TopBarProps) {
             size="small"
             placeholder="Search your notes…"
             value={searchText}
+            inputRef={searchInputRef}
             onChange={(e) => onSearchText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) onRunSearch()

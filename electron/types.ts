@@ -4,6 +4,9 @@ export type Para = 'projects' | 'areas' | 'resources' | 'archives'
 export type ItemKind = string
 export type ItemStatus = string
 
+/** Application-menu actions sent to the renderer (CmdOrCtrl+N / F / K). */
+export type MenuAction = 'new-note' | 'find' | 'ask'
+
 export interface Item {
   id: string
   title: string

@@ -75,6 +75,7 @@ export interface ChatViewProps {
   scopeCoupleHint: string | null
   chatInput: string
   chatPlaceholder: string
+  composerRef?: RefObject<HTMLInputElement | null>
   sessions: ChatSession[]
   activeSessionId: string | null
   // Callbacks
@@ -136,6 +137,7 @@ export function ChatView(props: ChatViewProps) {
     scopeCoupleHint,
     chatInput,
     chatPlaceholder,
+    composerRef,
     sessions,
     activeSessionId,
     onRecheck,
@@ -515,8 +517,10 @@ export function ChatView(props: ChatViewProps) {
                 minRows={3}
                 maxRows={8}
                 value={chatInput}
+                inputRef={composerRef}
                 onChange={(e) => onChatInput(e.target.value)}
                 placeholder={chatPlaceholder}
+                aria-label="Ask a question"
                 disabled={busy}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {

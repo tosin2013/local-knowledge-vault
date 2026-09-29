@@ -244,13 +244,20 @@ export function NotesRail(props: NotesRailProps) {
             No notes match filters.
           </Typography>
         )}
-        <List dense disablePadding>
+        <List dense disablePadding aria-label="Notes">
           {items.map((it) => (
             <ListItemButton
               key={it.id}
               selected={selectedId === it.id}
               onClick={() => onSelect(it.id)}
               onDoubleClick={() => onSelect(it.id, { edit: true })}
+              onKeyDown={(e) => {
+                if (e.key === 'F2') {
+                  e.preventDefault()
+                  onSelect(it.id, { edit: true })
+                }
+              }}
+              aria-keyshortcuts="Enter F2"
               sx={{
                 mb: 0.5,
                 flexDirection: 'column',

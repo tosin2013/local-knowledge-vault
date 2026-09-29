@@ -132,6 +132,11 @@ const mockShell = {
   openPath: async (p: string) => '',
 }
 
+const mockMenu = {
+  buildFromTemplate: (template: unknown[]) => ({ template }),
+  setApplicationMenu: () => {},
+}
+
 // Install mock BEFORE any require() calls
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
@@ -153,6 +158,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
       protocol: mockProtocol,
       net: mockNet,
       shell: mockShell,
+      Menu: mockMenu,
     }
   }
   return origLoad.call(this, request, parent, isMain)
