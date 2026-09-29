@@ -213,6 +213,8 @@ async function main(): Promise<void> {
     // plugins
     'plugins:list', 'plugins:reload', 'plugins:setEnabled', 'plugins:remove',
     'plugins:contributions', 'plugins:openFolder', 'plugins:install',
+    'plugins:preview', 'plugins:installFromPath', 'plugins:listRemoved',
+    'plugins:restore', 'plugins:listBundled',
     // app
     'app:openExternal',
     // chat
@@ -261,6 +263,26 @@ async function main(): Promise<void> {
   const pluginsList = await ipcRendererMock.invoke('plugins:list') as { plugins: unknown[] }
   assert(pluginsList && Array.isArray(pluginsList.plugins), 'plugins:list returns plugins array')
 
+  // Add-on preview / removed / bundled handlers (delegate to plugin-loader)
+  const bundled = await ipcRendererMock.invoke('plugins:listBundled') as unknown[]
+  assert(Array.isArray(bundled), 'plugins:listBundled returns array')
+  const removed = await ipcRendererMock.invoke('plugins:listRemoved') as unknown[]
+  assert(Array.isArray(removed), 'plugins:listRemoved returns array')
+  const previewCanceled = await ipcRendererMock.invoke('plugins:preview', 'folder') as { canceled?: boolean }
+  assert(previewCanceled && previewCanceled.canceled === true, 'plugins:preview returns canceled when the dialog is dismissed')
+  let restoreThrew = false
+  try {
+    await ipcRendererMock.invoke('plugins:restore', 'missing-key-123')
+  } catch {
+    restoreThrew = true
+  }
+  assert(restoreThrew, 'plugins:restore throws for a missing key')
+  const installed = await ipcRendererMock.invoke(
+    'plugins:installFromPath',
+    path.join(__dirname, '../examples/plugins/study-buddy')
+  ) as { ok?: boolean }
+  assert(installed && installed.ok === true, 'plugins:installFromPath installs a bundled example')
+
   const sessions = await ipcRendererMock.invoke('chat:listSessions') as unknown[]
   assert(Array.isArray(sessions), 'chat:listSessions returns array')
 
@@ -308,6 +330,19 @@ async function main(): Promise<void> {
   assert(typeof (api.chat as Record<string, unknown>).send === 'function', 'chat.send is function')
   assert(typeof (api.media as Record<string, unknown>).listProjects === 'function', 'media.listProjects is function')
   assert(typeof (api.mcp as Record<string, unknown>).listServers === 'function', 'mcp.listServers is function')
+
+  // Invoke the add-on preview/removed/bundled methods through the preload surface.
+  const pluginsApi = api.plugins as Record<string, unknown>
+  assert(typeof pluginsApi.listBundled === 'function', 'plugins.listBundled is function')
+  await (pluginsApi.listBundled as () => Promise<unknown>)()
+  await (pluginsApi.listRemoved as () => Promise<unknown>)()
+  await (pluginsApi.preview as (kind?: string) => Promise<unknown>)('folder')
+  await (pluginsApi.installFromPath as (p: string) => Promise<unknown>)(path.join(__dirname, '../examples/plugins/study-buddy'))
+  try {
+    await (pluginsApi.restore as (key: string) => Promise<unknown>)('missing-key-123')
+  } catch {
+    /* expected */
+  }
 
   // 6) Test main.ts lifecycle hooks
   console.log('\nMain.ts lifecycle hooks')

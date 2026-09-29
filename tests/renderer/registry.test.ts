@@ -18,7 +18,7 @@ describe('plugin registry', () => {
   })
 
   it('gets the manage-plugins system panel', () => {
-    expect(getPlugin('manage-plugins')?.name).toBe('Manage plugins')
+    expect(getPlugin('manage-plugins')?.name).toBe('Add-ons')
   })
 
   it('returns undefined for an unknown id', () => {

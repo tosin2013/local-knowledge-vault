@@ -284,6 +284,11 @@ export function createLkvMock(): LkvMock {
       setEnabled: vi.fn().mockResolvedValue({ plugins: [], errors: [], pluginsDir: '', disabled: [] }),
       remove: vi.fn().mockResolvedValue({ plugins: [], errors: [], pluginsDir: '', disabled: [] }),
       install: vi.fn().mockResolvedValue({ ok: true }),
+      preview: vi.fn().mockResolvedValue({ canceled: true }),
+      installFromPath: vi.fn().mockResolvedValue({ ok: true }),
+      listRemoved: vi.fn().mockResolvedValue([]),
+      restore: vi.fn().mockResolvedValue({ plugins: [], errors: [], pluginsDir: '', disabled: [] }),
+      listBundled: vi.fn().mockResolvedValue([]),
       openFolder: vi.fn().mockResolvedValue({ path: '' }),
       contributions: vi
         .fn()

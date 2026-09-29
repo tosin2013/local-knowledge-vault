@@ -42,6 +42,8 @@ import type {
   PluginContributions,
   PluginInstallResult,
   PluginListResult,
+  PluginPreview,
+  PluginPreviewResult,
   ProviderConfig,
   ProviderDraft,
   ProviderModelsResult,
@@ -50,6 +52,7 @@ import type {
   ProviderTestResult,
   ProjectResult,
   ProjectSummary,
+  RemovedPlugin,
   OllamaHealth,
   Prompt,
   SearchQueryInput,
@@ -109,6 +112,13 @@ const api = {
     remove: (id: string): Promise<PluginListResult> => ipcRenderer.invoke('plugins:remove', id),
     install: (kind?: 'folder' | 'zip', srcPath?: string): Promise<PluginInstallResult> =>
       ipcRenderer.invoke('plugins:install', kind, srcPath),
+    preview: (kind?: 'folder' | 'zip'): Promise<PluginPreviewResult> =>
+      ipcRenderer.invoke('plugins:preview', kind),
+    installFromPath: (srcPath: string): Promise<PluginInstallResult> =>
+      ipcRenderer.invoke('plugins:installFromPath', srcPath),
+    listRemoved: (): Promise<RemovedPlugin[]> => ipcRenderer.invoke('plugins:listRemoved'),
+    restore: (key: string): Promise<PluginListResult> => ipcRenderer.invoke('plugins:restore', key),
+    listBundled: (): Promise<PluginPreview[]> => ipcRenderer.invoke('plugins:listBundled'),
     openFolder: (): Promise<{ path: string; error?: string }> => ipcRenderer.invoke('plugins:openFolder'),
     contributions: (): Promise<PluginContributions> => ipcRenderer.invoke('plugins:contributions'),
   },

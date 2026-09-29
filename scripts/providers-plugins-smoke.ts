@@ -36,6 +36,10 @@ import {
   removePlugin,
   resetPluginCache,
   pluginsDir,
+  previewPluginFrom,
+  listRemovedPlugins,
+  restorePlugin,
+  listBundledPlugins,
 } from '../electron/plugin-loader'
 import { writeZipFromFiles } from '../electron/citation-pack'
 import { buildAnthropicBody, ANTHROPIC_VERSION } from '../electron/providers/anthropic'
@@ -298,6 +302,74 @@ async function main() {
   assert(listPluginsResult().disabled.includes('media-chat'), 'built-in panel can be disabled (state persisted)')
   removePlugin('study-buddy')
   assert(!fs.existsSync(path.join(pluginsDir(), 'study-buddy')) && fs.existsSync(path.join(pdir, 'plugins-removed')), 'remove moves plugin to plugins-removed/ (recoverable)')
+
+  console.log('\nPlugin preview (no install), removed list, restore, bundled examples')
+  const prev = previewPluginFrom(path.join(__dirname, '../examples/plugins/openrouter-free-models'))
+  assert(prev.preview?.id === 'openrouter-free-models', 'preview reads a folder without installing')
+  assert((prev.preview?.cloudProviders?.length ?? 0) === 3, 'preview lists all cloud providers')
+  assert(prev.preview?.cloudProviders?.[0]?.domain === 'openrouter.ai', 'preview surfaces the cloud domain')
+
+  const prev2 = previewPluginFrom(path.join(__dirname, '../examples/plugins/study-buddy'))
+  assert(prev2.preview?.id === 'study-buddy', 'preview reads a promptFile plugin (study-buddy)')
+  assert((prev2.preview?.adds ?? []).some((a) => /voice/.test(a)), 'preview summarizes voices in plain language')
+  assert(!fs.existsSync(path.join(pluginsDir(), 'study-buddy')), 'preview does not install (study-buddy still removed)')
+
+  const removedList = listRemovedPlugins()
+  assert(removedList.some((r) => r.id === 'study-buddy'), 'removed plugin is listed for restore')
+  const removedKey = removedList.find((r) => r.id === 'study-buddy')!.key
+  restorePlugin(removedKey)
+  assert(listPluginsResult().plugins.some((p) => p.id === 'study-buddy'), 'restore moves a removed plugin back')
+  assert(listRemovedPlugins().length === 0, 'restored plugin no longer listed as removed')
+
+  const bundled = listBundledPlugins()
+  assert(bundled.some((b) => b.id === 'study-buddy'), 'bundled examples include study-buddy')
+  assert(bundled.some((b) => b.id === 'openrouter-free-models'), 'bundled examples include openrouter-free-models')
+
+  // preview error paths + a local+cloud provider mix
+  assert((previewPluginFrom(path.join(pdir, 'no-such-dir')).errors?.length ?? 0) > 0, 'preview of a missing path errors')
+  const txtPath = path.join(pdir, 'notaplugin.txt')
+  fs.writeFileSync(txtPath, 'hello')
+  assert(/Pick an add-on folder/.test((previewPluginFrom(txtPath).errors ?? []).join(' ')), 'preview of a non-plugin file errors')
+  const emptyDir = path.join(pdir, 'empty')
+  fs.mkdirSync(emptyDir, { recursive: true })
+  assert(/plugin\.json/.test((previewPluginFrom(emptyDir).errors ?? []).join(' ')), 'preview of a folder without plugin.json errors')
+
+  const mixedDir = path.join(pdir, 'mixed')
+  fs.mkdirSync(mixedDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(mixedDir, 'plugin.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      id: 'mixed',
+      name: 'Mixed',
+      version: '1.0.0',
+      contributes: {
+        providers: [
+          { id: 'local1', label: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', local: true },
+          { id: 'cloud1', label: 'Cloud', kind: 'openai-compatible', baseUrl: 'https://api.example.com/v1', defaultModel: 'x' },
+        ],
+      },
+    })
+  )
+  const prevMix = previewPluginFrom(mixedDir)
+  assert((prevMix.preview?.cloudProviders?.length ?? 0) === 1, 'mixed preview lists only the cloud provider')
+  assert((prevMix.preview?.localProviders?.length ?? 0) === 1, 'mixed preview lists the local provider')
+  assert((prevMix.preview?.adds ?? []).some((a) => /1 local AI provider and 1 cloud AI provider/.test(a)), 'mixed preview describes local and cloud')
+
+  let restoreThrew = false
+  try {
+    restorePlugin('../evil')
+  } catch {
+    restoreThrew = true
+  }
+  assert(restoreThrew, 'restorePlugin rejects a path-traversal key')
+  restoreThrew = false
+  try {
+    restorePlugin('missing-key-123')
+  } catch {
+    restoreThrew = true
+  }
+  assert(restoreThrew, 'restorePlugin errors for a missing key')
 
   await Promise.all([ollama.close(), oa.close(), an.close()])
   setLlmUserDataDir(null)

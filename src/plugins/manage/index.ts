@@ -5,8 +5,8 @@ export const MANAGE_PLUGINS_ID = 'manage-plugins'
 
 export const managePluginsPlugin: VaultPlugin = {
   id: MANAGE_PLUGINS_ID,
-  name: 'Manage plugins',
-  description: 'Install, enable or remove plugins (plugin.json packs and built-in panels).',
+  name: 'Add-ons',
+  description: 'Add AI providers, answer styles and connections.',
   icon: 'extension',
   render: ManagePluginsView,
 }
