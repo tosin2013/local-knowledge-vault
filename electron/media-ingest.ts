@@ -153,6 +153,33 @@ export function matchesSource(it: Item, src: MediaSource): boolean | null {
   )
 }
 
+export interface ExistingMediaProject {
+  project: string
+  noteCount: number
+}
+
+/**
+ * Find the media project whose transcript notes belong to `source`, without
+ * ingesting. Used to warn before a re-ingest would replace an existing project
+ * (#124). A project only matches when its notes carry this exact source marker.
+ */
+export function findExistingProjectBySource(source: MediaSource): ExistingMediaProject | null {
+  const byProject = new Map<string, Item[]>()
+  for (const it of listItems({ kind: 'transcript' })) {
+    if (matchesSource(it, source) !== true) continue
+    const p = (it.project ?? '').trim()
+    if (!p) continue
+    const list = byProject.get(p) ?? []
+    list.push(it)
+    byProject.set(p, list)
+  }
+  let best: ExistingMediaProject | null = null
+  for (const [project, list] of byProject) {
+    if (!best || list.length > best.noteCount) best = { project, noteCount: list.length }
+  }
+  return best
+}
+
 /**
  * Resolve the project name for an ingest. A name is reused only when every
  * transcript note under it belongs to this source (or is legacy/marker-less);

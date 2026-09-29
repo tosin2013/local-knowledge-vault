@@ -93,6 +93,7 @@ async function main(): Promise<void> {
     runYtDlp,
     ensureMediaReaderPrompt,
     findCompanionCaptions,
+    findExistingProjectBySource,
     youtubeEmbedUrl,
     listMediaProjects,
     notesNearPlayhead,
@@ -140,6 +141,13 @@ async function main(): Promise<void> {
     })
     const appended = listItemsByProjectExact('AppendMe', 'transcript').length
     assert(appended === r1.noteCount * 2, `append doubles notes (${r1.noteCount} -> ${appended})`)
+
+    console.log('findExistingProjectBySource')
+    const found = findExistingProjectBySource({ sourcePath: mediaFile })
+    assert(found?.project === 'AppendMe', `existing project for mediaFile is AppendMe (got ${found?.project})`)
+    assert(found?.noteCount === appended, 'existing project note count matches the notes under it')
+    const none = findExistingProjectBySource({ sourcePath: path.join(dir, 'unseen.mp4') })
+    assert(none === null, 'no existing project for an unseen source')
 
     console.log('ensureMediaReaderPrompt stale update')
     const fresh = ensureMediaReaderPrompt()

@@ -178,6 +178,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [fullscreen, setFullscreen] = useState(false)
   const [voices, setVoices] = useState<MediaVoiceOption[]>([])
   const [activeVoice, setActiveVoice] = useState<string>('Media reader')
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
 
   const refreshProjects = useCallback(async () => {
     if (!window.lkv?.media?.listProjects) return
@@ -423,6 +425,14 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         }
         return
       }
+      const existing = await window.lkv.media.findExistingProject?.({ mediaPath: pick.mediaPath })
+      if (existing && existing.noteCount > 0) {
+        const ok = window.confirm(
+          `"${existing.project}" already has ${existing.noteCount} transcript notes. ` +
+            'Re-ingesting will replace them and break existing citations to those notes. Continue?'
+        )
+        if (!ok) return
+      }
       const res = await window.lkv.media.ingestLocal({
         mediaPath: pick.mediaPath,
         captionsPath: pick.captionsPath,
@@ -445,6 +455,14 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setError(null)
     setBusy(true)
     try {
+      const existing = await window.lkv.media.findExistingProject?.({ url })
+      if (existing && existing.noteCount > 0) {
+        const ok = window.confirm(
+          `"${existing.project}" already has ${existing.noteCount} transcript notes. ` +
+            'Re-ingesting will replace them and break existing citations to those notes. Continue?'
+        )
+        if (!ok) return
+      }
       const res = await window.lkv.media.ingestYoutube({ url })
       await applyIngestResult(res)
       setYtUrl('')
@@ -496,6 +514,47 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setMessages([])
     setSessionId(null)
     setStatus(`Voice: ${name} (works with any media project)`)
+  }
+
+  const onRenameProject = async () => {
+    if (!window.lkv?.projects || !active) return
+    const next = renameValue.trim()
+    if (!next || next === active.project) {
+      setRenaming(false)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await window.lkv.projects.rename(active.project, next)
+      setActive((prev) => (prev ? { ...prev, project: next, title: next } : prev))
+      setStatus(`Renamed media project to “${next}”`)
+      await refreshProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+      setRenaming(false)
+    }
+  }
+
+  const onDeleteProject = async () => {
+    if (!window.lkv?.projects || !active) return
+    if (!window.confirm(`Delete media project “${active.project}” and its notes?`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      await window.lkv.projects.delete(active.project)
+      setActive(null)
+      setMessages([])
+      setSessionId(null)
+      setStatus(`Deleted media project “${active.project}”`)
+      await refreshProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   const seekTo = (sec: number) => {
@@ -1012,6 +1071,49 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                   </MenuItem>
                 ))}
               </TextField>
+            )}
+            {active && (
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                {renaming ? (
+                  <>
+                    <TextField
+                      size="small"
+                      sx={{ minWidth: 180 }}
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      label="Rename media project"
+                      autoFocus
+                    />
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disabled={busy || !renameValue.trim() || renameValue.trim() === active.project}
+                      onClick={() => void onRenameProject()}
+                    >
+                      Save
+                    </Button>
+                    <Button size="small" disabled={busy} onClick={() => setRenaming(false)}>
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      size="small"
+                      disabled={busy}
+                      onClick={() => {
+                        setRenaming(true)
+                        setRenameValue(active.project)
+                      }}
+                    >
+                      Rename
+                    </Button>
+                    <Button size="small" color="error" disabled={busy} onClick={() => void onDeleteProject()}>
+                      Delete
+                    </Button>
+                  </>
+                )}
+              </Stack>
             )}
           </Stack>
         </Paper>

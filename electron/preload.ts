@@ -26,6 +26,8 @@ import type {
   MediaCreatePersonaInput,
   MediaCreatePersonaResult,
   MediaVoicePackInfo,
+  MediaFindExistingInput,
+  MediaExistingProject,
   McpAddServerInput,
   McpCallToolInput,
   McpCallToolResult,
@@ -194,6 +196,8 @@ const api = {
       ipcRenderer.invoke('media:ingestYoutube', input),
     listProjects: (): Promise<MediaProjectInfo[]> =>
       ipcRenderer.invoke('media:listProjects'),
+    findExistingProject: (input: MediaFindExistingInput): Promise<MediaExistingProject | null> =>
+      ipcRenderer.invoke('media:findExistingProject', input),
     notesNear: (input: MediaNotesNearInput): Promise<Item[]> =>
       ipcRenderer.invoke('media:notesNear', input),
     youtubeEmbedUrl: (url: string): Promise<string | null> =>

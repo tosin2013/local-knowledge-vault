@@ -360,6 +360,7 @@ export function createLkvMock(): LkvMock {
       ingestLocal: vi.fn().mockResolvedValue(makeIngestResult()),
       ingestYoutube: vi.fn().mockResolvedValue(makeIngestResult({ sourceType: 'youtube' })),
       listProjects: vi.fn().mockResolvedValue([]),
+      findExistingProject: vi.fn().mockResolvedValue(null),
       notesNear: vi.fn().mockResolvedValue([]),
       youtubeEmbedUrl: vi.fn().mockResolvedValue(null),
       ensurePersonas: vi.fn().mockResolvedValue({ promptIds: [], names: [], created: [], updated: [] }),

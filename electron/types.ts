@@ -520,6 +520,16 @@ export interface MediaProjectInfo {
   updatedAt: string
 }
 
+export interface MediaFindExistingInput {
+  mediaPath?: string
+  url?: string
+}
+
+export interface MediaExistingProject {
+  project: string
+  noteCount: number
+}
+
 export interface MediaPickLocalResult {
   canceled: boolean
   mediaPath?: string

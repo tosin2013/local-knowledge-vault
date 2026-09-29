@@ -151,4 +151,31 @@ describe('MediaChatView', () => {
     fireEvent.click(screen.getByRole('option', { name: /My podcast/ }))
     await waitFor(() => expect(screen.getByText(/Loaded media project/)).toBeInTheDocument())
   })
+
+  it('renames the active media project', async () => {
+    await ingestYoutube()
+    fireEvent.click(screen.getByText('Rename'))
+    fireEvent.change(screen.getByLabelText('Rename media project'), {
+      target: { value: 'Renamed podcast' },
+    })
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() =>
+      expect(window.lkv.projects.rename).toHaveBeenCalledWith('My podcast', 'Renamed podcast'),
+    )
+  })
+
+  it('deletes the active media project after confirm', async () => {
+    await ingestYoutube()
+    fireEvent.click(screen.getByText('Delete'))
+    await waitFor(() => expect(window.lkv.projects.delete).toHaveBeenCalledWith('My podcast'))
+  })
+
+  it('confirms before a re-ingest replaces an existing project', async () => {
+    const lkv = seedMedia()
+    lkv.media.findExistingProject.mockResolvedValue({ project: 'My podcast', noteCount: 10 })
+    render(<MediaChatView />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(window.confirm).toHaveBeenCalled())
+    await waitFor(() => expect(lkv.media.ingestLocal).toHaveBeenCalled())
+  })
 })
