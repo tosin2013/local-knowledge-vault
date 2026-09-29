@@ -227,6 +227,29 @@ export function useNotes(deps: UseNotesDeps) {
     }
   }
 
+  /** Delete a note by id (from the rail), with confirmation. */
+  const deleteItemById = async (id: string) => {
+    if (!window.lkv) return
+    let title = id
+    try {
+      const item = await window.lkv.items.get(id)
+      if (item) title = item.title
+    } catch {
+      /* fall back to id in the confirm message */
+    }
+    if (!confirm(`Delete "${title}"?`)) return
+    await window.lkv.items.delete(id)
+    if (selectedId === id) {
+      setSelectedId(null)
+      setDraft(null)
+      setDirty(false)
+      setNotePeekOpen(false)
+      setPeekEditing(false)
+    }
+    await refreshList()
+    void refreshProjects()
+  }
+
   /** Promote an unconfirmed AI draft to a regular note (without editing). */
   const confirmDraft = async () => {
     if (!window.lkv || !draft || draft.status !== 'ai-draft' || draft.id === NEW_DRAFT_ID) return
@@ -349,6 +372,7 @@ export function useNotes(deps: UseNotesDeps) {
     onSave,
     confirmDraft,
     onDelete,
+    deleteItemById,
     renameProject,
     mergeProject,
     deleteProject,

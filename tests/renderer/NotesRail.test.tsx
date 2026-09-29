@@ -20,6 +20,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     onImport: vi.fn(),
     onProject: vi.fn(),
     onManageProjects: vi.fn(),
+    onDeleteItem: vi.fn(),
     onFilters: vi.fn(),
     onFiltersOpen: vi.fn(),
     onSelect: vi.fn(),
@@ -75,6 +76,13 @@ describe('NotesRail', () => {
     render(<NotesRail {...props} />)
     fireEvent.click(screen.getByLabelText('Manage projects'))
     expect(props.onManageProjects).toHaveBeenCalled()
+  })
+
+  it('deletes a note from the rail without opening it', () => {
+    const props = makeProps({ items: [makeItem('itm_1', { title: 'First note' })] })
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByLabelText('Delete First note'))
+    expect(props.onDeleteItem).toHaveBeenCalledWith('itm_1')
   })
 
   it('toggles more filters in simple mode', () => {

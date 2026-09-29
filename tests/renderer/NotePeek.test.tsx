@@ -76,6 +76,20 @@ describe('NotePeek', () => {
     expect(props.onConfirmDraft).toHaveBeenCalled()
   })
 
+  it('shows Delete in view mode', () => {
+    const props = makeProps({ peekEditing: false, draft: makeItem('itm_1', { title: 'My note' }) })
+    render(<NotePeek {...props} />)
+    fireEvent.click(screen.getByText('Delete'))
+    expect(props.onDelete).toHaveBeenCalled()
+  })
+
+  it('allows inline title editing in view mode', () => {
+    const props = makeProps({ peekEditing: false, draft: makeItem('itm_1', { title: 'My note' }) })
+    render(<NotePeek {...props} />)
+    fireEvent.change(screen.getByPlaceholderText('Title'), { target: { value: 'Renamed' } })
+    expect(props.onPatch).toHaveBeenCalledWith('title', 'Renamed')
+  })
+
   it('shows the copy-id affordance in advanced mode', () => {
     const props = makeProps({ advanced: true })
     render(<NotePeek {...props} />)
