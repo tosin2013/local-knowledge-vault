@@ -11,8 +11,10 @@ function makeProps(overrides: Partial<FindPanelProps> = {}): FindPanelProps {
     searchText: '',
     filters: { para: '', kind: '', status: '', project: '' },
     filterSummary: 'All notes',
+    hasMore: false,
     onSelect: vi.fn(),
     onAskInstead: vi.fn(),
+    onShowMore: vi.fn(),
     ...overrides,
   }
 }
@@ -55,5 +57,12 @@ describe('FindPanel', () => {
   it('shows score in advanced mode', () => {
     render(<FindPanel {...makeProps({ advanced: true, hits: [makeHit('itm_1')] })} />)
     expect(screen.getByText(/score/)).toBeInTheDocument()
+  })
+
+  it('shows a Show more button when more results are available', () => {
+    const props = makeProps({ hasMore: true, hits: [makeHit('itm_1', { title: 'Hit one' })] })
+    render(<FindPanel {...props} />)
+    fireEvent.click(screen.getByText('Show more'))
+    expect(props.onShowMore).toHaveBeenCalled()
   })
 })

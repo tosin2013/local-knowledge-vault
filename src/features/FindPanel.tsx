@@ -9,12 +9,14 @@ export interface FindPanelProps {
   searchText: string
   filters: ItemFilters
   filterSummary: string
+  hasMore: boolean
   onSelect: (id: string) => void
   onAskInstead: () => void
+  onShowMore: () => void
 }
 
 export function FindPanel(props: FindPanelProps) {
-  const { advanced, askResult, hits, searchText, filters, filterSummary, onSelect, onAskInstead } = props
+  const { advanced, askResult, hits, searchText, filters, filterSummary, hasMore, onSelect, onAskInstead, onShowMore } = props
 
   return (
     <Box className="panel" sx={{ p: 2 }}>
@@ -103,6 +105,11 @@ export function FindPanel(props: FindPanelProps) {
               </Typography>
             </Paper>
           ))}
+          {hasMore && (
+            <Button size="small" onClick={onShowMore} sx={{ alignSelf: 'flex-start' }}>
+              Show more
+            </Button>
+          )}
         </Stack>
       )}
     </Box>

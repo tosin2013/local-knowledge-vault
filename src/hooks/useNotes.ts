@@ -35,6 +35,12 @@ export function useNotes(deps: UseNotesDeps) {
   const [importBusy, setImportBusy] = useState(false)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // Rail display: hide transcript (source) chunks by default (#120), filter-as-you-type, sort.
+  const [showTranscripts, setShowTranscripts] = useState(false)
+  const [railQuery, setRailQuery] = useState('')
+  const [railSort, setRailSort] = useState<'updated' | 'title' | 'created'>('updated')
+  // Find "show more" pagination.
+  const [findLimit, setFindLimit] = useState(20)
 
   const refreshList = useCallback(async () => {
     if (!window.lkv) return
@@ -49,7 +55,7 @@ export function useNotes(deps: UseNotesDeps) {
     setProjects(list)
   }, [])
 
-  const runSearch = useCallback(async (textOverride?: string) => {
+  const runSearch = useCallback(async (textOverride?: string, limitOverride?: number) => {
     if (!window.lkv) return
     const text = textOverride !== undefined ? textOverride : searchText
     setBusy(true)
@@ -65,7 +71,7 @@ export function useNotes(deps: UseNotesDeps) {
           status: filters.status || undefined,
           project: filters.project || undefined,
         },
-        limit: 20,
+        limit: limitOverride ?? findLimit,
       })
       setHits(res.hits)
     } catch (e) {
@@ -73,7 +79,14 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setBusy(false)
     }
-  }, [searchText, filters, setBusy, setError, setMode])
+  }, [searchText, filters, findLimit, setBusy, setError, setMode])
+
+  /** "Show more" in Find: raise the cap and re-query. */
+  const loadMoreHits = () => {
+    const next = Math.min(findLimit + 20, 100)
+    setFindLimit(next)
+    void runSearch(undefined, next)
+  }
 
   useEffect(() => {
     if (!selectedId || !window.lkv) {
@@ -340,8 +353,38 @@ export function useNotes(deps: UseNotesDeps) {
     return parts.length ? parts.join(' · ') : 'All notes'
   }, [filters])
 
+  /** Rail list: hide transcript chunks by default, filter-as-you-type, sort. */
+  const visibleItems = useMemo(() => {
+    let list = items
+    if (!showTranscripts) list = list.filter((it) => it.kind !== 'transcript')
+    const q = railQuery.trim().toLowerCase()
+    if (q) {
+      list = list.filter(
+        (it) =>
+          it.title.toLowerCase().includes(q) ||
+          (it.body ?? '').toLowerCase().includes(q) ||
+          (it.summary ?? '').toLowerCase().includes(q) ||
+          (it.project ?? '').toLowerCase().includes(q),
+      )
+    }
+    const sorted = [...list]
+    if (railSort === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title))
+    else if (railSort === 'created') sorted.sort((a, b) => a.created_at.localeCompare(b.created_at))
+    else sorted.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    return sorted
+  }, [items, showTranscripts, railQuery, railSort])
+
   return {
     items,
+    visibleItems,
+    showTranscripts,
+    setShowTranscripts,
+    railQuery,
+    setRailQuery,
+    railSort,
+    setRailSort,
+    findLimit,
+    hasMore: hits.length >= findLimit && findLimit < 100,
     filters,
     setFilters,
     selectedId,
@@ -366,6 +409,7 @@ export function useNotes(deps: UseNotesDeps) {
     refreshList,
     refreshProjects,
     runSearch,
+    loadMoreHits,
     onNewNote,
     openPrefilledDraft,
     onImportFromUrl,
