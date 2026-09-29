@@ -167,4 +167,9 @@ describe('ChatView', () => {
     render(<ChatView {...makeProps({ scopeCoupleHint: 'Answers use all your notes', stayingInGorgias: false })} />)
     expect(screen.getAllByText('Answers use all your notes').length).toBeGreaterThan(0)
   })
+
+  it('labels the Ask composer for screen readers', () => {
+    render(<ChatView {...makeProps()} />)
+    expect(screen.getByLabelText('Ask a question')).toBeInTheDocument()
+  })
 })

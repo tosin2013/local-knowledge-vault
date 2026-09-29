@@ -43,6 +43,19 @@ describe('NotesRail', () => {
     expect(props.onSelect).toHaveBeenCalledWith('itm_1', { edit: true })
   })
 
+  it('edits a note with F2 (keyboard equivalent of double-click)', () => {
+    const props = makeProps({ items: [makeItem('itm_1', { title: 'First note' })] })
+    render(<NotesRail {...props} />)
+    const item = screen.getByText('First note').closest('[role="button"]') as HTMLElement
+    fireEvent.keyDown(item, { key: 'F2' })
+    expect(props.onSelect).toHaveBeenCalledWith('itm_1', { edit: true })
+  })
+
+  it('labels the notes list for screen readers', () => {
+    render(<NotesRail {...makeProps({ items: [makeItem('itm_1', { title: 'First note' })] })} />)
+    expect(screen.getByRole('list', { name: 'Notes' })).toBeInTheDocument()
+  })
+
   it('shows the empty state when there are no notes', () => {
     render(<NotesRail {...makeProps()} />)
     expect(screen.getByText('No notes match filters.')).toBeInTheDocument()

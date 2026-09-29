@@ -291,6 +291,7 @@ export function createLkvMock(): LkvMock {
     },
     app: {
       openExternal: vi.fn().mockResolvedValue(true),
+      onMenuAction: vi.fn().mockReturnValue(() => {}),
     },
     chat: {
       listSessions: vi.fn().mockResolvedValue([]),

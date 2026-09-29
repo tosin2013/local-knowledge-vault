@@ -1,7 +1,7 @@
 /**
  * Electron main process — app lifecycle + IPC handlers.
  */
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell, type OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { pathToFileURL } from 'url'
@@ -117,6 +117,7 @@ import type {
   MediaCreatePersonaInput,
   McpAddServerInput,
   McpCallToolInput,
+  MenuAction,
   ProviderDraft,
   ProviderSelection,
 } from './types'
@@ -285,6 +286,74 @@ function isTrustedAppUrl(url: string): boolean {
   const dev = process.env.VITE_DEV_SERVER_URL?.trim()
   if (dev && url.startsWith(dev)) return true
   return url.startsWith('file://')
+}
+
+/** Forward an application-menu action to the renderer. */
+function sendMenuAction(action: MenuAction): void {
+  mainWindow?.webContents.send('menu:action', action)
+}
+
+/**
+ * Application menu with a basic keyboard-shortcut set: ⌘N new note, ⌘F find,
+ * ⌘K ask. Standard edit/window roles are kept so clipboard and window shortcuts
+ * keep working. Only the custom items forward to the renderer via 'menu:action'.
+ */
+function buildApplicationMenu(): Menu {
+  const isMac = process.platform === 'darwin'
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Note',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendMenuAction('new-note'),
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' as const } : { role: 'quit' as const },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' as const },
+        { role: 'redo' as const },
+        { type: 'separator' as const },
+        { role: 'cut' as const },
+        { role: 'copy' as const },
+        { role: 'paste' as const },
+        { role: 'selectAll' as const },
+        { type: 'separator' as const },
+        {
+          label: 'Find in Notes',
+          accelerator: 'CmdOrCtrl+F',
+          click: () => sendMenuAction('find'),
+        },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Ask',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => sendMenuAction('ask'),
+        },
+        { type: 'separator' as const },
+        { role: 'reload' as const },
+        { role: 'toggleDevTools' as const },
+        { type: 'separator' as const },
+        { role: 'resetZoom' as const },
+        { role: 'zoomIn' as const },
+        { role: 'zoomOut' as const },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const },
+      ],
+    },
+    { role: 'windowMenu' as const },
+  ]
+  return Menu.buildFromTemplate(template)
 }
 
 function registerIpc(): void {
@@ -639,6 +708,7 @@ app.whenReady().then(async () => {
     console.error('[Vault providers] load failed:', err)
   }
   registerIpc()
+  Menu.setApplicationMenu(buildApplicationMenu())
   createWindow()
   try {
     startBridgeServer()

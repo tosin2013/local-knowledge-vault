@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import App from '../../src/App'
 
 describe('App', () => {
@@ -24,5 +24,21 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Find' })).toBeInTheDocument())
     screen.getByRole('button', { name: 'Find' }).click()
     await waitFor(() => expect(screen.getByText(/Search to find notes/)).toBeInTheDocument())
+  })
+
+  it('handles the new-note menu action (⌘N)', async () => {
+    let handler: ((action: string) => void) | undefined
+    const lkv = window.lkv as unknown as {
+      app: { onMenuAction: ReturnType<typeof vi.fn> }
+    }
+    lkv.app.onMenuAction.mockImplementation((cb: (action: string) => void) => {
+      handler = cb
+      return () => {}
+    })
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Find' })).toBeInTheDocument())
+    expect(handler).toBeDefined()
+    act(() => handler!('new-note'))
+    await waitFor(() => expect(screen.getByLabelText('Note title')).toBeInTheDocument())
   })
 })

@@ -42,6 +42,12 @@ describe('ContentChrome', () => {
     expect(props.onDismissError).toHaveBeenCalled()
   })
 
+  it('announces status (polite) and errors (assertive) to screen readers', () => {
+    render(<ContentChrome {...makeProps({ statusMsg: 'Saved', error: 'Failed' })} />)
+    expect(screen.getByText('Saved').closest('[role="status"]')).toBeInTheDocument()
+    expect(screen.getByText('Failed').closest('[role="alert"]')).toBeInTheDocument()
+  })
+
   it('shows an unknown-plugin warning for a bogus plugin id', () => {
     render(<ContentChrome {...makeProps({ activePluginId: 'does-not-exist' })} />)
     expect(screen.getByText('Unknown plugin')).toBeInTheDocument()

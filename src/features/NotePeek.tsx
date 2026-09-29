@@ -120,6 +120,7 @@ export function NotePeek(props: NotePeekProps) {
               value={draft.title}
               onChange={(e) => onPatch('title', e.target.value)}
               placeholder="Title"
+              aria-label="Note title"
               InputProps={{ readOnly: !peekEditing }}
             />
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
@@ -176,6 +177,7 @@ export function NotePeek(props: NotePeekProps) {
               value={draft.body}
               onChange={(e) => onPatch('body', e.target.value)}
               placeholder="Write your note…"
+              aria-label="Note body"
               InputProps={{ readOnly: !peekEditing }}
               sx={{ flex: 1, '& .MuiInputBase-root': { alignItems: 'flex-start' } }}
             />

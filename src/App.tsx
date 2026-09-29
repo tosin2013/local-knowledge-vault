@@ -27,6 +27,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
+  // Focus targets for the app menu / keyboard shortcuts (⌘F search, ⌘K ask).
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const composerRef = useRef<HTMLInputElement | null>(null)
+
   const ui = useUi()
   const providers = useProviders()
 
@@ -108,6 +112,25 @@ export default function App() {
     setMode('chat')
   }
 
+  // Latest handlers so the one-time menu subscription never goes stale.
+  const newNoteRef = useRef(notes.onNewNote)
+  newNoteRef.current = notes.onNewNote
+
+  // Application menu accelerators (⌘N new note, ⌘F find, ⌘K ask).
+  useEffect(() => {
+    if (!window.lkv?.app?.onMenuAction) return
+    return window.lkv.app.onMenuAction((action) => {
+      if (action === 'new-note') {
+        newNoteRef.current()
+      } else if (action === 'find') {
+        searchInputRef.current?.focus()
+      } else if (action === 'ask') {
+        setMode('chat')
+        window.setTimeout(() => composerRef.current?.focus(), 0)
+      }
+    })
+  }, [])
+
   const aiReady = providers.llmStatus?.active != null
   const aiStatusText = aiChipLabel(providers.llmStatus, ui.advanced)
   const showFirstRun = !!providers.llmStatus?.needsSetup
@@ -160,6 +183,7 @@ export default function App() {
           theme={ui.theme}
           searchText={notes.searchText}
           busy={busy}
+          searchInputRef={searchInputRef}
           onSearchText={notes.setSearchText}
           onRunSearch={() => void notes.runSearch()}
           onAiSettings={() => providers.setAiSettingsOpen(true)}
@@ -267,6 +291,7 @@ export default function App() {
                 scopeCoupleHint={chat.scopeCoupleHint}
                 chatInput={chat.chatInput}
                 chatPlaceholder={chat.chatPlaceholder}
+                composerRef={composerRef}
                 sessions={chat.sessions}
                 activeSessionId={chat.activeSessionId}
                 onRecheck={() => void providers.recheckLlm()}

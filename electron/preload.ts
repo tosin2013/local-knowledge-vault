@@ -32,6 +32,7 @@ import type {
   McpConnectResult,
   McpServerSummary,
   McpToolSummary,
+  MenuAction,
   CreatePromptInput,
   CreateSessionInput,
   ImportFromUrlResult,
@@ -111,6 +112,11 @@ const api = {
   },
   app: {
     openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('app:openExternal', url),
+    onMenuAction: (callback: (action: MenuAction) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, action: MenuAction) => callback(action)
+      ipcRenderer.on('menu:action', listener)
+      return () => ipcRenderer.removeListener('menu:action', listener)
+    },
   },
   chat: {
     listSessions: (): Promise<ChatSession[]> => ipcRenderer.invoke('chat:listSessions'),

@@ -68,6 +68,7 @@ export function ContentChrome(props: ContentChromeProps) {
         <Box sx={{ px: 2, pt: 1 }}>
           <Alert
             severity="success"
+            role="status"
             action={
               <IconButton size="small" aria-label="Dismiss" onClick={onDismissStatus}>
                 <CloseIcon fontSize="small" />
@@ -83,6 +84,7 @@ export function ContentChrome(props: ContentChromeProps) {
         <Box sx={{ px: 2, pt: 1 }}>
           <Alert
             severity="error"
+            role="alert"
             action={
               <IconButton size="small" aria-label="Dismiss error" onClick={onDismissError}>
                 <CloseIcon fontSize="small" />
