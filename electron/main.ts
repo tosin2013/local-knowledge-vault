@@ -25,6 +25,10 @@ import {
   listMessages,
   listPrompts,
   listSessions,
+  listProjects,
+  renameProject,
+  mergeProject,
+  deleteProject,
   updateChatProfile,
   updateItem,
   updatePrompt,
@@ -488,6 +492,12 @@ function registerIpc(): void {
     updateChatProfile(id, patch)
   )
   ipcMain.handle('profiles:delete', (_e, id: string) => deleteChatProfile(id))
+
+  // Projects (first-class: list / rename / merge / delete)
+  ipcMain.handle('projects:list', () => listProjects())
+  ipcMain.handle('projects:rename', (_e, from: string, to: string) => renameProject(from, to))
+  ipcMain.handle('projects:merge', (_e, from: string, into: string) => mergeProject(from, into))
+  ipcMain.handle('projects:delete', (_e, name: string) => deleteProject(name))
 
   // Citation pack export (Ask session → portable evidence bundle)
   ipcMain.handle('citationPack:export', async (_e, input: CitationPackExportInput) => {

@@ -194,6 +194,10 @@ describe('App flows — Notes rail + note peek', () => {
       makeItem('itm_1', { title: 'First note', project: 'Work' }),
       makeItem('itm_2', { title: 'Second note', project: 'Home' }),
     ])
+    lkv.projects.list.mockResolvedValue([
+      { name: 'Home', count: 1 },
+      { name: 'Work', count: 1 },
+    ])
     await renderApp()
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))

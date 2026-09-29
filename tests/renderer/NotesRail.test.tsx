@@ -19,6 +19,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     onImportUrl: vi.fn(),
     onImport: vi.fn(),
     onProject: vi.fn(),
+    onManageProjects: vi.fn(),
     onFilters: vi.fn(),
     onFiltersOpen: vi.fn(),
     onSelect: vi.fn(),
@@ -67,6 +68,13 @@ describe('NotesRail', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
     fireEvent.click(screen.getByRole('option', { name: 'Work' }))
     expect(props.onProject).toHaveBeenCalledWith('Work')
+  })
+
+  it('opens the manage-projects dialog from the rail', () => {
+    const props = makeProps()
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByLabelText('Manage projects'))
+    expect(props.onManageProjects).toHaveBeenCalled()
   })
 
   it('toggles more filters in simple mode', () => {

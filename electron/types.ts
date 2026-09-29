@@ -27,6 +27,17 @@ export interface ItemFilters {
   project?: string
 }
 
+/** A first-class project name and how many notes carry it. */
+export interface ProjectSummary {
+  name: string
+  count: number
+}
+
+/** Result of a project rename/merge/delete (count of notes affected). */
+export interface ProjectResult {
+  count: number
+}
+
 export interface CreateItemInput {
   title: string
   body?: string
