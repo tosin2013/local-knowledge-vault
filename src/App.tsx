@@ -403,6 +403,7 @@ export default function App() {
               busy={busy}
               advanced={ui.advanced}
               projectOptions={notes.projectOptions}
+              noteMissing={notes.noteMissing}
               onClose={notes.closeNotePeek}
               onEdit={notes.setPeekEditing}
               onPatch={notes.patchDraft}

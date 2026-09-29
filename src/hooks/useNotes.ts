@@ -28,6 +28,8 @@ export function useNotes(deps: UseNotesDeps) {
   const [dirty, setDirty] = useState(false)
   const [notePeekOpen, setNotePeekOpen] = useState(false)
   const [peekEditing, setPeekEditing] = useState(false)
+  // True when the selected note id no longer resolves (deleted / re-ingested) — #125.
+  const [noteMissing, setNoteMissing] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [hits, setHits] = useState<SearchHit[]>([])
   const [askResult, setAskResult] = useState<AskGroundedResult | null>(null)
@@ -96,14 +98,17 @@ export function useNotes(deps: UseNotesDeps) {
       if (!isNewDraft) {
         setDraft(null)
         setDirty(false)
+        setNoteMissing(false)
       }
       return
     }
     if (selectedId === NEW_DRAFT_ID || isNewDraft) {
+      setNoteMissing(false)
       return
     }
     void window.lkv.items.get(selectedId).then((item) => {
       setDraft(item)
+      setNoteMissing(!item)
       setDirty(false)
       setIsNewDraft(false)
     })
@@ -114,6 +119,7 @@ export function useNotes(deps: UseNotesDeps) {
       setIsNewDraft(false)
     }
     setSelectedId(id)
+    setNoteMissing(false)
     setNotePeekOpen(true)
     setPeekEditing(opts?.edit ?? false)
   }
@@ -135,6 +141,7 @@ export function useNotes(deps: UseNotesDeps) {
     }
     setNotePeekOpen(false)
     setPeekEditing(false)
+    setNoteMissing(false)
     if (isNewDraft) {
       setIsNewDraft(false)
       setSelectedId(null)
@@ -148,6 +155,7 @@ export function useNotes(deps: UseNotesDeps) {
     setIsNewDraft(true)
     setDraft(item)
     setSelectedId(NEW_DRAFT_ID)
+    setNoteMissing(false)
     setDirty(false)
     setNotePeekOpen(true)
     setPeekEditing(true)
@@ -159,6 +167,7 @@ export function useNotes(deps: UseNotesDeps) {
     setIsNewDraft(true)
     setDraft(item)
     setSelectedId(NEW_DRAFT_ID)
+    setNoteMissing(false)
     setDirty(true)
     setNotePeekOpen(true)
     setPeekEditing(true)
@@ -443,6 +452,7 @@ export function useNotes(deps: UseNotesDeps) {
     isNewDraft,
     notePeekOpen,
     peekEditing,
+    noteMissing,
     setPeekEditing,
     searchText,
     setSearchText,

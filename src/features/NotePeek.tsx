@@ -27,6 +27,7 @@ export interface NotePeekProps {
   busy: boolean
   advanced: boolean
   projectOptions: string[]
+  noteMissing: boolean
   onClose: () => void
   onEdit: (editing: boolean) => void
   onPatch: <K extends keyof Item>(key: K, value: Item[K]) => void
@@ -46,6 +47,7 @@ export function NotePeek(props: NotePeekProps) {
     busy,
     advanced,
     projectOptions,
+    noteMissing,
     onClose,
     onEdit,
     onPatch,
@@ -126,7 +128,9 @@ export function NotePeek(props: NotePeekProps) {
         {!draft ? (
           <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              Loading note…
+              {noteMissing
+                ? 'This note was deleted or re-ingested and no longer exists.'
+                : 'Loading note…'}
             </Typography>
           </Box>
         ) : (
