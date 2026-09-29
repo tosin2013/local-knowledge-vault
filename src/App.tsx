@@ -208,7 +208,7 @@ export default function App() {
         <Box className="main">
           <NotesRail
             advanced={ui.advanced}
-            items={notes.items}
+            items={notes.visibleItems}
             selectedId={notes.selectedId}
             filters={notes.filters}
             projectOptions={notes.projectOptions}
@@ -217,12 +217,18 @@ export default function App() {
             importUrl={notes.importUrl}
             importBusy={notes.importBusy}
             busy={busy}
+            railQuery={notes.railQuery}
+            railSort={notes.railSort}
+            showTranscripts={notes.showTranscripts}
             onNewNote={notes.onNewNote}
             onImportUrl={notes.setImportUrl}
             onImport={() => void notes.onImportFromUrl()}
             onProject={chat.onNotesFromChange}
             onManageProjects={() => setManageProjectsOpen(true)}
             onDeleteItem={(id) => void notes.deleteItemById(id)}
+            onRailQuery={notes.setRailQuery}
+            onRailSort={notes.setRailSort}
+            onShowTranscripts={notes.setShowTranscripts}
             onFilters={notes.setFilters}
             onFiltersOpen={notes.setFiltersOpen}
             onSelect={notes.selectItem}
@@ -261,8 +267,10 @@ export default function App() {
                 searchText={notes.searchText}
                 filters={notes.filters}
                 filterSummary={notes.filterSummary}
+                hasMore={notes.hasMore}
                 onSelect={notes.selectItem}
                 onAskInstead={goAskAi}
+                onShowMore={notes.loadMoreHits}
               />
             )}
 

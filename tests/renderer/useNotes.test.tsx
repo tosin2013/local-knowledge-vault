@@ -188,4 +188,33 @@ describe('useNotes', () => {
     })
     expect(lkv.items.update).toHaveBeenCalledWith('itm_1', { status: 'active' })
   })
+
+  it('hides transcript chunks by default and shows them on toggle', async () => {
+    const lkv = window.lkv as any
+    lkv.items.list.mockResolvedValue([
+      makeItem('itm_1', { title: 'My note', kind: 'note' }),
+      makeItem('itm_2', { title: 'Transcript', kind: 'transcript' }),
+    ])
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    await act(async () => {
+      await result.current.refreshList()
+    })
+    expect(result.current.visibleItems.map((i) => i.id)).toEqual(['itm_1'])
+    act(() => result.current.setShowTranscripts(true))
+    expect(result.current.visibleItems.map((i) => i.id)).toEqual(['itm_1', 'itm_2'])
+  })
+
+  it('filters the rail list as you type', async () => {
+    const lkv = window.lkv as any
+    lkv.items.list.mockResolvedValue([
+      makeItem('itm_1', { title: 'Alpha note' }),
+      makeItem('itm_2', { title: 'Beta note' }),
+    ])
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    await act(async () => {
+      await result.current.refreshList()
+    })
+    act(() => result.current.setRailQuery('alpha'))
+    expect(result.current.visibleItems.map((i) => i.id)).toEqual(['itm_1'])
+  })
 })

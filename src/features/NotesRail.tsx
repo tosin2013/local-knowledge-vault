@@ -4,7 +4,9 @@ import {
   Button,
   Chip,
   FormControl,
+  FormControlLabel,
   IconButton,
+  InputAdornment,
   InputLabel,
   List,
   ListItemButton,
@@ -12,6 +14,7 @@ import {
   Paper,
   Select,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material'
@@ -21,6 +24,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import SearchIcon from '@mui/icons-material/Search'
 import type { Item, ItemFilters, Para } from '../../electron/types'
 import { isValidHttpUrl, KIND_OPTIONS, PARA_OPTIONS, paraLabel, STATUS_OPTIONS } from '../domain'
 
@@ -35,12 +39,18 @@ export interface NotesRailProps {
   importUrl: string
   importBusy: boolean
   busy: boolean
+  railQuery: string
+  railSort: 'updated' | 'title' | 'created'
+  showTranscripts: boolean
   onNewNote: () => void
   onImportUrl: (v: string) => void
   onImport: () => void
   onProject: (project: string) => void
   onManageProjects: () => void
   onDeleteItem: (id: string) => void
+  onRailQuery: (v: string) => void
+  onRailSort: (v: 'updated' | 'title' | 'created') => void
+  onShowTranscripts: (v: boolean) => void
   onFilters: Dispatch<SetStateAction<ItemFilters>>
   onFiltersOpen: (open: boolean) => void
   onSelect: (id: string, opts?: { edit?: boolean }) => void
@@ -58,12 +68,18 @@ export function NotesRail(props: NotesRailProps) {
     importUrl,
     importBusy,
     busy,
+    railQuery,
+    railSort,
+    showTranscripts,
     onNewNote,
     onImportUrl,
     onImport,
     onProject,
     onManageProjects,
     onDeleteItem,
+    onRailQuery,
+    onRailSort,
+    onShowTranscripts,
     onFilters,
     onFiltersOpen,
     onSelect,
@@ -250,6 +266,49 @@ export function NotesRail(props: NotesRailProps) {
             )}
           </Box>
         )}
+
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="Filter notes…"
+          value={railQuery}
+          onChange={(e) => onRailQuery(e.target.value)}
+          aria-label="Filter notes"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <Stack direction="row" spacing={1} alignItems="center">
+          <FormControl size="small" sx={{ minWidth: 110 }}>
+            <InputLabel id="rail-sort-label">Sort</InputLabel>
+            <Select
+              labelId="rail-sort-label"
+              label="Sort"
+              value={railSort}
+              onChange={(e) => onRailSort(e.target.value as 'updated' | 'title' | 'created')}
+            >
+              <MenuItem value="updated">Updated</MenuItem>
+              <MenuItem value="title">Title</MenuItem>
+              <MenuItem value="created">Created</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showTranscripts}
+                onChange={(e) => onShowTranscripts(e.target.checked)}
+              />
+            }
+            label={<Typography variant="caption">Transcripts</Typography>}
+            title="Show transcript chunks (media captions) in the list"
+            sx={{ m: 0 }}
+          />
+        </Stack>
 
         <Typography variant="caption" color="text.secondary">
           {filterSummary} · {items.length} notes
