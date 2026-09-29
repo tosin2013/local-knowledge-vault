@@ -65,9 +65,10 @@ non-zero on failure. If you change behaviour, extend the matching script. `test:
 `test:mcp-discovery` use the network and are not part of CI.
 
 CI uploads `coverage/lcov.info` to [Codecov](https://app.codecov.io/gh/tosin2013/local-knowledge-vault).
-Gates are in `codecov.yml`: total coverage may not drop more than 1% below `main`, and lines a pull
+Gates are in `codecov.yml`: total project coverage must stay at or above 80%, and lines a pull
 request adds or changes need 70% coverage. The main process (`electron/`) is gated at 80% lines
-(`npm run coverage:main`, mirrored by the Codecov `main-process` component).
+(`npm run coverage:main`, mirrored by the Codecov `main-process` component), and the renderer
+(`src/`) at 70% lines (Codecov `renderer` component).
 Open `coverage/lcov-report/index.html` after `npm run coverage` to see which lines your change left untested.
 
 UI changes also need a manual check in `npm run dev`, because no test mounts the renderer yet.

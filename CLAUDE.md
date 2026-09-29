@@ -29,6 +29,7 @@ npm run test:media          # SRT/VTT caption parsing and chunking
 npm run test:citation-pack  # citation pack export
 npm run coverage            # every test:* suite in test:ci under c8 → coverage/lcov.info (CI uploads to Codecov)
 npm run coverage:main       # same main-process run, failing below 80% electron/ lines (the #83 gate)
+# Floors (#89): whole project ≥ 80%, renderer (src/) ≥ 70% — see codecov.yml.
 npm run test:providers:live # live Groq call with saved key (network)
 npm run test:mcp-discovery  # Notion MCP discovery (network)
 ```

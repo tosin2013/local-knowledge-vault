@@ -1,0 +1,8 @@
+{
+  "$comment": "Completion bar for #89: whole-project >= 80% coverage gate (landed last). Sets the Codecov project status target to a fixed 80% floor and the renderer component status to a fixed 70% floor; updates goal text in codecov.yml, CONTRIBUTING.md, CLAUDE.md. Verified: npm run coverage merges to 89.1% project (src/ 79.1%, electron/ 91.2%), clearing both floors.",
+  "authority_id": "89",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
