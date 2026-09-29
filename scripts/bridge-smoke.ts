@@ -11,6 +11,7 @@ import path from 'path'
 import fs from 'fs'
 
 import { setUserDataDirOverride } from '../electron/user-data'
+import { initDb, closeDb } from '../electron/db'
 import {
   startBridgeServer,
   stopBridgeServer,
@@ -67,6 +68,9 @@ function request(
 async function main() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-bridge-smoke-'))
   setUserDataDirOverride(dir)
+  // Seeded DB so /v1/ask can resolve (searchQuery needs an open database).
+  const dbFile = path.join(dir, 'test.sqlite')
+  initDb(dbFile)
 
   const port = 20000 + Math.floor(Math.random() * 30000)
   const server = startBridgeServer(port)
@@ -136,6 +140,41 @@ async function main() {
   })
   assert(valid.status !== 401 && valid.status !== 403, `valid token passes auth (got ${valid.status})`)
 
+  // /v1/ask with a question that matches no notes → 200 grounded "couldn't find" (no LLM call)
+  const noMatch = await request(port, {
+    method: 'POST',
+    path: '/v1/ask',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: 'qqqq zzzz a-topic-in-no-vault-note' }),
+  })
+  assert(noMatch.status === 200, `POST /v1/ask no-match → 200 (got ${noMatch.status})`)
+  assert(noMatch.body.includes("couldn't find"), 'no-match answer says it could not find it')
+
+  // bad JSON body → 400
+  const badJson = await request(port, {
+    method: 'POST',
+    path: '/v1/ask',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{not-json',
+  })
+  assert(badJson.status === 400, `POST /v1/ask bad JSON → 400 (got ${badJson.status})`)
+
+  // missing text → 400
+  const noText = await request(port, {
+    method: 'POST',
+    path: '/v1/ask',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  assert(noText.status === 400, `POST /v1/ask missing text → 400 (got ${noText.status})`)
+
+  // unknown route → 404
+  const unknown = await request(port, {
+    path: '/v1/does-not-exist',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  assert(unknown.status === 404, `GET unknown route → 404 (got ${unknown.status})`)
+
   // rotation invalidates the old token
   const rotated = rotateBridgeToken()
   assert(rotated !== token && rotated.length >= 32, 'rotateBridgeToken produces a new token')
@@ -145,6 +184,7 @@ async function main() {
   })
   assert(oldAfterRotate.status === 401, `old token rejected after rotation → 401 (got ${oldAfterRotate.status})`)
 
+  closeDb()
   stopBridgeServer()
   setUserDataDirOverride(null)
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`)
