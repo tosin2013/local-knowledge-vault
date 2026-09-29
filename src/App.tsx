@@ -57,8 +57,6 @@ export default function App() {
   })
   const chat = useChat({
     prompts: prompts.prompts,
-    filters: notes.filters,
-    setFilters: notes.setFilters,
     setBusy,
     setError,
     setStatusMsg,
@@ -227,7 +225,7 @@ export default function App() {
             onNewNote={notes.onNewNote}
             onImportUrl={notes.setImportUrl}
             onImport={() => void notes.onImportFromUrl()}
-            onProject={chat.onNotesFromChange}
+            onProject={(project) => notes.setFilters((f) => ({ ...f, project }))}
             onManageProjects={() => setManageProjectsOpen(true)}
             onDeleteItem={(id) => void notes.deleteItemById(id)}
             onRailQuery={notes.setRailQuery}
@@ -301,7 +299,7 @@ export default function App() {
                 prompts={prompts.prompts}
                 selectedPromptId={chat.selectedPromptId}
                 projectOptions={notes.projectOptions}
-                notesFrom={notes.filters.project ?? ''}
+                notesFrom={chat.project}
                 profileRenameOpen={chat.profileRenameOpen}
                 profileRenameName={chat.profileRenameName}
                 profileSaveOpen={chat.profileSaveOpen}
@@ -344,7 +342,7 @@ export default function App() {
                 onOpenProfileSave={() => {
                   const prompt = prompts.prompts.find((p) => p.id === chat.selectedPromptId)
                   const persona = prompt ? personalityDisplayName(prompt) : 'Custom'
-                  const proj = (notes.filters.project ?? '').trim()
+                  const proj = chat.project.trim()
                   chat.setProfileSaveName(proj ? `${persona} · ${proj}` : persona)
                   chat.setProfileSaveOpen(true)
                   chat.setProfileRenameOpen(false)
@@ -363,7 +361,7 @@ export default function App() {
                     kind: 'note',
                     para: 'resources',
                     status: AI_DRAFT_STATUS,
-                    project: notes.filters.project ?? null,
+                    project: chat.project.trim() || null,
                   })
                 }}
                 onSelectSession={(id) => void chat.onSelectSession(id)}

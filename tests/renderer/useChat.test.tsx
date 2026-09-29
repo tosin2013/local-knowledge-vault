@@ -6,9 +6,6 @@ import { makeMessage, makeProfile, makePrompt, makeSession } from './lkv'
 function makeDeps(overrides: Partial<UseChatDeps> = {}): UseChatDeps {
   return {
     prompts: [],
-    filters: { para: '', kind: '', status: '', project: '' },
-    setFilters: vi.fn(),
-    setKnownProjects: vi.fn(),
     setBusy: vi.fn(),
     setError: vi.fn(),
     setStatusMsg: vi.fn(),
@@ -157,10 +154,11 @@ describe('useChat', () => {
   })
 
   it('changes the personality while keeping notes-from', () => {
-    const deps = makeDeps({ prompts: [makePrompt('prm_1')], filters: { para: '', kind: '', status: '', project: 'Work' } })
+    const deps = makeDeps({ prompts: [makePrompt('prm_1')] })
     const { result } = renderHook(() => useChat(deps))
+    act(() => result.current.onNotesFromChange('Work'))
     act(() => result.current.onChatPromptChange('prm_1'))
-    expect(deps.setFilters).toHaveBeenCalled()
+    expect(result.current.project).toBe('Work')
   })
 
   it('re-picks the profile when the selected prompt is deleted', () => {
@@ -187,7 +185,7 @@ describe('useChat', () => {
 
   it('exposes the scope hint and ask-empty copy', () => {
     const prompts = [makePrompt('prm_1', 'Grounded default')]
-    const { result } = renderHook(() => useChat(makeDeps({ prompts, filters: { para: '', kind: '', status: '', project: '' } })))
+    const { result } = renderHook(() => useChat(makeDeps({ prompts })))
     expect(result.current.askEmpty.title).toContain('Ask anything')
   })
 })
