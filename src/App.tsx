@@ -18,6 +18,7 @@ import { NotePeek } from './features/NotePeek'
 import { AiSettingsDialog } from './features/AiSettingsDialog'
 import { ContentChrome } from './features/ContentChrome'
 import { ManageProjectsDialog } from './features/ManageProjectsDialog'
+import { TrashDialog } from './features/TrashDialog'
 
 export default function App() {
   // Cross-cutting navigation / notification state.
@@ -28,6 +29,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [manageProjectsOpen, setManageProjectsOpen] = useState(false)
+  const [trashOpen, setTrashOpen] = useState(false)
 
   // Focus targets for the app menu / keyboard shortcuts (⌘F search, ⌘K ask).
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -72,6 +74,7 @@ export default function App() {
     if (!hasApi) return
     void notes.refreshList()
     void notes.refreshProjects()
+    void notes.refreshTrashed()
     void providers.refreshLlm()
     void chat.refreshSessions()
     void prompts.refreshPrompts()
@@ -82,6 +85,7 @@ export default function App() {
     hasApi,
     notes.refreshList,
     notes.refreshProjects,
+    notes.refreshTrashed,
     providers.refreshLlm,
     chat.refreshSessions,
     prompts.refreshPrompts,
@@ -229,6 +233,10 @@ export default function App() {
             onRailQuery={notes.setRailQuery}
             onRailSort={notes.setRailSort}
             onShowTranscripts={notes.setShowTranscripts}
+            onOpenTrash={() => setTrashOpen(true)}
+            bulkSelected={notes.bulkSelected}
+            onToggleBulk={notes.toggleBulkSelect}
+            onBulkTrash={() => void notes.bulkTrash()}
             onFilters={notes.setFilters}
             onFiltersOpen={notes.setFiltersOpen}
             onSelect={notes.selectItem}
@@ -414,6 +422,15 @@ export default function App() {
           onRename={(from, to) => void notes.renameProject(from, to)}
           onMerge={(from, into) => void notes.mergeProject(from, into)}
           onDelete={(name) => void notes.deleteProject(name)}
+        />
+
+        <TrashDialog
+          open={trashOpen}
+          items={notes.trashed}
+          busy={busy}
+          onClose={() => setTrashOpen(false)}
+          onRestore={(id) => void notes.restoreItem(id)}
+          onEmpty={() => void notes.emptyTrash()}
         />
 
         <ProviderDialog

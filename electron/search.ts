@@ -34,7 +34,7 @@ export function searchQuery(input: SearchQueryInput): SearchQueryResult {
                 substr(COALESCE(summary, body), 1, 160) AS snippet,
                 0.0 AS score
          FROM items
-         WHERE 1=1${sql}
+         WHERE status != 'trashed'${sql}
          ORDER BY updated_at DESC
          LIMIT ?`
       )
@@ -63,7 +63,7 @@ export function searchQuery(input: SearchQueryInput): SearchQueryResult {
        FROM items_fts
        JOIN items i ON i.rowid = items_fts.rowid
        WHERE items_fts MATCH ?
-         AND i.id IN (SELECT id FROM items WHERE 1=1${filterSql})
+         AND i.id IN (SELECT id FROM items WHERE status != 'trashed'${filterSql})
        ORDER BY ${orderBy}
        LIMIT ?`
     )

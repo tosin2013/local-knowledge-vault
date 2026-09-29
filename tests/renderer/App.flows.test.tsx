@@ -185,7 +185,7 @@ describe('App flows — Notes rail + note peek', () => {
     fireEvent.click(await screen.findByText('Edit'))
     fireEvent.click(screen.getByText('Delete'))
 
-    await waitFor(() => expect(lkv.items.delete).toHaveBeenCalledWith('itm_1'))
+    await waitFor(() => expect(lkv.items.trash).toHaveBeenCalledWith('itm_1'))
   })
 
   it('filters the notes rail by project', async () => {

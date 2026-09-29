@@ -86,7 +86,7 @@ describe('useNotes', () => {
     await act(async () => {
       await result.current.onDelete()
     })
-    expect(lkv.items.delete).toHaveBeenCalledWith('itm_1')
+    expect(lkv.items.trash).toHaveBeenCalledWith('itm_1')
   })
 
   it('imports from a URL', async () => {
@@ -216,5 +216,39 @@ describe('useNotes', () => {
     })
     act(() => result.current.setRailQuery('alpha'))
     expect(result.current.visibleItems.map((i) => i.id)).toEqual(['itm_1'])
+  })
+
+  it('bulk-trashes selected notes', async () => {
+    const lkv = window.lkv as any
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    act(() => {
+      result.current.toggleBulkSelect('itm_1')
+      result.current.toggleBulkSelect('itm_2')
+    })
+    expect(result.current.bulkSelected).toEqual(new Set(['itm_1', 'itm_2']))
+    await act(async () => {
+      await result.current.bulkTrash()
+    })
+    expect(lkv.items.trash).toHaveBeenCalledWith('itm_1')
+    expect(lkv.items.trash).toHaveBeenCalledWith('itm_2')
+    expect(result.current.bulkSelected.size).toBe(0)
+  })
+
+  it('restores a trashed note and empties the trash', async () => {
+    const lkv = window.lkv as any
+    lkv.items.listTrashed.mockResolvedValue([makeItem('itm_1', { title: 'Trashed' })])
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    await act(async () => {
+      await result.current.refreshTrashed()
+    })
+    expect(result.current.trashed.map((i) => i.id)).toEqual(['itm_1'])
+    await act(async () => {
+      await result.current.restoreItem('itm_1')
+    })
+    expect(lkv.items.restore).toHaveBeenCalledWith('itm_1')
+    await act(async () => {
+      await result.current.emptyTrash()
+    })
+    expect(lkv.items.emptyTrash).toHaveBeenCalled()
   })
 })

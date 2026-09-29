@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
   FormControl,
   FormControlLabel,
@@ -51,6 +52,10 @@ export interface NotesRailProps {
   onRailQuery: (v: string) => void
   onRailSort: (v: 'updated' | 'title' | 'created') => void
   onShowTranscripts: (v: boolean) => void
+  onOpenTrash: () => void
+  bulkSelected: Set<string>
+  onToggleBulk: (id: string) => void
+  onBulkTrash: () => void
   onFilters: Dispatch<SetStateAction<ItemFilters>>
   onFiltersOpen: (open: boolean) => void
   onSelect: (id: string, opts?: { edit?: boolean }) => void
@@ -80,6 +85,10 @@ export function NotesRail(props: NotesRailProps) {
     onRailQuery,
     onRailSort,
     onShowTranscripts,
+    onOpenTrash,
+    bulkSelected,
+    onToggleBulk,
+    onBulkTrash,
     onFilters,
     onFiltersOpen,
     onSelect,
@@ -103,6 +112,29 @@ export function NotesRail(props: NotesRailProps) {
         >
           New note
         </Button>
+
+        {bulkSelected.size > 0 ? (
+          <Button
+            fullWidth
+            size="small"
+            color="error"
+            variant="contained"
+            startIcon={<DeleteOutlineIcon />}
+            onClick={onBulkTrash}
+          >
+            Trash {bulkSelected.size} selected
+          </Button>
+        ) : (
+          <Button
+            fullWidth
+            size="small"
+            variant="outlined"
+            startIcon={<DeleteOutlineIcon />}
+            onClick={onOpenTrash}
+          >
+            Trash
+          </Button>
+        )}
 
         {advanced && (
           <Stack spacing={0.5}>
@@ -345,6 +377,14 @@ export function NotesRail(props: NotesRailProps) {
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+                <Checkbox
+                  size="small"
+                  checked={bulkSelected.has(it.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => onToggleBulk(it.id)}
+                  inputProps={{ 'aria-label': `Select ${it.title}` }}
+                  sx={{ p: 0, mr: 0.5, mt: -0.25 }}
+                />
                 <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, mt: 0.25 }}>
                   {it.title}
                 </Typography>

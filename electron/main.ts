@@ -15,6 +15,7 @@ import {
   deleteItem,
   deletePrompt,
   deleteSession,
+  emptyTrash,
   getChatProfile,
   getItem,
   getPrompt,
@@ -26,9 +27,12 @@ import {
   listPrompts,
   listSessions,
   listProjects,
+  listTrashedItems,
   renameProject,
   mergeProject,
   deleteProject,
+  restoreItem,
+  trashItem,
   updateChatProfile,
   updateItem,
   updatePrompt,
@@ -384,6 +388,10 @@ function registerIpc(): void {
   ipcMain.handle('items:delete', (_e, id: string) => {
     return deleteItem(id)
   })
+  ipcMain.handle('items:trash', (_e, id: string) => trashItem(id))
+  ipcMain.handle('items:restore', (_e, id: string) => restoreItem(id))
+  ipcMain.handle('items:listTrashed', () => listTrashedItems())
+  ipcMain.handle('items:emptyTrash', () => emptyTrash())
 
   ipcMain.handle('search:query', (_e, input: SearchQueryInput) => {
     return searchQuery(input)

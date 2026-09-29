@@ -72,6 +72,10 @@ const api = {
     update: (id: string, patch: UpdateItemPatch): Promise<Item | null> =>
       ipcRenderer.invoke('items:update', id, patch),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('items:delete', id),
+    trash: (id: string): Promise<boolean> => ipcRenderer.invoke('items:trash', id),
+    restore: (id: string): Promise<boolean> => ipcRenderer.invoke('items:restore', id),
+    listTrashed: (): Promise<Item[]> => ipcRenderer.invoke('items:listTrashed'),
+    emptyTrash: (): Promise<number> => ipcRenderer.invoke('items:emptyTrash'),
   },
   search: {
     query: (input: SearchQueryInput): Promise<SearchQueryResult> =>

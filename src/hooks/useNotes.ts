@@ -41,6 +41,9 @@ export function useNotes(deps: UseNotesDeps) {
   const [railSort, setRailSort] = useState<'updated' | 'title' | 'created'>('updated')
   // Find "show more" pagination.
   const [findLimit, setFindLimit] = useState(20)
+  // Trash (soft-delete) + rail bulk-select.
+  const [trashed, setTrashed] = useState<Item[]>([])
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
 
   const refreshList = useCallback(async () => {
     if (!window.lkv) return
@@ -290,13 +293,60 @@ export function useNotes(deps: UseNotesDeps) {
       setPeekEditing(false)
       return
     }
-    if (!confirm(`Delete “${draft.title}”?`)) return
-    await window.lkv.items.delete(draft.id)
+    // Soft-delete to trash (reversible — no confirm needed).
+    await window.lkv.items.trash(draft.id)
     setSelectedId(null)
     setDraft(null)
     setDirty(false)
     setNotePeekOpen(false)
     setPeekEditing(false)
+    await refreshList()
+    void refreshProjects()
+    void refreshTrashed()
+  }
+
+  /** Refresh the trash list. */
+  const refreshTrashed = async () => {
+    if (!window.lkv?.items?.listTrashed) return
+    setTrashed(await window.lkv.items.listTrashed())
+  }
+
+  /** Toggle one note in the rail bulk-selection set. */
+  const toggleBulkSelect = (id: string) => {
+    setBulkSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  /** Move every selected note to the trash. */
+  const bulkTrash = async () => {
+    if (!window.lkv?.items?.trash || bulkSelected.size === 0) return
+    for (const id of bulkSelected) {
+      await window.lkv.items.trash(id)
+    }
+    setBulkSelected(new Set())
+    await refreshList()
+    void refreshProjects()
+    void refreshTrashed()
+  }
+
+  /** Restore a trashed note. */
+  const restoreItem = async (id: string) => {
+    if (!window.lkv?.items?.restore) return
+    await window.lkv.items.restore(id)
+    await refreshTrashed()
+    await refreshList()
+    void refreshProjects()
+  }
+
+  /** Permanently empty the trash. */
+  const emptyTrash = async () => {
+    if (!window.lkv?.items?.emptyTrash) return
+    await window.lkv.items.emptyTrash()
+    await refreshTrashed()
     await refreshList()
     void refreshProjects()
   }
@@ -417,6 +467,13 @@ export function useNotes(deps: UseNotesDeps) {
     confirmDraft,
     onDelete,
     deleteItemById,
+    trashed,
+    refreshTrashed,
+    bulkSelected,
+    toggleBulkSelect,
+    bulkTrash,
+    restoreItem,
+    emptyTrash,
     renameProject,
     mergeProject,
     deleteProject,
