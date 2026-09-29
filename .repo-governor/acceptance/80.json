@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #80: media ingest remaining paths. New scripts/media-ingest-smoke.ts (30 assertions) wired into test:ci as test:media-ingest. Covers: ingestLocalMedia no-cue/missing errors + replaceExisting:false append; ensureMediaReaderPrompt stale-body update; findCompanionCaptions unreadable-dir fallback; resolveYtDlp env hit + isolated miss; runYtDlp spawn-error + output-cap kill; ingestYoutubeMedia validation (empty/foreign/missing/cueless), yt-dlp-missing, full stubbed yt-dlp download path via LKV_YTDLP_PATH stub (metadata track pick, subtitle download, title file, transaction), no-English/429/failed-download errors, captionsPath title probe; youtubeEmbedUrl; listMediaProjects local/youtube/unknown; notesNearPlayhead hit/miss. media-ingest.ts 76% -> 97.1%.",
+  "authority_id": "80",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:media-ingest" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
