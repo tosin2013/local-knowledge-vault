@@ -15,7 +15,7 @@ describe('ManagePluginsView', () => {
     render(<ManagePluginsView />)
     expect(screen.getByText('Manage plugins')).toBeInTheDocument()
     expect(screen.getByText('Media chat')).toBeInTheDocument()
-    expect(screen.getByText('Media personas')).toBeInTheDocument()
+    expect(screen.getByText('Media voices')).toBeInTheDocument()
     expect(screen.getByText('MCP connections')).toBeInTheDocument()
   })
 

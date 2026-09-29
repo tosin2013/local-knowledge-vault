@@ -409,7 +409,7 @@ function registerIpc(): void {
   )
   ipcMain.handle('prompts:delete', (_e, id: string) => deletePrompt(id))
 
-  // Chat profiles (user-saved Personality + Notes from)
+  // Chat profiles (user-saved Personality + Project)
   ipcMain.handle('profiles:list', () => listChatProfiles())
   ipcMain.handle('profiles:get', (_e, id: string) => getChatProfile(id))
   ipcMain.handle('profiles:create', (_e, input: CreateChatProfileInput) =>

@@ -64,7 +64,7 @@ describe('App flows — Ask', () => {
       messages: [
         makeMessage({
           role: 'assistant',
-          content: "I couldn't find that in your notes. Try different words, or clear Notes from / Profile scope.",
+          content: "I couldn't find that in your notes. Try different words, or clear Project / Profile scope.",
         }),
       ],
       session: makeSession('s_1'),

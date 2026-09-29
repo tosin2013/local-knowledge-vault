@@ -142,7 +142,7 @@ export function NotesRail(props: NotesRailProps) {
         </FormControl>
 
         {advanced && (
-          <Stack direction="row" flexWrap="wrap" gap={0.75} role="group" aria-label="Note group">
+          <Stack direction="row" flexWrap="wrap" gap={0.75} role="group" aria-label="Group">
             <Chip
               size="small"
               label="All"
@@ -210,10 +210,10 @@ export function NotesRail(props: NotesRailProps) {
             </FormControl>
             {advanced && (
               <FormControl size="small" fullWidth sx={{ gridColumn: '1 / -1' }}>
-                <InputLabel id="para-filter-label">PARA</InputLabel>
+                <InputLabel id="para-filter-label">Group</InputLabel>
                 <Select
                   labelId="para-filter-label"
-                  label="PARA"
+                  label="Group"
                   value={filters.para ?? ''}
                   onChange={(e) =>
                     onFilters((f) => ({

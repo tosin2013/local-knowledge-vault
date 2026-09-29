@@ -62,7 +62,7 @@ Prefer a cloud model? Click the AI chip → **Add provider**, pick a preset, pas
 - **Any model you like.** Local models first, or OpenAI, Anthropic, Gemini, OpenRouter, Mistral,
   DeepSeek, Together, Groq, xAI, or any OpenAI-compatible URL.
 - **Plugins you can share safely.** A plugin is a `plugin.json` folder or zip. It adds presets,
-  personas and prompts, and it cannot run code.
+  voices and prompt packs, and it cannot run code.
 - **Low ceremony.** Ask is the home screen. Simple mode hides the knobs; Advanced shows them.
 
 ## Features
@@ -104,10 +104,10 @@ explains why a broken pack was rejected.
   impersonation that avoids YouTube 429 errors) or open a local video/audio file with its `.srt`/`.vtt` captions. Captions
   become timed transcript notes you can ask about. With local media, clicking a citation seeks the
   player; YouTube embeds show the timestamp instead. Player and chat can go fullscreen together.
-- **Media personas.** Reusable voices (Desk cohost, Curious student, Skeptical investor, or your
+- **Media voices.** Reusable voices (Desk cohost, Curious student, Skeptical investor, or your
   own) that change the speaking style but keep the same grounding rules. One install works for
   every video.
-- **Personalities and profiles** for Ask, plus PARA metadata (Projects / Areas / Resources /
+- **Personalities and profiles** for Ask, plus note groups (Projects / Areas / Resources /
   Archives), kinds, status and project filters.
 - **Add from URL.** Fetches a public web page, extracts the text and auto-tags it as a note
   (Advanced mode).
@@ -150,7 +150,7 @@ and environment variables: **[docs/providers.md](docs/providers.md)**.
 ## Plugins
 
 A plugin is a folder with a `plugin.json` (plus optional Markdown and image files). It can add
-provider presets, personas, quick-ask prompt packs and MCP server presets. It cannot run code, and
+provider presets, voices, quick-ask prompt packs and MCP server presets. It cannot run code, and
 it cannot ship API keys or custom headers.
 
 ```json

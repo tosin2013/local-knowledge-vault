@@ -447,10 +447,10 @@ export function ChatView(props: ChatViewProps) {
                       </Select>
                     </FormControl>
                     <FormControl size="small" sx={{ flex: 1, minWidth: 160 }}>
-                      <InputLabel id="notes-from-label">Notes from</InputLabel>
+                      <InputLabel id="notes-from-label">Project</InputLabel>
                       <Select
                         labelId="notes-from-label"
-                        label="Notes from"
+                        label="Project"
                         value={notesFrom}
                         onChange={(e) => onNotesFrom(String(e.target.value))}
                       >
@@ -585,12 +585,11 @@ export function ChatView(props: ChatViewProps) {
               onClick={onExportCitationPack}
               aria-label="Export citation pack"
             >
-              Export pack
+              Export citation pack
             </Button>
           )}
-          <Typography variant="caption" color="text.secondary" title="Brainstorm mode not in this slice">
+          <Typography variant="caption" color="text.secondary">
             Answers from your notes
-            {advanced && <span> · Coming soon: brainstorm</span>}
           </Typography>
         </Stack>
         <Box className="session-list" sx={{ p: 1 }}>

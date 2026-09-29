@@ -151,7 +151,7 @@ export async function askGrounded(input: AskGroundedInput): Promise<AskGroundedR
   if (hits.length === 0) {
     return {
       answer:
-        'I couldn\'t find that in your notes. Try different words, or broaden Notes from / Profile if you\'re narrowed to one project.',
+        'I couldn\'t find that in your notes. Try different words, or broaden Project / Profile if you\'re narrowed to one project.',
       citations: [],
       hits: [],
     }

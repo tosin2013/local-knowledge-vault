@@ -380,7 +380,7 @@ export interface ImportFromUrlResult {
 }
 
 
-/* ---- Chat profiles (user-saved Personality + Notes from) ---- */
+/* ---- Chat profiles (user-saved Personality + Project) ---- */
 
 export interface ChatProfile {
   id: string

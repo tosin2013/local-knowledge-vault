@@ -77,7 +77,7 @@ export function usePrompts(deps: UsePromptsDeps) {
 
   const onDeletePrompt = async () => {
     if (!window.lkv || !editingPrompt) return
-    if (!confirm(`Delete prompt “${editingPrompt.name}”?`)) return
+    if (!confirm(`Delete personality “${editingPrompt.name}”?`)) return
     const deletedId = editingPrompt.id
     await window.lkv.prompts.delete(deletedId)
     onPromptDeleted(deletedId)

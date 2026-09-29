@@ -14,7 +14,7 @@ describe('plugin registry', () => {
 
   it('gets a built-in plugin by id', () => {
     expect(getPlugin('media-chat')?.name).toBe('Media chat')
-    expect(getPlugin('media-personas')?.name).toBe('Media personas')
+    expect(getPlugin('media-personas')?.name).toBe('Media voices')
   })
 
   it('gets the manage-plugins system panel', () => {

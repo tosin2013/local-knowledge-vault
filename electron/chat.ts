@@ -234,7 +234,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     const project = (input.filters?.project ?? '').trim()
     const soft = project
       ? `I couldn't find that in your ${project} notes. Try a name or topic from those notes, or switch Profile to search more broadly.`
-      : `I couldn't find that in your notes. Try different words, or clear Notes from / Profile scope if you're narrowed to one project.`
+      : `I couldn't find that in your notes. Try different words, or clear Project / Profile scope if you're narrowed to one project.`
     return finish(soft, [], [])
   }
 

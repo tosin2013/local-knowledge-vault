@@ -76,7 +76,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
 
   const ensureAll = async () => {
     if (!window.lkv?.media?.ensurePersonas) {
-      setError('Media personas IPC is unavailable. Restart the app after updating.')
+      setError('Media voices IPC is unavailable. Restart the app after updating.')
       return
     }
     setBusy(true)
@@ -90,8 +90,8 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
       if (r.updated.length) bits.push(`refreshed ${r.updated.join(', ')}`)
       setStatus(
         bits.length
-          ? `Personas ready — ${bits.join('; ')}.`
-          : `All ${r.names.length} Media personas already up to date.`
+          ? `Voices ready — ${bits.join('; ')}.`
+          : `All ${r.names.length} Media voices already up to date.`
       )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -102,7 +102,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
 
   const installOne = async (def: MediaPersonaDef) => {
     if (!window.lkv?.media?.ensurePersonas) {
-      setError('Media personas IPC is unavailable.')
+      setError('Media voices IPC is unavailable.')
       return
     }
     setBusy(true)
@@ -121,7 +121,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
   /** Optional advanced: also save an Ask profile bound to one project. Default path is Install + Media chat chips. */
   const alsoSaveAskProfile = async (personaName: string) => {
     if (!window.lkv?.media?.applyPersona) {
-      setError('Media personas IPC is unavailable.')
+      setError('Media voices IPC is unavailable.')
       return
     }
     const project = selectedProject.trim()
@@ -151,7 +151,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
 
   const saveCustom = async () => {
     if (!window.lkv?.media?.createPersona) {
-      setError('Easy Add persona IPC is unavailable. Restart the app after updating.')
+      setError('Easy Add voice IPC is unavailable. Restart the app after updating.')
       return
     }
     const name = newName.trim()
@@ -195,7 +195,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
       <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
         <RecordVoiceOverIcon color="primary" fontSize="small" />
         <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
-          Media personas
+          Media voices
         </Typography>
         <Button size="small" variant="outlined" disabled={busy || !hasEnsureApi} onClick={() => void ensureAll()}>
           Install / refresh all
@@ -213,7 +213,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
             <AddIcon color="primary" fontSize="small" />
             <Typography variant="subtitle1" fontWeight={600}>
-              Add persona
+              Add voice
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
@@ -266,7 +266,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
             onClick={() => void saveCustom()}
             title={!hasCreateApi ? 'Restart app after update' : undefined}
           >
-            Save persona
+            Save voice
           </Button>
         </CardActions>
       </Card>
@@ -290,8 +290,8 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
       />
 
       <Typography variant="body2" color="text.secondary">
-        Voice packs work with any ingested media (not one persona per video). Install built-ins below, or use
-        Add persona above, then pick them as chips in Media chat.
+        Voice packs work with any ingested media (not one voice per video). Install built-ins below, or use
+        Add voice above, then pick them as chips in Media chat.
       </Typography>
 
       <Typography variant="subtitle2" fontWeight={600}>
@@ -351,7 +351,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
       </Typography>
       {customPacks.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
-          No custom personas yet — use Add persona above.
+          No custom voices yet — use Add voice above.
         </Typography>
       ) : (
         <Box
@@ -396,7 +396,7 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
       <Alert severity="info" variant="outlined">
         <Typography variant="body2">
           After install, use the voice chips in <strong>Media chat</strong> — the open media project scopes
-          notes; the persona only changes voice. You can also pick the personality in{' '}
+          notes; the voice only changes style. You can also pick the personality in{' '}
           <strong>Ask → Customize</strong>. Grounding rules always win over style.
         </Typography>
       </Alert>
