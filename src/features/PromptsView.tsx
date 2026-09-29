@@ -1,7 +1,15 @@
-import { Box, Button, List, ListItemButton, Paper, Stack, TextField, Typography } from '@mui/material'
+import { useState } from 'react'
+import { Box, Button, Chip, Link, List, ListItemButton, Paper, Stack, TextField, Typography } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import type { Prompt } from '../../electron/types'
 import { personalityDisplayName } from '../domain'
+import {
+  PERSONALITY_CAN_CHANGE,
+  PERSONALITY_HELPER_PROMPT,
+  PERSONALITY_TEMPLATES,
+  type PersonalityTemplate,
+} from '../personalityHelp'
 
 export interface PromptDraft {
   name: string
@@ -45,6 +53,23 @@ export function PromptsView(props: PromptsViewProps) {
     onDeletePrompt,
     onSavePrompt,
   } = props
+
+  const [copied, setCopied] = useState(false)
+
+  const applyTemplate = (t: PersonalityTemplate) => {
+    onDraft(() => ({ name: t.name, description: t.description, body: t.instructions }))
+    onDirty(true)
+  }
+
+  const copyHelperPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(PERSONALITY_HELPER_PROMPT)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* clipboard may be unavailable (file:// or denied) */
+    }
+  }
 
   return (
     <Box className="prompts-layout">
@@ -160,6 +185,29 @@ export function PromptsView(props: PromptsViewProps) {
               </Box>
             ) : (
               <>
+                <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 1.5 }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
+                    What a personality can change
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {PERSONALITY_CAN_CHANGE}
+                  </Typography>
+                </Box>
+                <Stack direction="row" flexWrap="wrap" alignItems="center" gap={0.75}>
+                  <Typography variant="caption" color="text.secondary">
+                    Start from a template:
+                  </Typography>
+                  {PERSONALITY_TEMPLATES.map((t) => (
+                    <Chip
+                      key={t.name}
+                      size="small"
+                      variant="outlined"
+                      label={t.name}
+                      title={t.description}
+                      onClick={() => applyTemplate(t)}
+                    />
+                  ))}
+                </Stack>
                 <TextField
                   fullWidth
                   multiline
@@ -176,6 +224,20 @@ export function PromptsView(props: PromptsViewProps) {
                 <Typography variant="caption" color="text.secondary">
                   Answers still come from your notes. These instructions only change tone and format.
                 </Typography>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => void copyHelperPrompt()}>
+                    {copied ? 'Copied' : 'Copy helper prompt'}
+                  </Button>
+                  <Link
+                    component="a"
+                    href="https://github.com/tosin2013/local-knowledge-vault/blob/main/docs/personalities.md"
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="caption"
+                  >
+                    Personality guide
+                  </Link>
+                </Stack>
                 <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
                   {editingPrompt && (
                     <Button color="error" variant="outlined" onClick={onDeletePrompt}>
