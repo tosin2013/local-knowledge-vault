@@ -46,6 +46,11 @@ export function searchQuery(input: SearchQueryInput): SearchQueryResult {
   // Filter metadata first via subquery, then FTS on matching rowids
   const { sql: filterSql, params: filterParams } = buildFilterClause(filters)
 
+  // Notes-first (#138): when sourcesLast is set, transcript (source) chunks rank
+  // after the user's own notes. Media chat passes sourcesLast=false to stay
+  // transcript-first (it is chat with the video).
+  const orderBy = input.sourcesLast ? '(i.kind = \'transcript\'), score' : 'score'
+
   const rows = database
     .prepare(
       `SELECT i.id, i.title, i.para, i.kind, i.project,
@@ -55,7 +60,7 @@ export function searchQuery(input: SearchQueryInput): SearchQueryResult {
        JOIN items i ON i.rowid = items_fts.rowid
        WHERE items_fts MATCH ?
          AND i.id IN (SELECT id FROM items WHERE 1=1${filterSql})
-       ORDER BY score
+       ORDER BY ${orderBy}
        LIMIT ?`
     )
     .all(fts, ...filterParams, limit) as Record<string, unknown>[]

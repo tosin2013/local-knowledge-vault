@@ -72,6 +72,8 @@ export interface SearchQueryInput {
   text: string
   filters?: ItemFilters
   limit?: number
+  /** When true, transcript (source) chunks sort after the user's own notes. */
+  sourcesLast?: boolean
 }
 
 export interface SearchQueryResult {
@@ -88,6 +90,8 @@ export interface AskGroundedInput {
   filters?: ItemFilters
   limit?: number
   systemExtra?: string
+  /** When true, transcript (source) chunks sort after the user's own notes. */
+  sourcesLast?: boolean
 }
 
 export interface AskGroundedResult {
@@ -147,6 +151,8 @@ export interface ChatSendInput {
   promptId?: string
   systemPrompt?: string
   limit?: number
+  /** When true, transcript (source) chunks sort after the user's own notes. */
+  sourcesLast?: boolean
 }
 
 export interface ChatSendResult {

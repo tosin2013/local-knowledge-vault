@@ -228,6 +228,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     text: searchText,
     filters: input.filters,
     limit,
+    sourcesLast: input.sourcesLast ?? true,
   })
 
   if (hits.length === 0) {
