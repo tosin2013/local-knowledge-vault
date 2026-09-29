@@ -199,10 +199,10 @@ export function TopBar(props: TopBarProps) {
             >
               <Box>
                 <Typography variant="body2" fontWeight={600}>
-                  Manage plugins…
+                  Add-ons…
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 280 }}>
-                  Install plugin.json packs, enable or remove plugins
+                  Add AI providers, answer styles and connections
                 </Typography>
               </Box>
             </MenuItem>

@@ -213,6 +213,8 @@ async function main(): Promise<void> {
     // plugins
     'plugins:list', 'plugins:reload', 'plugins:setEnabled', 'plugins:remove',
     'plugins:contributions', 'plugins:openFolder', 'plugins:install',
+    'plugins:preview', 'plugins:installFromPath', 'plugins:listRemoved',
+    'plugins:restore', 'plugins:listBundled',
     // app
     'app:openExternal',
     // chat

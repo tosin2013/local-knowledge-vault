@@ -5,6 +5,7 @@
  */
 import fs from 'fs'
 import path from 'path'
+import { app } from 'electron'
 import { resolveUserDataDir } from './user-data'
 import { readZip } from './zip-read'
 import type {
@@ -16,8 +17,11 @@ import type {
   PluginManifest,
   PluginMcpServerPreset,
   PluginPersona,
+  PluginPreview,
+  PluginPreviewResult,
   PluginPromptPack,
   PluginProviderPreset,
+  RemovedPlugin,
 } from './types'
 
 export const PLUGIN_SCHEMA_VERSION = 1
@@ -525,4 +529,174 @@ export function removePlugin(id: string): PluginListResult {
   writeState({ disabled: s.disabled.filter((d) => d !== id) })
   reloadPlugins()
   return listPluginsResult()
+}
+
+/* ---------------- install preview / consent ---------------- */
+
+/** Cloud (non-local) providers with their domains, for the install-consent warning. */
+function cloudProvidersOf(m: PluginManifest): PluginPreview['cloudProviders'] {
+  const out: PluginPreview['cloudProviders'] = []
+  for (const p of m.contributes.providers ?? []) {
+    if (p.kind === 'ollama' || p.local) continue
+    let domain = p.baseUrl
+    try {
+      domain = new URL(p.baseUrl).host
+    } catch {
+      /* keep raw baseUrl */
+    }
+    out.push({ label: p.label, domain })
+  }
+  return out
+}
+
+function localProviderLabels(m: PluginManifest): string[] {
+  return (m.contributes.providers ?? [])
+    .filter((p) => p.kind === 'ollama' || p.local)
+    .map((p) => p.label)
+}
+
+/** Plain-language "what this adds" strings for the preview. */
+function addsSummary(m: PluginManifest): string[] {
+  const out: string[] = []
+  const providers = m.contributes.providers ?? []
+  const local = providers.filter((p) => p.kind === 'ollama' || p.local).length
+  const cloud = providers.length - local
+  if (local || cloud) {
+    const bits: string[] = []
+    if (local) bits.push(`${local} local AI provider${local === 1 ? '' : 's'}`)
+    if (cloud) bits.push(`${cloud} cloud AI provider${cloud === 1 ? '' : 's'}`)
+    out.push(bits.join(' and '))
+  }
+  const nP = m.contributes.personas?.length ?? 0
+  if (nP) out.push(`${nP} voice${nP === 1 ? '' : 's'} for Media chat`)
+  const nPack = m.contributes.promptPacks?.length ?? 0
+  if (nPack) out.push(`${nPack} prompt pack${nPack === 1 ? '' : 's'} (quick-asks in Ask)`)
+  const nMcp = m.contributes.mcpServers?.length ?? 0
+  if (nMcp) out.push(`${nMcp} MCP connection${nMcp === 1 ? '' : 's'}`)
+  return out
+}
+
+function previewFromManifest(m: PluginManifest, sourcePath: string): PluginPreview {
+  return {
+    id: m.id,
+    name: m.name,
+    version: m.version,
+    description: m.description ?? '',
+    author: m.author,
+    adds: addsSummary(m),
+    cloudProviders: cloudProvidersOf(m),
+    localProviders: localProviderLabels(m),
+    sourcePath,
+  }
+}
+
+/** Read + validate an add-on from a folder/zip WITHOUT installing. */
+export function previewPluginFrom(srcPath: string): PluginPreviewResult {
+  let collected: { files: Array<{ rel: string; data: Buffer }>; skipped: string[] }
+  try {
+    const st = fs.statSync(srcPath)
+    if (st.isDirectory()) collected = collectFolder(srcPath)
+    else if (/\.zip$/i.test(srcPath)) collected = collectZip(srcPath)
+    else if (path.basename(srcPath) === 'plugin.json') collected = collectFolder(path.dirname(srcPath))
+    else return { errors: ['Pick an add-on folder (containing plugin.json) or a .zip'] }
+  } catch (e) {
+    return { errors: [e instanceof Error ? e.message : String(e)] }
+  }
+  if (!collected.files.some((f) => f.rel === 'plugin.json')) {
+    return { errors: ['No plugin.json found at the top of that folder / zip'] }
+  }
+  // Stage to a temp dir so promptFile personas resolve, then validate + discard.
+  const root = pluginsDir()
+  fs.mkdirSync(root, { recursive: true })
+  const staging = path.join(root, `.preview-${stamp()}`)
+  try {
+    for (const f of collected.files) {
+      const dest = path.join(staging, f.rel)
+      if (!dest.startsWith(staging + path.sep)) throw new Error(`Unsafe path: ${f.rel}`)
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.writeFileSync(dest, f.data)
+    }
+    const r = readPluginDir(staging)
+    if (!r.info || !r.info.manifest) return { errors: r.errors }
+    return { preview: previewFromManifest(r.info.manifest, srcPath) }
+  } catch (e) {
+    return { errors: [e instanceof Error ? e.message : String(e)] }
+  } finally {
+    try {
+      fs.rmSync(staging, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/* ---------------- removed plugins (recoverable) ---------------- */
+
+function removedDir(): string {
+  return path.join(resolveUserDataDir(), 'plugins-removed')
+}
+
+export function listRemovedPlugins(): RemovedPlugin[] {
+  const out: RemovedPlugin[] = []
+  let entries: fs.Dirent[] = []
+  try {
+    entries = fs.readdirSync(removedDir(), { withFileTypes: true }).filter((e) => e.isDirectory())
+  } catch {
+    return out
+  }
+  for (const ent of entries) {
+    try {
+      const r = readPluginDir(path.join(removedDir(), ent.name))
+      if (r.info) out.push({ key: ent.name, id: r.info.id, name: r.info.name, version: r.info.version })
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  return out
+}
+
+/** Move a removed plugin back into plugins/<id>/. */
+export function restorePlugin(key: string): PluginListResult {
+  if (!key || key.includes('/') || key.includes('..') || key.startsWith('.')) {
+    throw new Error(`Invalid removed add-on: ${key}`)
+  }
+  const from = path.join(removedDir(), key)
+  if (!fs.existsSync(path.join(from, 'plugin.json'))) throw new Error(`Removed add-on not found: ${key}`)
+  const r = readPluginDir(from)
+  if (!r.info) throw new Error(`Removed add-on is invalid: ${(r.errors || []).join('; ')}`)
+  const target = path.join(pluginsDir(), r.info.id)
+  if (fs.existsSync(target)) throw new Error(`An add-on with id "${r.info.id}" is already installed`)
+  fs.mkdirSync(pluginsDir(), { recursive: true })
+  fs.renameSync(from, target)
+  reloadPlugins()
+  return listPluginsResult()
+}
+
+/* ---------------- bundled example add-ons ---------------- */
+
+function bundledPluginsDir(): string {
+  // Packaged: examples ship as extraResources under process.resourcesPath.
+  // Dev / Electron-as-Node: `app` may be undefined; fall back to the repo folder.
+  if (app?.isPackaged) return path.join(process.resourcesPath, 'examples', 'plugins')
+  return path.join(__dirname, '..', 'examples', 'plugins')
+}
+
+export function listBundledPlugins(): PluginPreview[] {
+  const root = bundledPluginsDir()
+  const out: PluginPreview[] = []
+  let entries: string[] = []
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+  } catch {
+    return out
+  }
+  for (const name of entries) {
+    try {
+      const r = readPluginDir(path.join(root, name))
+      if (r.info?.manifest) out.push(previewFromManifest(r.info.manifest, path.join(root, name)))
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  return out
 }

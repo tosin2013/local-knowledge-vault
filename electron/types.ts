@@ -385,6 +385,44 @@ export interface PluginContributions {
   mcpServers: Array<PluginMcpServerPreset & { pluginId: string; pluginName: string }>
 }
 
+/* ---- Add-on install preview / removed (recoverable) plugins ---- */
+
+export interface PluginCloudProvider {
+  label: string
+  domain: string
+}
+
+/** A pre-install preview of what an add-on contributes, in plain language. */
+export interface PluginPreview {
+  id: string
+  name: string
+  version: string
+  description: string
+  author?: string
+  /** Plain-language "what it adds" strings, e.g. ["2 cloud AI providers", "1 voice"]. */
+  adds: string[]
+  /** Cloud (non-local) providers with their domains — surfaced for install consent. */
+  cloudProviders: PluginCloudProvider[]
+  /** Local (non-cloud) provider labels, if any. */
+  localProviders: string[]
+  /** Filesystem path to install from (bundled or user-picked). */
+  sourcePath: string
+}
+
+export interface PluginPreviewResult {
+  canceled?: boolean
+  preview?: PluginPreview
+  errors?: string[]
+}
+
+export interface RemovedPlugin {
+  /** Directory name under plugins-removed/ (stable restore key). */
+  key: string
+  id: string
+  name: string
+  version: string
+}
+
 /* ---- Import from URL ---- */
 
 export interface ImportFromUrlResult {

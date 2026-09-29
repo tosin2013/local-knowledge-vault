@@ -95,9 +95,13 @@ import {
   getPluginContributions,
   installPluginFrom,
   listPluginsResult,
+  listRemovedPlugins,
+  listBundledPlugins,
+  previewPluginFrom,
   pluginsDir,
   reloadPlugins,
   removePlugin,
+  restorePlugin,
   setPluginEnabled,
 } from './plugin-loader'
 import type {
@@ -445,6 +449,27 @@ function registerIpc(): void {
     }
     return installPluginFrom(src)
   })
+
+  // Add-on preview (no install yet), bundled examples, and recoverable removed add-ons.
+  ipcMain.handle('plugins:preview', async (_e, kind?: 'folder' | 'zip') => {
+    const opts: OpenDialogOptions =
+      kind === 'zip'
+        ? { title: 'Choose an add-on (.zip)', properties: ['openFile'], filters: [{ name: 'Add-on zip', extensions: ['zip'] }] }
+        : kind === 'folder'
+          ? { title: 'Choose an add-on folder', properties: ['openDirectory'] }
+          : {
+              title: 'Choose an add-on (folder or .zip)',
+              properties: ['openFile', 'openDirectory'],
+              filters: [{ name: 'Add-on zip', extensions: ['zip'] }],
+            }
+    const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths[0]) return { canceled: true }
+    return previewPluginFrom(r.filePaths[0])
+  })
+  ipcMain.handle('plugins:installFromPath', (_e, srcPath: string) => installPluginFrom(srcPath))
+  ipcMain.handle('plugins:listRemoved', () => listRemovedPlugins())
+  ipcMain.handle('plugins:restore', (_e, key: string) => restorePlugin(key))
+  ipcMain.handle('plugins:listBundled', () => listBundledPlugins())
 
   ipcMain.handle('app:openExternal', async (_e, url: string) => {
     try {

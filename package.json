@@ -86,6 +86,10 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "examples/plugins",
+        "to": "examples/plugins"
       }
     ],
     "linux": {
