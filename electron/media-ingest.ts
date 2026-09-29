@@ -199,7 +199,7 @@ function writeChunksAsNotes(
 ): Item[] {
   const created: Item[] = []
   for (const chunk of chunks) {
-    const title = mediaNoteTitle(chunk.startSec, chunk.endSec)
+    const title = mediaNoteTitle(chunk.startSec, opts.project)
     const body = buildTranscriptNoteBody({
       text: chunk.text,
       startSec: chunk.startSec,

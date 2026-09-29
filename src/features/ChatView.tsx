@@ -291,7 +291,7 @@ export function ChatView(props: ChatViewProps) {
                           color="primary"
                           variant={isUser ? 'filled' : 'outlined'}
                           onClick={() => onSelectNote(c.id)}
-                          title={advanced ? c.id : c.title}
+                          title={advanced ? c.id : c.project && !c.title.includes(c.project) ? `${c.title} — ${c.project}` : c.title}
                           sx={isUser ? { bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' } : undefined}
                         />
                       ))}

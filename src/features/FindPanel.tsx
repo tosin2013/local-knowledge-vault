@@ -44,7 +44,7 @@ export function FindPanel(props: FindPanelProps) {
                     color="primary"
                     variant="outlined"
                     onClick={() => onSelect(c.id)}
-                    title={advanced ? c.id : c.title}
+                    title={advanced ? c.id : c.project && !c.title.includes(c.project) ? `${c.title} — ${c.project}` : c.title}
                   />
                 ))}
               </Stack>
@@ -93,6 +93,7 @@ export function FindPanel(props: FindPanelProps) {
               <Typography variant="body2" fontWeight={600}>
                 {h.title}{' '}
                 <Typography component="span" variant="caption" color="text.secondary" fontWeight={400}>
+                  {h.project && !h.title.includes(h.project) && <>{h.project} · </>}
                   {advanced && <>score {h.score.toFixed(2)} · </>}
                   {paraLabel(h.para)}
                 </Typography>

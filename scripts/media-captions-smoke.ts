@@ -327,6 +327,7 @@ void (async () => {
   assert(items.length === result.noteCount, 'list matches')
   const t0 = parseTStartFromBody(items[0].body)
   assert(t0 != null, 't_start in body')
+  assert(/^Media Demo · \d{1,2}:\d{2}/.test(items[0].title), `transcript title carries the source title (got "${items[0].title}")`)
   console.log('OK ingest:', {
     project: result.project,
     notes: result.noteCount,

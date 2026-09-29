@@ -136,7 +136,7 @@ export function offlineCopy(
 export function citationsFromIds(ids: string[]): Citation[] {
   return ids.map((id) => {
     const item = getItem(id)
-    return { id, title: item?.title ?? id }
+    return { id, title: item?.title ?? id, project: item?.project ?? null }
   })
 }
 
