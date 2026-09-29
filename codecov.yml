@@ -2,9 +2,9 @@
 # (scripts/merge-coverage.mjs): c8 over the offline smoke tests in scripts/ (electron/**) and vitest over
 # tests/renderer (src/**); see docs/adr/0001. .github/workflows/ci.yml uploads it.
 #
-# Goals: main process (electron/) >= 80% lines (v0.2.x, #83); whole project >= 80% (v0.4.0, #89).
-# The project status and the renderer component status each block drops of more than 1% vs the base
-# commit; the main-process component is reported (not yet gated; that is #83).
+# Goals: main process (electron/) >= 80% lines (gated since #83); whole project >= 80% (v0.4.0, #89).
+# The project status and both component statuses block drops below their targets; patch
+# coverage keeps new lines tested.
 codecov:
   require_ci_to_pass: true
 
@@ -29,6 +29,11 @@ component_management:
       name: main process
       paths:
         - electron/**
+      statuses:
+        - type: project
+          # Gated since #83: electron/ must stay at or above 80% lines
+          # (mirrored locally by `npm run coverage:main`).
+          target: 80%
     - component_id: renderer
       name: renderer
       paths:

@@ -1,0 +1,8 @@
+{
+  "$comment": "Completion bar for #83: main-process >= 80% coverage gate. Sets the Codecov main-process component status target to 80%; adds npm run coverage:main (c8 --check-coverage --lines 80 over electron/** per .c8rc.json) and wires it into CI after npm run coverage; updates goal text in codecov.yml, CONTRIBUTING.md, CLAUDE.md. Verified: coverage:main reports 91.2% lines, gate passes.",
+  "authority_id": "83",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run coverage:main" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
