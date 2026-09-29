@@ -29,6 +29,10 @@ import {
   renameProject,
   mergeProject,
   deleteProject,
+  trashItem,
+  restoreItem,
+  listTrashedItems,
+  emptyTrash,
 } from '../electron/db'
 import { searchQuery, buildFtsQuery } from '../electron/search'
 import { extractCitedIds, validateCitations, buildGroundedPrompt } from '../electron/generate'
@@ -169,6 +173,19 @@ async function main(): Promise<void> {
   const confirmedIdx = draftSearch.hits.findIndex((h) => h.id === confirmedNote.id)
   assert(draftIdx !== -1 && confirmedIdx !== -1, 'both the draft and confirmed note match')
   assert(confirmedIdx < draftIdx, 'confirmed note ranks before the AI draft')
+
+  // --- Trash (soft-delete) ---
+  console.log('\nTrash (soft-delete)')
+  const trashed = createItem({ title: 'Trash me', body: 'trash-token-abc', kind: 'note', status: 'active' })
+  assert(trashItem(trashed.id), 'trashItem soft-deletes a note')
+  assert(!listItems().some((i) => i.id === trashed.id), 'trashed note hidden from listItems')
+  assert(listTrashedItems().some((i) => i.id === trashed.id), 'trashed note listed in trash')
+  assert(!searchQuery({ text: 'trash-token-abc', limit: 10 }).hits.some((h) => h.id === trashed.id), 'trashed note excluded from search')
+  assert(restoreItem(trashed.id), 'restoreItem restores a note')
+  assert(listItems().some((i) => i.id === trashed.id), 'restored note back in listItems')
+  assert(trashItem(trashed.id), 'trash again for emptyTrash')
+  assert(emptyTrash() >= 1, 'emptyTrash permanently deletes')
+  assert(listTrashedItems().length === 0, 'trash is empty after emptyTrash')
 
   // --- Citation validation ---
   console.log('\nCitation validation')

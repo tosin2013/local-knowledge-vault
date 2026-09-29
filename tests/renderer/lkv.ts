@@ -259,6 +259,10 @@ export function createLkvMock(): LkvMock {
       get: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockImplementation((id: string) => Promise.resolve(makeItem(id))),
       delete: vi.fn().mockResolvedValue(true),
+      trash: vi.fn().mockResolvedValue(true),
+      restore: vi.fn().mockResolvedValue(true),
+      listTrashed: vi.fn().mockResolvedValue([]),
+      emptyTrash: vi.fn().mockResolvedValue(0),
     },
     search: {
       query: vi.fn().mockResolvedValue({ hits: [] }),

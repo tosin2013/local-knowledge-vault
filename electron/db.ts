@@ -187,7 +187,7 @@ export function listItems(filters?: ItemFilters): Item[] {
   const database = getDb()
   const { sql, params } = buildFilterClause(filters)
   const rows = database
-    .prepare(`SELECT * FROM items WHERE 1=1${sql} ORDER BY updated_at DESC`)
+    .prepare(`SELECT * FROM items WHERE status != 'trashed'${sql} ORDER BY updated_at DESC`)
     .all(...params) as Record<string, unknown>[]
   return rows.map(rowToItem)
 }
@@ -199,8 +199,8 @@ export function listItems(filters?: ItemFilters): Item[] {
 export function listItemsByProjectExact(project: string, kind?: string): Item[] {
   const database = getDb()
   const sql = kind
-    ? 'SELECT * FROM items WHERE project = ? AND kind = ? ORDER BY updated_at DESC'
-    : 'SELECT * FROM items WHERE project = ? ORDER BY updated_at DESC'
+    ? "SELECT * FROM items WHERE project = ? AND kind = ? AND status != 'trashed' ORDER BY updated_at DESC"
+    : "SELECT * FROM items WHERE project = ? AND status != 'trashed' ORDER BY updated_at DESC"
   const rows = (kind
     ? database.prepare(sql).all(project, kind)
     : database.prepare(sql).all(project)) as Record<string, unknown>[]
@@ -215,7 +215,7 @@ export function listProjects(): ProjectSummary[] {
     .prepare(
       `SELECT project AS name, COUNT(*) AS count
        FROM items
-       WHERE project IS NOT NULL AND TRIM(project) != ''
+       WHERE project IS NOT NULL AND TRIM(project) != '' AND status != 'trashed'
        GROUP BY project
        ORDER BY project COLLATE NOCASE`
     )
@@ -324,6 +324,38 @@ export function deleteItem(id: string): boolean {
   return result.changes > 0
 }
 
+/* ---- Trash (soft-delete) ---- */
+
+/** Move a note to the trash (status='trashed'). Reversible via restoreItem. */
+export function trashItem(id: string): boolean {
+  const result = getDb()
+    .prepare("UPDATE items SET status = 'trashed', updated_at = ? WHERE id = ? AND status != 'trashed'")
+    .run(nowIso(), id)
+  return result.changes > 0
+}
+
+/** Restore a trashed note back to active. */
+export function restoreItem(id: string): boolean {
+  const result = getDb()
+    .prepare("UPDATE items SET status = 'active', updated_at = ? WHERE id = ?")
+    .run(nowIso(), id)
+  return result.changes > 0
+}
+
+/** Trashed notes, newest first. */
+export function listTrashedItems(): Item[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM items WHERE status = 'trashed' ORDER BY updated_at DESC")
+    .all() as Record<string, unknown>[]
+  return rows.map(rowToItem)
+}
+
+/** Permanently delete everything in the trash. Returns the number removed. */
+export function emptyTrash(): number {
+  const result = getDb().prepare("DELETE FROM items WHERE status = 'trashed'").run()
+  return result.changes
+}
+
 /** Run a function in a transaction. On success commits; on error rolls back and re-throws. */
 export function runInTransaction<T>(fn: () => T): T {
   const db = getDb()
@@ -339,7 +371,9 @@ export function runInTransaction<T>(fn: () => T): T {
 }
 
 export function countItems(): number {
-  const row = getDb().prepare('SELECT COUNT(*) AS c FROM items').get() as { c: number }
+  const row = getDb()
+    .prepare("SELECT COUNT(*) AS c FROM items WHERE status != 'trashed'")
+    .get() as { c: number }
   return row.c
 }
 

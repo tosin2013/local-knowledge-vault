@@ -27,6 +27,10 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     onRailQuery: vi.fn(),
     onRailSort: vi.fn(),
     onShowTranscripts: vi.fn(),
+    onOpenTrash: vi.fn(),
+    bulkSelected: new Set<string>(),
+    onToggleBulk: vi.fn(),
+    onBulkTrash: vi.fn(),
     onFilters: vi.fn(),
     onFiltersOpen: vi.fn(),
     onSelect: vi.fn(),
@@ -67,6 +71,20 @@ describe('NotesRail', () => {
   it('shows the empty state when there are no notes', () => {
     render(<NotesRail {...makeProps()} />)
     expect(screen.getByText('No notes match filters.')).toBeInTheDocument()
+  })
+
+  it('shows a bulk trash button when notes are selected', () => {
+    const props = makeProps({ bulkSelected: new Set(['itm_1']), items: [makeItem('itm_1', { title: 'First note' })] })
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByText('Trash 1 selected'))
+    expect(props.onBulkTrash).toHaveBeenCalled()
+  })
+
+  it('opens the trash dialog', () => {
+    const props = makeProps()
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByText('Trash'))
+    expect(props.onOpenTrash).toHaveBeenCalled()
   })
 
   it('changes project filter', () => {
