@@ -88,7 +88,7 @@ notes.
 
 ### Things that are easy to get wrong
 
-- Edit `scripts/<name>.ts`, not `scripts/<name>.bundle.cjs`. The bundles are prebuilt output.
+- Run `scripts/<name>.ts` directly under Electron-as-Node. Prebuilt `scripts/*.bundle.cjs` artefacts were removed (#43) and are gitignored.
 - A new native module must be added to the Rollup `external` list in `vite.config.mts`, next to
   `better-sqlite3` and `electron`.
 - A new IPC call touches three files: the handler in `electron/main.ts`, the method in
