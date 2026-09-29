@@ -13,6 +13,7 @@ function makeProps(overrides: Partial<NotePeekProps> = {}): NotePeekProps {
     busy: false,
     advanced: false,
     projectOptions: [],
+    noteMissing: false,
     onClose: vi.fn(),
     onEdit: vi.fn(),
     onPatch: vi.fn(),
@@ -102,5 +103,15 @@ describe('NotePeek', () => {
     render(<NotePeek {...props} />)
     fireEvent.click(screen.getByLabelText('Close note peek'))
     expect(props.onClose).toHaveBeenCalled()
+  })
+
+  it('shows a clear message when the note is missing', () => {
+    render(<NotePeek {...makeProps({ draft: null, noteMissing: true })} />)
+    expect(screen.getByText(/deleted or re-ingested/)).toBeInTheDocument()
+  })
+
+  it('shows loading while a note is still resolving', () => {
+    render(<NotePeek {...makeProps({ draft: null, noteMissing: false })} />)
+    expect(screen.getByText('Loading note…')).toBeInTheDocument()
   })
 })

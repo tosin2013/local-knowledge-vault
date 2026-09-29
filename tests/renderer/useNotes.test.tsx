@@ -125,6 +125,17 @@ describe('useNotes', () => {
     expect(result.current.dirty).toBe(true)
   })
 
+  it('flags a note as missing when get returns null', async () => {
+    const lkv = window.lkv as any
+    lkv.items.get.mockResolvedValue(null)
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    act(() => {
+      result.current.selectItem('itm_gone')
+    })
+    await waitFor(() => expect(result.current.noteMissing).toBe(true))
+    expect(result.current.draft).toBeNull()
+  })
+
   it('loads projects from the projects API', async () => {
     const lkv = window.lkv as any
     lkv.projects.list.mockResolvedValue([
