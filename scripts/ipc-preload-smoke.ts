@@ -89,13 +89,19 @@ const mockContextBridge = {
 const mockSession = {
   defaultSession: {
     webRequest: {
-      onBeforeSendHeaders: (filter: unknown, listener: (details: unknown) => void) => {
+      onBeforeSendHeaders: (
+        filter: unknown,
+        listener: (details: unknown, callback: (response: unknown) => void) => void
+      ) => {
         try {
-          listener({
-            url: 'https://www.youtube-nocookie.com/embed/test',
-            referrer: 'file:///app/index.html',
-            requestHeaders: {},
-          })
+          listener(
+            {
+              url: 'https://www.youtube-nocookie.com/embed/test',
+              referrer: 'file:///app/index.html',
+              requestHeaders: {},
+            },
+            () => {}
+          )
         } catch {
           /* ignore */
         }

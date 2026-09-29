@@ -115,6 +115,24 @@ describe('MediaChatView', () => {
     await waitFor(() => expect(lkv.items.get).toHaveBeenCalledWith('itm_1'))
   })
 
+  it('embeds YouTube without an origin= param (#117)', async () => {
+    const lkv = seedMedia()
+    const embed = 'https://www.youtube-nocookie.com/embed/abc123abc12?enablejsapi=1'
+    lkv.media.youtubeEmbedUrl.mockResolvedValue(embed)
+    lkv.media.ingestYoutube.mockResolvedValue(
+      makeIngestResult({ sourceType: 'youtube', mediaUrl: 'https://www.youtube.com/watch?v=abc123abc12' }),
+    )
+    const { container } = render(<MediaChatView />)
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123abc12' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull())
+    const src = container.querySelector('iframe')!.getAttribute('src')!
+    expect(src).toBe(embed)
+    expect(new URL(src).searchParams.has('origin')).toBe(false)
+  })
+
   it('loads a media project from the select', async () => {
     const lkv = seedMedia()
     lkv.media.listProjects.mockResolvedValue([

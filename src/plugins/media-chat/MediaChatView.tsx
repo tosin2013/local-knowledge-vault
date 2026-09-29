@@ -306,15 +306,11 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
           setEmbedUrl(null)
           return
         }
-        // origin= (strict) keeps the embed working in packaged builds, where the
-        // renderer is file:// and would otherwise send a null origin (player
-        // error 153). The main process also rewrites Referer/Origin; see
-        // fixYoutubeEmbedHeaders().
-        const sep = url.includes('?') ? '&' : '?'
-        const withOrigin = `${url}${sep}origin=${encodeURIComponent(
-          'https://www.youtube-nocookie.com'
-        )}`
-        setEmbedUrl(withOrigin)
+        // No origin= param: the IFrame API uses it as the postMessage target for
+        // the embedding page, and no value matches a file:// renderer, so player
+        // events would never arrive (#117). Error 153 in packaged builds is
+        // handled by the main-process Referer/Origin rewrite (#24, #116).
+        setEmbedUrl(url)
         setYtVideoId(videoIdFromEmbedUrl(url))
       })
       .catch(() => {

@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #116: fixYoutubeEmbedHeaders registered an onBeforeSendHeaders listener that never called Electron's callback, so every */embed/* request hung and the player stayed black. Fix: the listener moves to electron/youtube-embed-headers.ts (rewriteYoutubeEmbedHeaders) and calls callback({ requestHeaders }) exactly once on every path. Criterion 1 is behavioral and fails before the change: test:media-ingest invokes the listener for a file:// referrer, an empty referrer, a dev (localhost) referrer and an unparseable URL, and asserts one callback per call with rewritten headers only in the file:// cases. 2-4 guard typecheck, build and the IPC suite (whose mock now passes a callback). Live check on a production build over CDP: the embed loads and plays (see PR).",
+  "authority_id": "116",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:media-ingest" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:ipc-preload" }
+  ]
+}

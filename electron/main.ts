@@ -59,6 +59,7 @@ import {
   rotateBridgeToken,
 } from './bridge-server'
 import { resolveMediaFile, mediaMimeType } from './media-protocol'
+import { YOUTUBE_EMBED_FILTER, rewriteYoutubeEmbedHeaders } from './youtube-embed-headers'
 import {
   listMcpServers,
   addMcpServer,
@@ -142,36 +143,13 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow: BrowserWindow | null = null
 
-/**
- * Packaged builds load the renderer via file://, so the youtube-nocookie embed
- * iframe is sent with a `null` origin and no Referer, which YouTube rejects with
- * player error 153. Rewrite those requests to carry the embed page's own origin
- * (https://www.youtube-nocookie.com) and a strict-origin Referer, mirroring what
- * a browser sends when the embed is loaded from a real page. Dev (localhost) is
- * unaffected and needs no rewrite.
- */
+/** Keep the YouTube embed loading from the file:// renderer; see youtube-embed-headers.ts. */
 function fixYoutubeEmbedHeaders(): void {
-  const filter = {
-    urls: [
-      'https://*.youtube.com/embed/*',
-      'https://*.youtube-nocookie.com/embed/*',
-      'https://www.youtube.com/embed/*',
-      'https://www.youtube-nocookie.com/embed/*',
-    ],
-  }
-  const rewrite = (details: Electron.OnBeforeSendHeadersListenerDetails) => {
-    try {
-      const u = new URL(details.url)
-      // Only rewrite when the embedding page is our file:// renderer (the packaged case).
-      if (!(details.referrer === '' || details.referrer.startsWith('file://'))) return
-      details.requestHeaders['Referer'] = `${u.origin}/`
-      details.requestHeaders['Origin'] = u.origin
-    } catch {
-      /* leave headers untouched */
-    }
-  }
   // defaultSession covers the main window (no partition is used anywhere).
-  session.defaultSession.webRequest.onBeforeSendHeaders(filter, rewrite)
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    YOUTUBE_EMBED_FILTER,
+    rewriteYoutubeEmbedHeaders
+  )
 }
 
 function dbPath(): string {
