@@ -193,7 +193,7 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
       setVoices([])
       return []
     }
-    // Best-effort seed so chips appear without opening the personas plugin first
+    // Best-effort seed so chips appear without opening the voices plugin first
     try {
       await window.lkv.media?.ensurePersonas?.()
     } catch {
@@ -484,7 +484,7 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
     if (!window.lkv || !active) return
     const opt = voices.find((v) => v.name === name)
     if (!opt) {
-      setError(`Voice “${name}” is not installed yet — open Media personas to install.`)
+      setError(`Voice “${name}” is not installed yet — open Media voices to install.`)
       return
     }
     // Voice packs are reusable across projects — only switch promptId (no per-video profiles)

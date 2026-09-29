@@ -3,9 +3,9 @@ import { MediaPersonasView } from './MediaPersonasView'
 
 export const mediaPersonasPlugin: VaultPlugin = {
   id: 'media-personas',
-  name: 'Media personas',
+  name: 'Media voices',
   description:
-    'Reusable Media voice packs (any video). Install / Add persona → Media chat chips. Optional Ask profiles are advanced-only.',
+    'Reusable Media voice packs (any video). Install / Add voice → Media chat chips. Optional Ask profiles are advanced-only.',
   icon: 'record_voice_over',
   render: MediaPersonasView,
 }

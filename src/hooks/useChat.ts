@@ -35,7 +35,7 @@ export interface UseChatDeps {
   busy: boolean
 }
 
-/** Owns chat sessions/messages and the Personality + Notes-from profile state. */
+/** Owns chat sessions/messages and the Personality + Project profile state. */
 export function useChat(deps: UseChatDeps) {
   const {
     prompts,
@@ -61,7 +61,7 @@ export function useChat(deps: UseChatDeps) {
   const [chatOffline, setChatOffline] = useState(false)
   const threadEndRef = useRef<HTMLDivElement | null>(null)
 
-  // User chat profiles (Personality + Notes from)
+  // User chat profiles (Personality + Project)
   const [userProfiles, setUserProfiles] = useState<ChatProfile[]>([])
   const [profileSaveOpen, setProfileSaveOpen] = useState(false)
   const [profileSaveName, setProfileSaveName] = useState('')
@@ -103,7 +103,7 @@ export function useChat(deps: UseChatDeps) {
     setMessages(msgs)
   }, [])
 
-  // Restore last Profile (Personality + Notes from) once prompts (+ profiles) are available.
+  // Restore last Profile (Personality + Project) once prompts (+ profiles) are available.
   useEffect(() => {
     if (profileHydrated || prompts.length === 0 || !profilesLoaded) return
     const grounded = findGroundedDefaultPrompt(prompts)
@@ -176,7 +176,7 @@ export function useChat(deps: UseChatDeps) {
   }, [messages, busy])
 
   useEffect(() => {
-    // Advanced keeps Customize open; Simple hides Personality / Notes from by default.
+    // Advanced keeps Customize open; Simple hides Personality / Project by default.
     setAskCustomizeOpen(advanced)
   }, [advanced])
 
@@ -188,7 +188,7 @@ export function useChat(deps: UseChatDeps) {
     setMessages([])
     setChatOffline(false)
     setMode('chat')
-    // New sessions keep the last Profile (Personality + Notes from).
+    // New sessions keep the last Profile (Personality + Project).
     const promptId =
       selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
     const project = filters.project ?? ''
@@ -449,7 +449,7 @@ export function useChat(deps: UseChatDeps) {
   }
 
   const onChatPromptChange = (promptId: string) => {
-    // Keep Notes-from independent when only Personality changes (avoid surprising scope jumps).
+    // Keep Project independent when only Personality changes (avoid surprising scope jumps).
     const nextProject = filters.project ?? ''
     applyPromptAndProject(promptId, nextProject)
   }
@@ -460,7 +460,7 @@ export function useChat(deps: UseChatDeps) {
       if (projectIsGorgias) {
         return 'Gorgias reader · notes limited to project Gorgias'
       }
-      return 'Gorgias reader often pairs with project Gorgias — Notes scope unchanged'
+      return 'Gorgias reader often pairs with project Gorgias — answers use all your notes'
     }
     if (selectedProfileId === 'gorgias' || (selectedUserProfile && selectedUserProfile.project.trim())) {
       const proj =
@@ -472,7 +472,7 @@ export function useChat(deps: UseChatDeps) {
       }
     }
     if (selectedProfileId === 'grounded-helper' && !(filters.project ?? '').trim()) {
-      return 'Notes scope unchanged'
+      return 'Answers use all your notes'
     }
     return null
   }, [

@@ -164,7 +164,7 @@ describe('ChatView', () => {
   })
 
   it('shows the scope couple hint', () => {
-    render(<ChatView {...makeProps({ scopeCoupleHint: 'Notes scope unchanged', stayingInGorgias: false })} />)
-    expect(screen.getAllByText('Notes scope unchanged').length).toBeGreaterThan(0)
+    render(<ChatView {...makeProps({ scopeCoupleHint: 'Answers use all your notes', stayingInGorgias: false })} />)
+    expect(screen.getAllByText('Answers use all your notes').length).toBeGreaterThan(0)
   })
 })

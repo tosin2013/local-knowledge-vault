@@ -167,7 +167,7 @@ export function ManagePluginsView({ onClose }: VaultPluginRenderProps) {
         )}
       </Stack>
       <Typography variant="body2" color="text.secondary">
-        Plugins are small <code>plugin.json</code> packs — provider presets, personas, prompt packs and MCP server
+        Plugins are small <code>plugin.json</code> packs — provider presets, voices, prompt packs and MCP server
         presets. They can’t run code. Drop a folder into the plugins folder and press Reload, or install a folder / .zip.
         See <code>docs/plugins-authoring.md</code>.
       </Typography>

@@ -31,7 +31,7 @@ export function usePluginContributions(): PluginContributions {
   return c
 }
 
-/** Personas contributed by plugins — one click installs them via the same Easy Add path. */
+/** Voices contributed by plugins — one click installs them via the same Easy Add path. */
 export function PluginPersonasSection({ onInstalled }: { onInstalled?: (name: string) => void }) {
   const { personas } = usePluginContributions()
   const [busy, setBusy] = useState<string | null>(null)

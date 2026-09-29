@@ -14,7 +14,7 @@ describe('MediaPersonasView', () => {
   it('renders the built-in voice packs', async () => {
     seed()
     render(<MediaPersonasView />)
-    expect(screen.getByText('Media personas')).toBeInTheDocument()
+    expect(screen.getByText('Media voices')).toBeInTheDocument()
     expect(screen.getByText('Desk cohost')).toBeInTheDocument()
     expect(screen.getByText('Curious student')).toBeInTheDocument()
     expect(screen.getByText('Skeptical investor')).toBeInTheDocument()
@@ -31,7 +31,7 @@ describe('MediaPersonasView', () => {
     render(<MediaPersonasView />)
     fireEvent.click(await screen.findByText('Install / refresh all'))
     await waitFor(() => expect(lkv.media.ensurePersonas).toHaveBeenCalled())
-    await waitFor(() => expect(screen.getByText(/Personas ready/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Voices ready/)).toBeInTheDocument())
   })
 
   it('installs one built-in persona', async () => {
@@ -50,7 +50,7 @@ describe('MediaPersonasView', () => {
 
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Late-night host' } })
     fireEvent.change(screen.getByLabelText(/Short vibe/), { target: { value: 'Warm and wry' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save persona' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save voice' }))
 
     await waitFor(() =>
       expect(lkv.media.createPersona).toHaveBeenCalledWith({
@@ -64,9 +64,9 @@ describe('MediaPersonasView', () => {
   it('disables Save persona until name and style are filled', async () => {
     const lkv = seed()
     render(<MediaPersonasView />)
-    expect(screen.getByRole('button', { name: 'Save persona' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save voice' })).toBeDisabled()
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'X' } })
-    expect(screen.getByRole('button', { name: 'Save persona' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save voice' })).toBeDisabled()
     expect(lkv.media.createPersona).not.toHaveBeenCalled()
   })
 

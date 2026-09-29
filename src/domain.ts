@@ -18,7 +18,7 @@ export const UI_MODE_KEY = 'lkv.uiMode'
 export const THEME_KEY = 'lkv.theme'
 export const LAST_PROFILE_KEY = 'lkv.lastProfile'
 
-/** Built-in chat profiles: Personality + Notes from (+ optional bind). */
+/** Built-in chat profiles: Personality + Project (+ optional bind). */
 export type BuiltinChatProfileId = 'grounded-helper' | 'gorgias'
 /** Builtins, Custom, or a user profile id (`prf_…`). */
 export type ChatProfileId = BuiltinChatProfileId | 'custom' | string
