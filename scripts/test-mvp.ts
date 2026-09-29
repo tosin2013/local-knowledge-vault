@@ -99,8 +99,11 @@ async function main(): Promise<void> {
   console.log('\nFilters')
   const projects = listItems({ para: 'projects' })
   assert(projects.length >= 1 && projects.every((i) => i.para === 'projects'), 'para filter works')
-  const byProject = listItems({ project: 'Knowledge' })
-  assert(byProject.length >= 1, 'project text filter works')
+  const byProject = listItems({ project: 'Local Knowledge Vault' })
+  assert(byProject.length >= 1, 'project filter matches an exact project name')
+  // #127: the project filter must not substring-match across projects.
+  const leaked = listItems({ project: 'Knowledge' })
+  assert(leaked.length === 0, 'project filter does not substring-match ("Knowledge" leaks 0 notes)')
 
   // --- FTS ---
   console.log('\nFTS5 search')
