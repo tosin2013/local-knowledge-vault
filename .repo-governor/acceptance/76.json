@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #76: smoke tests for media personas + persona definitions. Both electron/media-personas.ts (339 lines) and electron/media-persona-defs.ts (117 lines) were at 0% — now covered by scripts/media-personas-smoke.ts wired into test:ci. Tests cover: built-in persona definitions (3), MEDIA_HARD_RULES, buildMediaVoicePromptBody, lookups, custom description prefix; ensureMediaPersonaPrompts idempotent seed; Easy Add createCustomMediaPersona (reject built-in name, empty name, empty style); applyMediaPersona (project required, built-in + custom, unknown rejected); listMediaVoicePacks + listCustomMediaPersonas.",
+  "authority_id": "76",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:media-personas" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
