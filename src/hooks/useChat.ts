@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import type {
   ChatMessage,
   ChatProfile,
   ChatSession,
-  ItemFilters,
   Prompt,
 } from '../../electron/types'
 import {
@@ -24,8 +22,6 @@ import {
 
 export interface UseChatDeps {
   prompts: Prompt[]
-  filters: ItemFilters
-  setFilters: Dispatch<SetStateAction<ItemFilters>>
   setBusy: (busy: boolean) => void
   setError: (error: string | null) => void
   setStatusMsg: (msg: string | null) => void
@@ -38,8 +34,6 @@ export interface UseChatDeps {
 export function useChat(deps: UseChatDeps) {
   const {
     prompts,
-    filters,
-    setFilters,
     setBusy,
     setError,
     setStatusMsg,
@@ -54,6 +48,8 @@ export function useChat(deps: UseChatDeps) {
   const [chatInput, setChatInput] = useState('')
   const [selectedPromptId, setSelectedPromptId] = useState<string>('')
   const [selectedProfileId, setSelectedProfileId] = useState<ChatProfileId>('grounded-helper')
+  // Ask note scope, decoupled from the notes-rail project filter (#123).
+  const [project, setProject] = useState<string>('')
   const [profileHydrated, setProfileHydrated] = useState(false)
   const [profilesLoaded, setProfilesLoaded] = useState(false)
   const [chatOffline, setChatOffline] = useState(false)
@@ -107,7 +103,7 @@ export function useChat(deps: UseChatDeps) {
     const grounded = findGroundedDefaultPrompt(prompts)
     const saved = loadLastProfile()
     let promptId = ''
-    let project = ''
+    let nextProject = ''
     let profileId: ChatProfileId = 'grounded-helper'
 
     if (saved) {
@@ -116,7 +112,7 @@ export function useChat(deps: UseChatDeps) {
         const builtin = listBuiltinProfiles(prompts).find((p) => p.id === saved.profileId)
         if (builtin) {
           promptId = resolveProfilePromptId(builtin, prompts) || grounded?.id || ''
-          project = builtin.project
+          nextProject = builtin.project
           profileId = builtin.id
         }
       } else if (saved.profileId !== 'custom') {
@@ -126,26 +122,26 @@ export function useChat(deps: UseChatDeps) {
           promptId = promptOk
             ? user.prompt_id
             : grounded?.id || prompts[0]?.id || ''
-          project = user.project
+          nextProject = user.project
           profileId = user.id
         }
       }
       if (!promptId && savedPromptOk) {
         promptId = saved.promptId
-        project = saved.project ?? ''
-        profileId = matchProfileId(promptId, project, prompts, userProfiles)
+        nextProject = saved.project ?? ''
+        profileId = matchProfileId(promptId, nextProject, prompts, userProfiles)
       }
     }
 
     if (!promptId) {
       promptId = grounded?.id || prompts[0]?.id || ''
-      project = ''
+      nextProject = ''
       profileId = 'grounded-helper'
     }
 
     setSelectedPromptId(promptId)
-    setFilters((f) => ({ ...f, project }))
-    persistProfile(profileId, promptId, project)
+    setProject(nextProject)
+    persistProfile(profileId, promptId, nextProject)
     setProfileHydrated(true)
   }, [prompts, userProfiles, profilesLoaded, profileHydrated, persistProfile])
 
@@ -154,13 +150,13 @@ export function useChat(deps: UseChatDeps) {
     if (!profileHydrated) return
     if (isBuiltinProfileId(selectedProfileId) || selectedProfileId === 'custom') return
     if (userProfiles.some((p) => p.id === selectedProfileId)) return
-    persistProfile('custom', selectedPromptId, filters.project ?? '')
+    persistProfile('custom', selectedPromptId, project)
   }, [
     profileHydrated,
     selectedProfileId,
     userProfiles,
     selectedPromptId,
-    filters.project,
+    project,
     persistProfile,
   ])
 
@@ -184,12 +180,12 @@ export function useChat(deps: UseChatDeps) {
     // New sessions keep the last Profile (Personality + Project).
     const promptId =
       selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    const project = filters.project ?? ''
+    const nextProject = project
     if (promptId) {
       persistProfile(
-        matchProfileId(promptId, project, prompts),
+        matchProfileId(promptId, nextProject, prompts),
         promptId,
-        project,
+        nextProject,
       )
     }
   }
@@ -274,7 +270,7 @@ export function useChat(deps: UseChatDeps) {
       const res = await window.lkv.chat.send({
         sessionId,
         text,
-        filters,
+        filters: { project },
         promptId:
           selectedPromptId ||
           findGroundedDefaultPrompt(prompts)?.id ||
@@ -301,15 +297,15 @@ export function useChat(deps: UseChatDeps) {
   }
 
   const gorgiasReaderSelected = isGorgiasReaderPrompt(selectedPromptId, prompts)
-  const projectIsGorgias = (filters.project ?? '').trim() === GORGIAS_PROJECT
+  const projectIsGorgias = project.trim() === GORGIAS_PROJECT
   const stayingInGorgias = gorgiasReaderSelected && projectIsGorgias
 
-  const applyPromptAndProject = (promptId: string, project: string, profileId?: ChatProfileId) => {
+  const applyPromptAndProject = (promptId: string, projectValue: string, profileId?: ChatProfileId) => {
     const nextPrompt =
       promptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    const nextProject = project ?? ''
+    const nextProject = projectValue ?? ''
     setSelectedPromptId(nextPrompt)
-    setFilters((f) => ((f.project ?? '') === nextProject ? f : { ...f, project: nextProject }))
+    setProject(nextProject)
     const matched =
       profileId ?? matchProfileId(nextPrompt, nextProject, prompts, userProfiles)
     persistProfile(matched, nextPrompt, nextProject)
@@ -317,17 +313,16 @@ export function useChat(deps: UseChatDeps) {
 
   const onProfileChange = (profileId: string) => {
     if (profileId === 'custom') {
-      const project = filters.project ?? ''
+      const nextProject = project
       const promptId =
         selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-      persistProfile('custom', promptId, project)
+      persistProfile('custom', promptId, nextProject)
       return
     }
     const builtin = listBuiltinProfiles(prompts).find((p) => p.id === profileId)
     if (builtin) {
       const promptId = resolveProfilePromptId(builtin, prompts) || ''
-      const project = builtin.project
-      applyPromptAndProject(promptId, project, builtin.id)
+      applyPromptAndProject(promptId, builtin.project, builtin.id)
       return
     }
     const user = userProfiles.find((p) => p.id === profileId)
@@ -336,11 +331,10 @@ export function useChat(deps: UseChatDeps) {
     const promptId = promptOk
       ? user.prompt_id
       : findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    const project = user.project
     if (!promptOk) {
       setStatusMsg(`Profile “${user.name}” personality missing — using default.`)
     }
-    applyPromptAndProject(promptId, project, user.id)
+    applyPromptAndProject(promptId, user.project, user.id)
   }
 
   const selectedUserProfile = userProfiles.find((p) => p.id === selectedProfileId)
@@ -364,7 +358,7 @@ export function useChat(deps: UseChatDeps) {
       const created = await window.lkv.profiles.create({
         name,
         promptId,
-        project: filters.project ?? '',
+        project,
       })
       await refreshProfiles()
       applyPromptAndProject(created.prompt_id, created.project, created.id)
@@ -433,7 +427,7 @@ export function useChat(deps: UseChatDeps) {
 
   const onChatPromptChange = (promptId: string) => {
     // Keep Project independent when only Personality changes (avoid surprising scope jumps).
-    const nextProject = filters.project ?? ''
+    const nextProject = project
     applyPromptAndProject(promptId, nextProject)
   }
 
@@ -450,11 +444,11 @@ export function useChat(deps: UseChatDeps) {
         selectedProfileId === 'gorgias'
           ? GORGIAS_PROJECT
           : selectedUserProfile?.project.trim() || ''
-      if (proj && (filters.project ?? '').trim() === proj) {
+      if (proj && project.trim() === proj) {
         return `This also limits notes to project ${proj}`
       }
     }
-    if (selectedProfileId === 'grounded-helper' && !(filters.project ?? '').trim()) {
+    if (selectedProfileId === 'grounded-helper' && !project.trim()) {
       return 'Answers use all your notes'
     }
     return null
@@ -464,13 +458,13 @@ export function useChat(deps: UseChatDeps) {
     projectIsGorgias,
     selectedProfileId,
     selectedUserProfile,
-    filters.project,
+    project,
   ])
 
-  const onNotesFromChange = (project: string) => {
+  const onNotesFromChange = (projectValue: string) => {
     const promptId =
       selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    applyPromptAndProject(promptId, project)
+    applyPromptAndProject(promptId, projectValue)
   }
 
   const chatPlaceholder = projectIsGorgias
@@ -483,10 +477,10 @@ export function useChat(deps: UseChatDeps) {
         selectedProfileId,
         prompts,
         selectedPromptId,
-        filters.project ?? '',
+        project,
         userProfiles,
       ),
-    [selectedProfileId, prompts, selectedPromptId, filters.project, userProfiles],
+    [selectedProfileId, prompts, selectedPromptId, project, userProfiles],
   )
 
   /** Re-pick the active profile after the currently-selected prompt is deleted. */
@@ -495,9 +489,9 @@ export function useChat(deps: UseChatDeps) {
     const remaining = prompts.filter((p) => p.id !== deletedId)
     const grounded = findGroundedDefaultPrompt(remaining)
     const nextId = grounded?.id || remaining[0]?.id || ''
-    const project = (filters.project ?? '').trim()
+    const nextProject = project.trim()
     setSelectedPromptId(nextId)
-    persistProfile(matchProfileId(nextId, project, remaining), nextId, project)
+    persistProfile(matchProfileId(nextId, nextProject, remaining), nextId, nextProject)
   }
 
   return {
@@ -508,6 +502,7 @@ export function useChat(deps: UseChatDeps) {
     setChatInput,
     selectedPromptId,
     selectedProfileId,
+    project,
     userProfiles,
     selectedUserProfile,
     profileSaveOpen,
