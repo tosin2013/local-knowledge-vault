@@ -9,11 +9,11 @@ import type {
 } from '../../electron/types'
 import {
   askEmptyStateCopy,
-  BUILTIN_PROFILES,
   findGroundedDefaultPrompt,
   GORGIAS_PROJECT,
   isBuiltinProfileId,
   isGorgiasReaderPrompt,
+  listBuiltinProfiles,
   loadLastProfile,
   matchProfileId,
   resolveProfilePromptId,
@@ -113,7 +113,7 @@ export function useChat(deps: UseChatDeps) {
     if (saved) {
       const savedPromptOk = saved.promptId && prompts.some((p) => p.id === saved.promptId)
       if (isBuiltinProfileId(saved.profileId)) {
-        const builtin = BUILTIN_PROFILES.find((p) => p.id === saved.profileId)
+        const builtin = listBuiltinProfiles(prompts).find((p) => p.id === saved.profileId)
         if (builtin) {
           promptId = resolveProfilePromptId(builtin, prompts) || grounded?.id || ''
           project = builtin.project
@@ -225,7 +225,7 @@ export function useChat(deps: UseChatDeps) {
         selectedProfileId === 'custom'
           ? 'Custom'
           : isBuiltinProfileId(selectedProfileId)
-            ? BUILTIN_PROFILES.find((p) => p.id === selectedProfileId)?.name
+            ? listBuiltinProfiles(prompts).find((p) => p.id === selectedProfileId)?.name
             : userProfiles.find((p) => p.id === selectedProfileId)?.name
       const res = await window.lkv.citationPack.export({
         sessionId: activeSessionId,
@@ -323,7 +323,7 @@ export function useChat(deps: UseChatDeps) {
       persistProfile('custom', promptId, project)
       return
     }
-    const builtin = BUILTIN_PROFILES.find((p) => p.id === profileId)
+    const builtin = listBuiltinProfiles(prompts).find((p) => p.id === profileId)
     if (builtin) {
       const promptId = resolveProfilePromptId(builtin, prompts) || ''
       const project = builtin.project

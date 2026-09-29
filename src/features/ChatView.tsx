@@ -35,9 +35,9 @@ import type {
   ProviderConfig,
 } from '../../electron/types'
 import {
-  BUILTIN_PROFILES,
   findGroundedDefaultPrompt,
   isBuiltinProfileId,
+  listBuiltinProfiles,
   parseCitations,
   personalityDisplayName,
   type ChatProfileId,
@@ -347,7 +347,7 @@ export function ChatView(props: ChatViewProps) {
                   onChange={(e) => onProfileChange(String(e.target.value))}
                   aria-label="Chat profile"
                 >
-                  {BUILTIN_PROFILES.map((p) => (
+                  {listBuiltinProfiles(prompts).map((p) => (
                     <MenuItem key={p.id} value={p.id}>
                       {p.name}
                     </MenuItem>
