@@ -18,6 +18,7 @@ function makeProps(overrides: Partial<NotePeekProps> = {}): NotePeekProps {
     onPatch: vi.fn(),
     onSave: vi.fn(),
     onDelete: vi.fn(),
+    onConfirmDraft: vi.fn(),
     onCopyId: vi.fn(),
     ...overrides,
   }
@@ -62,6 +63,17 @@ describe('NotePeek', () => {
     const props = makeProps({ peekEditing: true, projectOptions: ['Work', 'Home'] })
     render(<NotePeek {...props} />)
     expect(screen.getByLabelText('Project')).toBeInTheDocument()
+  })
+
+  it('shows an AI-draft badge and confirms it', () => {
+    const props = makeProps({
+      peekEditing: true,
+      draft: makeItem('itm_1', { title: 'Saved answer', status: 'ai-draft' }),
+    })
+    render(<NotePeek {...props} />)
+    expect(screen.getByText('AI draft')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Confirm draft'))
+    expect(props.onConfirmDraft).toHaveBeenCalled()
   })
 
   it('shows the copy-id affordance in advanced mode', () => {

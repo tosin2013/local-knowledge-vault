@@ -3,7 +3,7 @@ import { Box, CssBaseline, Paper, ThemeProvider, Typography } from '@mui/materia
 import { listPlugins } from './plugins/registry'
 import { ProviderDialog } from './components/ai/ProviderDialog'
 import { aiChipLabel } from './components/ai/FirstRunLocalCard'
-import { personalityDisplayName, type Mode } from './domain'
+import { personalityDisplayName, AI_DRAFT_STATUS, provenanceHeader, type Mode } from './domain'
 import { useUi } from './hooks/useUi'
 import { useProviders } from './hooks/useProviders'
 import { useNotes } from './hooks/useNotes'
@@ -249,6 +249,7 @@ export default function App() {
               onDismissStatus={() => setStatusMsg(null)}
               onDismissError={() => setError(null)}
               onOpenNote={(id) => notes.selectItem(id)}
+              onNewDraft={notes.openPrefilledDraft}
             />
 
             {!activePluginId && mode === 'search' && (
@@ -337,6 +338,17 @@ export default function App() {
                 onSend={() => void chat.onSendChat()}
                 onNewChat={() => void chat.onNewChat()}
                 onExportCitationPack={() => void chat.onExportCitationPack()}
+                onSaveAsNote={(content, cites) => {
+                  const title = (content.trim().split(/[?!.\n]/)[0] || 'Saved answer').slice(0, 60)
+                  notes.openPrefilledDraft({
+                    title,
+                    body: provenanceHeader({ citedIds: cites.map((c) => c.id) }) + content,
+                    kind: 'note',
+                    para: 'resources',
+                    status: AI_DRAFT_STATUS,
+                    project: notes.filters.project ?? null,
+                  })
+                }}
                 onSelectSession={(id) => void chat.onSelectSession(id)}
                 onDeleteSession={(id) => void chat.onDeleteSession(id)}
               />
@@ -379,6 +391,7 @@ export default function App() {
               onPatch={notes.patchDraft}
               onSave={() => void notes.onSave()}
               onDelete={() => void notes.onDelete()}
+              onConfirmDraft={() => void notes.confirmDraft()}
               onCopyId={(id) => void notes.copyItemId(id)}
             />
           </Box>

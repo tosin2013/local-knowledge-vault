@@ -21,6 +21,7 @@ import MovieIcon from '@mui/icons-material/Movie'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import type { VaultPluginRenderProps } from '../types'
+import { AI_DRAFT_STATUS, provenanceHeader } from '../../domain'
 import type {
   ChatMessage,
   Citation,
@@ -152,7 +153,7 @@ function writeStoredVoiceName(name: string) {
   }
 }
 
-export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
+export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRenderProps) {
   const videoRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null)
   const ytFrameRef = useRef<HTMLIFrameElement | null>(null)
   const ytPlayerRef = useRef<YTPlayer | null>(null)
@@ -542,6 +543,36 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
     return `[At ${clock} in the media${windowHint}] ${q}`
   }
 
+  /** Save the transcript passage near the playhead as an AI-draft note. */
+  const saveMoment = async () => {
+    if (!active || !onNewDraft || !window.lkv?.media?.notesNear) return
+    setBusy(true)
+    setError(null)
+    try {
+      const notes = await window.lkv.media.notesNear({ project: active.project, centerSec: currentTime, windowSec: 45 })
+      const passage = notes.map((n) => n.body).join('\n\n') || '(no transcript near this moment)'
+      onNewDraft({
+        title: `Media moment — ${formatClock(currentTime)}`,
+        body:
+          provenanceHeader({
+            sourceUrl: active.mediaUrl ?? active.mediaPath,
+            tStart: Math.max(0, Math.round(currentTime - 45)),
+            tEnd: Math.round(currentTime + 45),
+          }) +
+          passage +
+          '\n\n## In my words\n\n',
+        kind: 'note',
+        para: 'resources',
+        status: AI_DRAFT_STATUS,
+        project: active.project,
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const onSend = async (opts?: { aboutMoment?: boolean }) => {
     if (!window.lkv || !active || !chatInput.trim()) return
     const text = buildQuestion(chatInput, !!opts?.aboutMoment)
@@ -593,6 +624,11 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
       <Chip size="small" label={`Now: ${formatClock(currentTime)}`} />
       {nearCount != null && (
         <Chip size="small" variant="outlined" label={`${nearCount} notes near playhead`} />
+      )}
+      {active && onNewDraft && (
+        <Button size="small" variant="outlined" disabled={busy} onClick={() => void saveMoment()}>
+          Save this moment
+        </Button>
       )}
       <FormControlLabel
         control={
@@ -811,6 +847,24 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
                           />
                         ))}
                       </Stack>
+                    )}
+                    {m.role === 'assistant' && onNewDraft && (
+                      <Button
+                        size="small"
+                        sx={{ mt: 0.5 }}
+                        onClick={() =>
+                          onNewDraft({
+                            title: (m.content.trim().split(/[?!.\n]/)[0] || 'Saved answer').slice(0, 60),
+                            body: provenanceHeader({ citedIds: cites.map((c) => c.id) }) + m.content,
+                            kind: 'note',
+                            para: 'resources',
+                            status: AI_DRAFT_STATUS,
+                            project: active?.project ?? null,
+                          })
+                        }
+                      >
+                        Save as note
+                      </Button>
                     )}
                   </Box>
                 )

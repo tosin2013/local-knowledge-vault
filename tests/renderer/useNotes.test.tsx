@@ -141,4 +141,51 @@ describe('useNotes', () => {
       { name: 'Home', count: 1 },
     ])
   })
+
+  it('opens a pre-filled draft (save answer as note)', () => {
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    act(() => result.current.openPrefilledDraft({ title: 'Saved answer', body: 'content', status: 'ai-draft' }))
+    expect(result.current.isNewDraft).toBe(true)
+    expect(result.current.peekEditing).toBe(true)
+    expect(result.current.draft?.title).toBe('Saved answer')
+    expect(result.current.draft?.status).toBe('ai-draft')
+  })
+
+  it('saves a new AI-draft answer still as ai-draft', async () => {
+    const lkv = window.lkv as any
+    lkv.items.create.mockImplementation((input: { status: string }) => Promise.resolve(makeItem('itm_new', input)))
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    act(() => result.current.openPrefilledDraft({ title: 'A', body: 'b', status: 'ai-draft' }))
+    await act(async () => {
+      await result.current.onSave()
+    })
+    expect(lkv.items.create).toHaveBeenCalledWith(expect.objectContaining({ status: 'ai-draft' }))
+  })
+
+  it('editing an existing AI draft saves it as active', async () => {
+    const lkv = window.lkv as any
+    lkv.items.get.mockResolvedValue(makeItem('itm_1', { status: 'ai-draft' }))
+    lkv.items.update.mockResolvedValue(makeItem('itm_1', { status: 'active' }))
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    act(() => result.current.selectItem('itm_1'))
+    await waitFor(() => expect(result.current.draft?.id).toBe('itm_1'))
+    act(() => result.current.patchDraft('body', 'edited'))
+    await act(async () => {
+      await result.current.onSave()
+    })
+    expect(lkv.items.update).toHaveBeenCalledWith('itm_1', expect.objectContaining({ status: 'active' }))
+  })
+
+  it('confirms an AI draft without editing', async () => {
+    const lkv = window.lkv as any
+    lkv.items.get.mockResolvedValue(makeItem('itm_1', { status: 'ai-draft' }))
+    lkv.items.update.mockResolvedValue(makeItem('itm_1', { status: 'active' }))
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    act(() => result.current.selectItem('itm_1'))
+    await waitFor(() => expect(result.current.draft?.id).toBe('itm_1'))
+    await act(async () => {
+      await result.current.confirmDraft()
+    })
+    expect(lkv.items.update).toHaveBeenCalledWith('itm_1', { status: 'active' })
+  })
 })
