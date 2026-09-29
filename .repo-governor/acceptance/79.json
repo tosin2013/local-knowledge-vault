@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #79: URL import smoke test against local HTTP fixture server. Covers isAllowedUrl (scheme validation), extractFromHtml (title/og:title/h1 fallback, script/style removal), heuristicTags, parseAutoTagJson (valid/invalid JSON, markdown fences, minimal fields), importFromUrl (success, redirects, redirect chains, too-large, binary content-type, 404/500, invalid URLs). Mocks llmGenerate to test heuristic fallback path. Runs headless under Electron-as-Node. import-url.ts 49% -> 90.6% (356/393).",
+  "authority_id": "79",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:url-import" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
