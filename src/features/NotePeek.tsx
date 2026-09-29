@@ -102,13 +102,20 @@ export function NotePeek(props: NotePeekProps) {
           <Chip size="small" color="warning" variant="outlined" label="AI draft" />
         )}
         {!peekEditing && draft && (
-          <Button
-            size="small"
-            startIcon={<EditOutlinedIcon />}
-            onClick={() => onEdit(true)}
-          >
-            Edit
-          </Button>
+          <>
+            <Button
+              size="small"
+              startIcon={<EditOutlinedIcon />}
+              onClick={() => onEdit(true)}
+            >
+              Edit
+            </Button>
+            {!isNewDraft && draft.id !== NEW_DRAFT_ID && (
+              <Button size="small" color="error" onClick={onDelete}>
+                Delete
+              </Button>
+            )}
+          </>
         )}
         <IconButton size="small" aria-label="Close note peek" onClick={onClose}>
           <CloseIcon fontSize="small" />
@@ -130,7 +137,6 @@ export function NotePeek(props: NotePeekProps) {
               onChange={(e) => onPatch('title', e.target.value)}
               placeholder="Title"
               aria-label="Note title"
-              InputProps={{ readOnly: !peekEditing }}
             />
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
               <FormControl fullWidth size="small" disabled={!peekEditing}>
@@ -211,11 +217,11 @@ export function NotePeek(props: NotePeekProps) {
                   ? dirty
                     ? 'Draft — not saved yet'
                     : 'Draft — save to add to your vault'
-                  : peekEditing
-                    ? dirty
-                      ? 'Unsaved changes'
-                      : 'Saved'
-                    : 'Read-only'}
+                  : dirty
+                    ? 'Unsaved changes'
+                    : peekEditing
+                      ? 'Saved'
+                      : 'Viewing'}
               </Typography>
               {peekEditing && (
                 <>
@@ -229,14 +235,16 @@ export function NotePeek(props: NotePeekProps) {
                       Delete
                     </Button>
                   )}
-                  <Button
-                    variant="contained"
-                    disabled={busy || (!dirty && !isNewDraft && draft.id !== NEW_DRAFT_ID)}
-                    onClick={onSave}
-                  >
-                    Save
-                  </Button>
                 </>
+              )}
+              {(peekEditing || dirty) && (
+                <Button
+                  variant="contained"
+                  disabled={busy || (!dirty && !isNewDraft && draft.id !== NEW_DRAFT_ID)}
+                  onClick={onSave}
+                >
+                  Save
+                </Button>
               )}
             </Stack>
           </Box>

@@ -222,6 +222,7 @@ export default function App() {
             onImport={() => void notes.onImportFromUrl()}
             onProject={chat.onNotesFromChange}
             onManageProjects={() => setManageProjectsOpen(true)}
+            onDeleteItem={(id) => void notes.deleteItemById(id)}
             onFilters={notes.setFilters}
             onFiltersOpen={notes.setFiltersOpen}
             onSelect={notes.selectItem}

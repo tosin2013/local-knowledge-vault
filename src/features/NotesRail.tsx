@@ -20,6 +20,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import type { Item, ItemFilters, Para } from '../../electron/types'
 import { isValidHttpUrl, KIND_OPTIONS, PARA_OPTIONS, paraLabel, STATUS_OPTIONS } from '../domain'
 
@@ -39,6 +40,7 @@ export interface NotesRailProps {
   onImport: () => void
   onProject: (project: string) => void
   onManageProjects: () => void
+  onDeleteItem: (id: string) => void
   onFilters: Dispatch<SetStateAction<ItemFilters>>
   onFiltersOpen: (open: boolean) => void
   onSelect: (id: string, opts?: { edit?: boolean }) => void
@@ -61,6 +63,7 @@ export function NotesRail(props: NotesRailProps) {
     onImport,
     onProject,
     onManageProjects,
+    onDeleteItem,
     onFilters,
     onFiltersOpen,
     onSelect,
@@ -282,9 +285,23 @@ export function NotesRail(props: NotesRailProps) {
                 borderColor: 'primary.main',
               }}
             >
-              <Typography variant="body2" fontWeight={600} noWrap>
-                {it.title}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+                <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, mt: 0.25 }}>
+                  {it.title}
+                </Typography>
+                <IconButton
+                  size="small"
+                  aria-label={`Delete ${it.title}`}
+                  title="Delete note"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteItem(it.id)
+                  }}
+                  sx={{ ml: 0.5, mt: -0.25, mr: -0.5 }}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Box>
               <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
                 <Chip
                   size="small"
