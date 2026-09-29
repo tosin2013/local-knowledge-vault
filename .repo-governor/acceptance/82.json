@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #82: provider adapter error paths. New scripts/provider-errors-smoke.ts (41 assertions) wired into test:ci as test:provider-errors, using a local failure-injection HTTP server. Covers: anthropic chat/listModels (success, 500 object-message detail, no-key, timeout wording, refused, plain-text error, bad-json); openai-compatible chat (success, 400-temperature retry, 400-plain, 500, array content, bad-json, timeout) + listModels (success, 500, bad-json); http fetchWithTimeout abort wording + readErrorDetail all shapes (string/message/detail/plain/throwing); llm resolveFromProviders (missing-selected, running-no-models, cloud-no-key), providerDisplayName, llmGenerate no-candidates + fallthrough, fetchProviderModels ollama/anthropic/openai paths, testProvider no-model + success paths. anthropic/openai-compatible/http/llm all 100%. electron/ 91.2%.",
+  "authority_id": "82",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:provider-errors" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
