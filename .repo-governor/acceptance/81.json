@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #81: store + loader edge cases. New scripts/store-loader-smoke.ts (57 assertions) wired into test:ci as test:store-loader. Covers: user-data LKV_USER_DATA_DIR + tmp fallback; db updateItem miss/para, chat-profile CRUD + unique names, grounded-helper rename/refresh/create, initDb on existing file; provider-store corrupt backup, selected fallback, legacy groq key, env precedence, setSelection/setProviderEnabled/upsert/remove error paths, isLocalUrl garbage, plugin overrides; plugin-loader URL/schema/contributes/promptFile rejections, malformed plugin.json, icon ok/unreadable, duplicate ids, unreadable root, install error paths, reinstall backup; zip-read traversal + bad-method rejections. Remaining uncovered: Windows-only chmod catch + unreachable unlink catch. db 91->99.7%, plugin-loader 91->99.4%, provider-store 93->98.9%, user-data 84->100%, zip-read 95->100%.",
+  "authority_id": "81",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:store-loader" },
+    { "check": "command_exit", "target": "npm run coverage" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
