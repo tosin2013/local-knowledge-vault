@@ -565,6 +565,7 @@ export function MediaChatView({ onOpenNote, onClose }: VaultPluginRenderProps) {
         filters: { project: active.project },
         promptId: active.promptId || undefined,
         limit: 8,
+        sourcesLast: false, // Media chat is chat with the video: transcripts rank normally
       })
       setMessages(res.messages)
     } catch (e) {

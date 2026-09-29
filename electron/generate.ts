@@ -146,6 +146,7 @@ export async function askGrounded(input: AskGroundedInput): Promise<AskGroundedR
     text: input.question,
     filters: input.filters,
     limit,
+    sourcesLast: input.sourcesLast ?? true,
   })
 
   if (hits.length === 0) {
