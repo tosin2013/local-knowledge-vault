@@ -5,12 +5,14 @@ import {
   BUILTIN_PROFILES,
   emptyFilters,
   findGroundedDefaultPrompt,
+  GORGIAS_PROFILE,
   GORGIAS_PROJECT,
   isBuiltinProfileId,
   isGorgiasReaderPrompt,
   isValidHttpUrl,
   KIND_OPTIONS,
   LAST_PROFILE_KEY,
+  listBuiltinProfiles,
   loadLastProfile,
   loadTheme,
   loadUiMode,
@@ -115,10 +117,19 @@ describe('profile helpers', () => {
 
   it('resolveProfilePromptId resolves by promptId or name', () => {
     const prompts = [makePrompt('prm_g', 'Grounded default')]
-    const gorgias = BUILTIN_PROFILES.find((p) => p.id === 'gorgias')!
-    expect(resolveProfilePromptId(gorgias, prompts)).toBe('prm_56ba1ab41bfe4042')
+    expect(resolveProfilePromptId(GORGIAS_PROFILE, prompts)).toBe('prm_56ba1ab41bfe4042')
     const grounded = BUILTIN_PROFILES.find((p) => p.id === 'grounded-helper')!
     expect(resolveProfilePromptId(grounded, prompts)).toBe('prm_g')
+  })
+
+  it('listBuiltinProfiles hides Gorgias unless its reader prompt exists', () => {
+    expect(listBuiltinProfiles([]).map((p) => p.id)).toEqual(['grounded-helper'])
+    expect(
+      listBuiltinProfiles([makePrompt('prm_56ba1ab41bfe4042', 'Gorgias reader')]).map((p) => p.id)
+    ).toEqual(['grounded-helper', 'gorgias'])
+    expect(
+      listBuiltinProfiles([makePrompt('prm_x', 'Gorgias reader')]).map((p) => p.id)
+    ).toEqual(['grounded-helper', 'gorgias'])
   })
 
   it('personalityDisplayName maps Grounded default to Grounded helper', () => {

@@ -52,13 +52,6 @@ export const BUILTIN_PROFILES: BuiltinProfile[] = [
     promptNames: ['Grounded default', 'Grounded helper'],
     project: '',
   },
-  {
-    id: 'gorgias',
-    name: 'Gorgias',
-    promptId: 'prm_56ba1ab41bfe4042',
-    promptNames: ['Gorgias reader'],
-    project: 'Gorgias',
-  },
 ]
 
 /** Legacy localStorage values: blink = dark, blink-light = light. */
@@ -168,6 +161,27 @@ export const GORGIAS_PROJECT = 'Gorgias'
 export const GORGIAS_READER_NAME = 'Gorgias reader'
 export const GROUNDED_DEFAULT_NAMES = ['Grounded default', 'Grounded helper']
 
+/**
+ * The Gorgias demo profile. It is not in BUILTIN_PROFILES because it must not
+ * ship to every user (#126): it only appears once the "Gorgias reader" prompt
+ * actually exists (i.e. the user ingested the Gorgias source).
+ */
+export const GORGIAS_PROFILE: BuiltinProfile = {
+  id: 'gorgias',
+  name: 'Gorgias',
+  promptId: GORGIAS_READER_PROMPT_ID,
+  promptNames: [GORGIAS_READER_NAME],
+  project: GORGIAS_PROJECT,
+}
+
+/** Built-in profiles visible to this user: Gorgias only when its prompt is present. */
+export function listBuiltinProfiles(prompts: Prompt[]): BuiltinProfile[] {
+  const hasGorgias = prompts.some(
+    (p) => p.id === GORGIAS_READER_PROMPT_ID || p.name === GORGIAS_READER_NAME
+  )
+  return hasGorgias ? [...BUILTIN_PROFILES, GORGIAS_PROFILE] : BUILTIN_PROFILES
+}
+
 export function isGorgiasReaderPrompt(promptId: string, prompts: Prompt[]): boolean {
   if (!promptId) return false
   if (promptId === GORGIAS_READER_PROMPT_ID) return true
@@ -255,7 +269,7 @@ export function matchProfileId(
   userProfiles: ChatProfile[] = [],
 ): ChatProfileId {
   const proj = (project ?? '').trim()
-  for (const profile of BUILTIN_PROFILES) {
+  for (const profile of listBuiltinProfiles(prompts)) {
     const resolved = resolveProfilePromptId(profile, prompts)
     if (!resolved || resolved !== promptId) continue
     if ((profile.project ?? '').trim() === proj) return profile.id
