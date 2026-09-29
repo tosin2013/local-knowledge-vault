@@ -83,6 +83,8 @@ export interface SearchQueryResult {
 export interface Citation {
   id: string
   title: string
+  /** Project/source the cited note belongs to (for traceability in chips). */
+  project?: string | null
 }
 
 export interface AskGroundedInput {

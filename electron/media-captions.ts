@@ -341,6 +341,7 @@ export function buildTranscriptNoteBody(opts: {
   return lines.join('\n')
 }
 
-export function mediaNoteTitle(startSec: number, endSec: number): string {
-  return `Media — ${formatTimestamp(startSec)}–${formatTimestamp(endSec)}`
+export function mediaNoteTitle(startSec: number, sourceTitle?: string): string {
+  const source = (sourceTitle ?? '').trim() || 'Media'
+  return `${source} · ${formatTimestamp(startSec)}`
 }
