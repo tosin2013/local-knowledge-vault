@@ -17,6 +17,7 @@ import { PromptsView } from './features/PromptsView'
 import { NotePeek } from './features/NotePeek'
 import { AiSettingsDialog } from './features/AiSettingsDialog'
 import { ContentChrome } from './features/ContentChrome'
+import { ManageProjectsDialog } from './features/ManageProjectsDialog'
 
 export default function App() {
   // Cross-cutting navigation / notification state.
@@ -26,6 +27,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [manageProjectsOpen, setManageProjectsOpen] = useState(false)
 
   const ui = useUi()
   const providers = useProviders()
@@ -51,7 +53,6 @@ export default function App() {
     prompts: prompts.prompts,
     filters: notes.filters,
     setFilters: notes.setFilters,
-    setKnownProjects: notes.setKnownProjects,
     setBusy,
     setError,
     setStatusMsg,
@@ -66,6 +67,7 @@ export default function App() {
   useEffect(() => {
     if (!hasApi) return
     void notes.refreshList()
+    void notes.refreshProjects()
     void providers.refreshLlm()
     void chat.refreshSessions()
     void prompts.refreshPrompts()
@@ -75,6 +77,7 @@ export default function App() {
   }, [
     hasApi,
     notes.refreshList,
+    notes.refreshProjects,
     providers.refreshLlm,
     chat.refreshSessions,
     prompts.refreshPrompts,
@@ -194,6 +197,7 @@ export default function App() {
             onImportUrl={notes.setImportUrl}
             onImport={() => void notes.onImportFromUrl()}
             onProject={chat.onNotesFromChange}
+            onManageProjects={() => setManageProjectsOpen(true)}
             onFilters={notes.setFilters}
             onFiltersOpen={notes.setFiltersOpen}
             onSelect={notes.selectItem}
@@ -344,6 +348,7 @@ export default function App() {
               dirty={notes.dirty}
               busy={busy}
               advanced={ui.advanced}
+              projectOptions={notes.projectOptions}
               onClose={notes.closeNotePeek}
               onEdit={notes.setPeekEditing}
               onPatch={notes.patchDraft}
@@ -353,6 +358,16 @@ export default function App() {
             />
           </Box>
         </Box>
+
+        <ManageProjectsDialog
+          open={manageProjectsOpen}
+          projects={notes.projects}
+          busy={busy}
+          onClose={() => setManageProjectsOpen(false)}
+          onRename={(from, to) => void notes.renameProject(from, to)}
+          onMerge={(from, into) => void notes.mergeProject(from, into)}
+          onDelete={(name) => void notes.deleteProject(name)}
+        />
 
         <ProviderDialog
           open={providers.providerDialogOpen}

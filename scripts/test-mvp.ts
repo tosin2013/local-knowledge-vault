@@ -25,6 +25,10 @@ import {
   appendMessage,
   listMessages,
   updateSessionTitle,
+  listProjects,
+  renameProject,
+  mergeProject,
+  deleteProject,
 } from '../electron/db'
 import { searchQuery, buildFtsQuery } from '../electron/search'
 import { extractCitedIds, validateCitations, buildGroundedPrompt } from '../electron/generate'
@@ -127,6 +131,34 @@ async function main(): Promise<void> {
   assert(!!getItem(created.id), 'create + get works')
   const uniq = searchQuery({ text: 'qwerty-lkv', limit: 5 })
   assert(uniq.hits.some((h) => h.id === created.id), 'new note is FTS-indexed via triggers')
+
+  // --- Projects (first-class list / rename / merge / delete) ---
+  console.log('\nProjects')
+  createItem({ title: 'P1 note', body: 'alpha project content', kind: 'note', project: 'Alpha' })
+  createItem({ title: 'P1 note 2', body: 'alpha project content two', kind: 'note', project: 'Alpha' })
+  createItem({ title: 'P2 note', body: 'beta project content', kind: 'note', project: 'Beta' })
+  let projs = listProjects()
+  assert(
+    projs.some((p) => p.name === 'Alpha' && p.count === 2),
+    'listProjects counts notes per project'
+  )
+  assert(projs.some((p) => p.name === 'Beta' && p.count === 1), 'listProjects includes Beta')
+
+  const renamedProj = renameProject('Alpha', 'Alpha-renamed')
+  assert(renamedProj.count === 2, 'renameProject renames 2 notes')
+  projs = listProjects()
+  assert(!projs.some((p) => p.name === 'Alpha'), 'renameProject removes old name')
+  assert(projs.some((p) => p.name === 'Alpha-renamed' && p.count === 2), 'renameProject adds new name')
+
+  const mergedProj = mergeProject('Alpha-renamed', 'Beta')
+  assert(mergedProj.count === 2, 'mergeProject moves 2 notes')
+  projs = listProjects()
+  assert(!projs.some((p) => p.name === 'Alpha-renamed'), 'mergeProject removes source')
+  assert(projs.some((p) => p.name === 'Beta' && p.count === 3), 'mergeProject combines counts')
+
+  const deletedProj = deleteProject('Beta')
+  assert(deletedProj.count === 3, 'deleteProject deletes 3 notes')
+  assert(!listProjects().some((p) => p.name === 'Beta'), 'deleteProject removes the project')
 
   // --- Citation validation ---
   console.log('\nCitation validation')

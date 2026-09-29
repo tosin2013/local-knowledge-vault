@@ -4,6 +4,7 @@ import {
   Button,
   Chip,
   FormControl,
+  IconButton,
   InputLabel,
   List,
   ListItemButton,
@@ -17,6 +18,8 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import type { Item, ItemFilters, Para } from '../../electron/types'
 import { isValidHttpUrl, KIND_OPTIONS, PARA_OPTIONS, paraLabel, STATUS_OPTIONS } from '../domain'
 
@@ -35,6 +38,7 @@ export interface NotesRailProps {
   onImportUrl: (v: string) => void
   onImport: () => void
   onProject: (project: string) => void
+  onManageProjects: () => void
   onFilters: Dispatch<SetStateAction<ItemFilters>>
   onFiltersOpen: (open: boolean) => void
   onSelect: (id: string, opts?: { edit?: boolean }) => void
@@ -56,6 +60,7 @@ export function NotesRail(props: NotesRailProps) {
     onImportUrl,
     onImport,
     onProject,
+    onManageProjects,
     onFilters,
     onFiltersOpen,
     onSelect,
@@ -123,23 +128,33 @@ export function NotesRail(props: NotesRailProps) {
           </Stack>
         )}
 
-        <FormControl fullWidth size="small">
-          <InputLabel id="project-filter-label">Project</InputLabel>
-          <Select
-            labelId="project-filter-label"
-            label="Project"
-            value={filters.project ?? ''}
-            onChange={(e) => onProject(String(e.target.value))}
-            aria-label="Filter notes by project"
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <FormControl fullWidth size="small">
+            <InputLabel id="project-filter-label">Project</InputLabel>
+            <Select
+              labelId="project-filter-label"
+              label="Project"
+              value={filters.project ?? ''}
+              onChange={(e) => onProject(String(e.target.value))}
+              aria-label="Filter notes by project"
+            >
+              <MenuItem value="">All projects</MenuItem>
+              {projectOptions.map((name) => (
+                <MenuItem key={name} value={name}>
+                  {name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <IconButton
+            size="small"
+            onClick={onManageProjects}
+            aria-label="Manage projects"
+            title="Manage projects (rename, merge, delete)"
           >
-            <MenuItem value="">All projects</MenuItem>
-            {projectOptions.map((name) => (
-              <MenuItem key={name} value={name}>
-                {name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+            <SettingsOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Stack>
 
         {advanced && (
           <Stack direction="row" flexWrap="wrap" gap={0.75} role="group" aria-label="Note group">
@@ -264,9 +279,23 @@ export function NotesRail(props: NotesRailProps) {
                 {it.title}
               </Typography>
               <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
-                <Chip size="small" label={paraLabel(it.para)} color="primary" variant="outlined" />
+                <Chip
+                  size="small"
+                  label={paraLabel(it.para)}
+                  color="primary"
+                  variant="outlined"
+                  title={`Group: ${paraLabel(it.para)}`}
+                />
                 <Chip size="small" label={it.kind} variant="outlined" />
-                {it.project && <Chip size="small" label={it.project} variant="outlined" />}
+                {it.project && (
+                  <Chip
+                    size="small"
+                    icon={<FolderOutlinedIcon />}
+                    label={it.project}
+                    variant="outlined"
+                    title={`Project: ${it.project}`}
+                  />
+                )}
               </Stack>
             </ListItemButton>
           ))}

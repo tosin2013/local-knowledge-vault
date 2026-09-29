@@ -17,6 +17,8 @@ import type {
   Item,
   ItemFilters,
   Prompt,
+  ProjectResult,
+  ProjectSummary,
   UpdateChatProfilePatch,
   UpdateItemPatch,
   UpdatePromptPatch,
@@ -203,6 +205,60 @@ export function listItemsByProjectExact(project: string, kind?: string): Item[] 
     ? database.prepare(sql).all(project, kind)
     : database.prepare(sql).all(project)) as Record<string, unknown>[]
   return rows.map(rowToItem)
+}
+
+/* ---- Projects (first-class, derived from the `project` field on notes) ---- */
+
+/** Distinct project names with note counts, ordered case-insensitively. */
+export function listProjects(): ProjectSummary[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT project AS name, COUNT(*) AS count
+       FROM items
+       WHERE project IS NOT NULL AND TRIM(project) != ''
+       GROUP BY project
+       ORDER BY project COLLATE NOCASE`
+    )
+    .all() as Array<{ name: string; count: number }>
+  return rows.map((r) => ({ name: String(r.name), count: Number(r.count) }))
+}
+
+/** Rename a project (exact match) across notes and chat profiles. */
+export function renameProject(from: string, to: string): ProjectResult {
+  const prev = (from ?? '').trim()
+  const next = (to ?? '').trim()
+  if (!prev || !next) throw new Error('Both project names are required')
+  if (prev === next) return { count: 0 }
+  const database = getDb()
+  const items = database
+    .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
+    .run(next, nowIso(), prev)
+  database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(next, prev)
+  return { count: items.changes }
+}
+
+/** Move every note (and chat profile) from `from` into `into`. */
+export function mergeProject(from: string, into: string): ProjectResult {
+  const src = (from ?? '').trim()
+  const dst = (into ?? '').trim()
+  if (!src || !dst) throw new Error('Both project names are required')
+  if (src === dst) return { count: 0 }
+  const database = getDb()
+  const items = database
+    .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
+    .run(dst, nowIso(), src)
+  database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(dst, src)
+  return { count: items.changes }
+}
+
+/** Delete every note (and chat profile) under a project name. */
+export function deleteProject(name: string): ProjectResult {
+  const n = (name ?? '').trim()
+  if (!n) throw new Error('Project name is required')
+  const database = getDb()
+  const items = database.prepare('DELETE FROM items WHERE project = ?').run(n)
+  database.prepare('DELETE FROM chat_profiles WHERE project = ?').run(n)
+  return { count: items.changes }
 }
 
 export function getItem(id: string): Item | null {

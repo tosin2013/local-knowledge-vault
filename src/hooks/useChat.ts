@@ -26,7 +26,6 @@ export interface UseChatDeps {
   prompts: Prompt[]
   filters: ItemFilters
   setFilters: Dispatch<SetStateAction<ItemFilters>>
-  setKnownProjects: Dispatch<SetStateAction<string[]>>
   setBusy: (busy: boolean) => void
   setError: (error: string | null) => void
   setStatusMsg: (msg: string | null) => void
@@ -35,13 +34,12 @@ export interface UseChatDeps {
   busy: boolean
 }
 
-/** Owns chat sessions/messages and the Personality + Notes-from profile state. */
+/** Owns chat sessions/messages and the Personality + Project profile state. */
 export function useChat(deps: UseChatDeps) {
   const {
     prompts,
     filters,
     setFilters,
-    setKnownProjects,
     setBusy,
     setError,
     setStatusMsg,
@@ -130,11 +128,6 @@ export function useChat(deps: UseChatDeps) {
             : grounded?.id || prompts[0]?.id || ''
           project = user.project
           profileId = user.id
-          if (project) {
-            setKnownProjects((prev) =>
-              prev.includes(project) ? prev : [...prev, project].sort((a, b) => a.localeCompare(b)),
-            )
-          }
         }
       }
       if (!promptId && savedPromptOk) {
@@ -334,11 +327,6 @@ export function useChat(deps: UseChatDeps) {
     if (builtin) {
       const promptId = resolveProfilePromptId(builtin, prompts) || ''
       const project = builtin.project
-      if (project) {
-        setKnownProjects((prev) =>
-          prev.includes(project) ? prev : [...prev, project].sort((a, b) => a.localeCompare(b)),
-        )
-      }
       applyPromptAndProject(promptId, project, builtin.id)
       return
     }
@@ -349,11 +337,6 @@ export function useChat(deps: UseChatDeps) {
       ? user.prompt_id
       : findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
     const project = user.project
-    if (project) {
-      setKnownProjects((prev) =>
-        prev.includes(project) ? prev : [...prev, project].sort((a, b) => a.localeCompare(b)),
-      )
-    }
     if (!promptOk) {
       setStatusMsg(`Profile “${user.name}” personality missing — using default.`)
     }

@@ -47,6 +47,8 @@ import type {
   ProviderPresetInfo,
   ProviderSelection,
   ProviderTestResult,
+  ProjectResult,
+  ProjectSummary,
   OllamaHealth,
   Prompt,
   SearchQueryInput,
@@ -149,6 +151,15 @@ const api = {
     update: (id: string, patch: UpdateChatProfilePatch): Promise<ChatProfile | null> =>
       ipcRenderer.invoke('profiles:update', id, patch),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('profiles:delete', id),
+  },
+  projects: {
+    list: (): Promise<ProjectSummary[]> => ipcRenderer.invoke('projects:list'),
+    rename: (from: string, to: string): Promise<ProjectResult> =>
+      ipcRenderer.invoke('projects:rename', from, to),
+    merge: (from: string, into: string): Promise<ProjectResult> =>
+      ipcRenderer.invoke('projects:merge', from, into),
+    delete: (name: string): Promise<ProjectResult> =>
+      ipcRenderer.invoke('projects:delete', name),
   },
   citationPack: {
     export: (input: CitationPackExportInput): Promise<CitationPackExportResult> =>

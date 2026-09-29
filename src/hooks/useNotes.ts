@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { AskGroundedResult, Item, ItemFilters, SearchHit } from '../../electron/types'
+import type { AskGroundedResult, Item, ItemFilters, ProjectSummary, SearchHit } from '../../electron/types'
 import {
   emptyFilters,
   isValidHttpUrl,
@@ -33,7 +33,7 @@ export function useNotes(deps: UseNotesDeps) {
   const [askResult, setAskResult] = useState<AskGroundedResult | null>(null)
   const [importUrl, setImportUrl] = useState('')
   const [importBusy, setImportBusy] = useState(false)
-  const [knownProjects, setKnownProjects] = useState<string[]>([])
+  const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   const refreshList = useCallback(async () => {
@@ -41,6 +41,13 @@ export function useNotes(deps: UseNotesDeps) {
     const list = await window.lkv.items.list({ filters })
     setItems(list)
   }, [filters])
+
+  /** DB-backed project list (exact names + note counts) — the single source of truth. */
+  const refreshProjects = useCallback(async () => {
+    if (!window.lkv?.projects) return
+    const list = await window.lkv.projects.list()
+    setProjects(list)
+  }, [])
 
   const runSearch = useCallback(async (textOverride?: string) => {
     if (!window.lkv) return
@@ -85,27 +92,6 @@ export function useNotes(deps: UseNotesDeps) {
       setIsNewDraft(false)
     })
   }, [selectedId, isNewDraft])
-
-  useEffect(() => {
-    setKnownProjects((prev) => {
-      const names = new Set(prev)
-      let changed = false
-      for (const it of items) {
-        const p = it.project?.trim()
-        if (p && !names.has(p)) {
-          names.add(p)
-          changed = true
-        }
-      }
-      const current = filters.project?.trim()
-      if (current && !names.has(current)) {
-        names.add(current)
-        changed = true
-      }
-      if (!changed) return prev
-      return Array.from(names).sort((a, b) => a.localeCompare(b))
-    })
-  }, [items, filters.project])
 
   const openNotePeek = (id: string, opts?: { edit?: boolean }) => {
     if (id !== NEW_DRAFT_ID) {
@@ -165,6 +151,7 @@ export function useNotes(deps: UseNotesDeps) {
       const res = await window.lkv.import.fromUrl(url)
       setImportUrl('')
       await refreshList()
+      void refreshProjects()
       selectItem(res.item.id)
       const para = paraLabel(res.item.para)
       const kind = res.item.kind || 'article'
@@ -204,6 +191,7 @@ export function useNotes(deps: UseNotesDeps) {
         setSelectedId(created.id)
         setDirty(false)
         await refreshList()
+        void refreshProjects()
         return
       }
       const updated = await window.lkv.items.update(draft.id, {
@@ -218,6 +206,7 @@ export function useNotes(deps: UseNotesDeps) {
       setDraft(updated)
       setDirty(false)
       await refreshList()
+      void refreshProjects()
     } finally {
       setBusy(false)
     }
@@ -243,6 +232,7 @@ export function useNotes(deps: UseNotesDeps) {
     setNotePeekOpen(false)
     setPeekEditing(false)
     await refreshList()
+    void refreshProjects()
   }
 
   const patchDraft = <K extends keyof Item>(key: K, value: Item[K]) => {
@@ -256,6 +246,36 @@ export function useNotes(deps: UseNotesDeps) {
     } catch {
       /* ignore */
     }
+  }
+
+  /** Rename a project across its notes + profiles, then refresh. */
+  const renameProject = async (from: string, to: string) => {
+    if (!window.lkv?.projects) return
+    const res = await window.lkv.projects.rename(from, to)
+    if ((filters.project ?? '') === from) setFilters((f) => ({ ...f, project: to }))
+    await refreshList()
+    await refreshProjects()
+    return res
+  }
+
+  /** Merge `from` into `into` (reassign notes + profiles), then refresh. */
+  const mergeProject = async (from: string, into: string) => {
+    if (!window.lkv?.projects) return
+    const res = await window.lkv.projects.merge(from, into)
+    if ((filters.project ?? '') === from) setFilters((f) => ({ ...f, project: into }))
+    await refreshList()
+    await refreshProjects()
+    return res
+  }
+
+  /** Delete a project and its notes, then refresh. */
+  const deleteProject = async (name: string) => {
+    if (!window.lkv?.projects) return
+    const res = await window.lkv.projects.delete(name)
+    if ((filters.project ?? '') === name) setFilters((f) => ({ ...f, project: '' }))
+    await refreshList()
+    await refreshProjects()
+    return res
   }
 
   const filterSummary = useMemo(() => {
@@ -285,18 +305,21 @@ export function useNotes(deps: UseNotesDeps) {
     importUrl,
     setImportUrl,
     importBusy,
-    knownProjects,
-    setKnownProjects,
+    projects,
     filtersOpen,
     setFiltersOpen,
     filterSummary,
-    projectOptions: knownProjects,
+    projectOptions: projects.map((p) => p.name),
     refreshList,
+    refreshProjects,
     runSearch,
     onNewNote,
     onImportFromUrl,
     onSave,
     onDelete,
+    renameProject,
+    mergeProject,
+    deleteProject,
     patchDraft,
     copyItemId,
     selectItem,

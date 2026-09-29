@@ -125,13 +125,20 @@ describe('useNotes', () => {
     expect(result.current.dirty).toBe(true)
   })
 
-  it('accumulates known projects from items', async () => {
+  it('loads projects from the projects API', async () => {
     const lkv = window.lkv as any
-    lkv.items.list.mockResolvedValue([makeItem('itm_1', { project: 'Work' }), makeItem('itm_2', { project: 'Home' })])
+    lkv.projects.list.mockResolvedValue([
+      { name: 'Work', count: 2 },
+      { name: 'Home', count: 1 },
+    ])
     const { result } = renderHook(() => useNotes(makeDeps()))
     await act(async () => {
-      await result.current.refreshList()
+      await result.current.refreshProjects()
     })
-    expect(result.current.projectOptions).toEqual(['Home', 'Work'])
+    expect(result.current.projectOptions).toEqual(['Work', 'Home'])
+    expect(result.current.projects).toEqual([
+      { name: 'Work', count: 2 },
+      { name: 'Home', count: 1 },
+    ])
   })
 })

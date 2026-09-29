@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Drawer,
@@ -24,6 +25,7 @@ export interface NotePeekProps {
   dirty: boolean
   busy: boolean
   advanced: boolean
+  projectOptions: string[]
   onClose: () => void
   onEdit: (editing: boolean) => void
   onPatch: <K extends keyof Item>(key: K, value: Item[K]) => void
@@ -41,6 +43,7 @@ export function NotePeek(props: NotePeekProps) {
     dirty,
     busy,
     advanced,
+    projectOptions,
     onClose,
     onEdit,
     onPatch,
@@ -152,12 +155,16 @@ export function NotePeek(props: NotePeekProps) {
                 onChange={(e) => onPatch('status', e.target.value)}
                 InputProps={{ readOnly: !peekEditing }}
               />
-              <TextField
-                label="Project"
+              <Autocomplete
+                freeSolo
                 size="small"
+                disabled={!peekEditing}
+                options={projectOptions}
                 value={draft.project ?? ''}
-                onChange={(e) => onPatch('project', e.target.value || null)}
-                InputProps={{ readOnly: !peekEditing }}
+                onInputChange={(_e, value) => onPatch('project', value ? String(value) : null)}
+                renderInput={(params) => (
+                  <TextField {...params} label="Project" placeholder="New or existing project" />
+                )}
               />
             </Box>
             <TextField

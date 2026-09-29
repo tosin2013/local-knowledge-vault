@@ -12,6 +12,7 @@ function makeProps(overrides: Partial<NotePeekProps> = {}): NotePeekProps {
     dirty: false,
     busy: false,
     advanced: false,
+    projectOptions: [],
     onClose: vi.fn(),
     onEdit: vi.fn(),
     onPatch: vi.fn(),
@@ -55,6 +56,12 @@ describe('NotePeek', () => {
     render(<NotePeek {...props} />)
     expect(screen.getByText('New note')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+  })
+
+  it('renders a project picker with existing projects', () => {
+    const props = makeProps({ peekEditing: true, projectOptions: ['Work', 'Home'] })
+    render(<NotePeek {...props} />)
+    expect(screen.getByLabelText('Project')).toBeInTheDocument()
   })
 
   it('shows the copy-id affordance in advanced mode', () => {

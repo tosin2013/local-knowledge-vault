@@ -331,6 +331,12 @@ export function createLkvMock(): LkvMock {
       ),
       delete: vi.fn().mockResolvedValue(true),
     },
+    projects: {
+      list: vi.fn().mockResolvedValue([]),
+      rename: vi.fn().mockResolvedValue({ count: 0 }),
+      merge: vi.fn().mockResolvedValue({ count: 0 }),
+      delete: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     citationPack: {
       export: vi.fn().mockResolvedValue(makeCitationPackResult()),
     },
