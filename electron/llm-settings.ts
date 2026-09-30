@@ -8,6 +8,7 @@
 import fs from 'fs'
 import path from 'path'
 import { resolveUserDataDir, setUserDataDirOverride } from './user-data'
+import { encryptSecret, decryptSecret } from './secret-store'
 
 export type LlmProviderChoice = 'auto' | 'ollama' | 'grok' | 'groq'
 
@@ -134,8 +135,8 @@ export function envGroqKey(): string | null {
 export function readKeyFileAt(p: string): string | null {
   try {
     if (!fs.existsSync(p)) return null
-    const v = fs.readFileSync(p, 'utf8').trim()
-    return v || null
+    const raw = fs.readFileSync(p, 'utf8')
+    return decryptSecret(raw)
   } catch {
     return null
   }
@@ -152,7 +153,8 @@ export function writeKeyFileAt(p: string, key: string | null): void {
     }
     return
   }
-  fs.writeFileSync(p, key.trim(), { encoding: 'utf8', mode: 0o600 })
+  const stored = encryptSecret(key.trim())
+  fs.writeFileSync(p, stored, { encoding: 'utf8', mode: 0o600 })
   try {
     fs.chmodSync(p, 0o600)
   } catch {

@@ -200,8 +200,8 @@ Your data lives in Vault's user-data folder:
 | Linux | `~/.config/local-knowledge-vault` |
 
 It holds the notes database (`lkv.sqlite`), provider settings (`lkv-providers.json`), API keys
-(`lkv-keys/`, owner-only files) and plugins (`plugins/`). Set `LKV_USER_DATA_DIR` to use another
-folder.
+(`lkv-keys/`, encrypted with the OS keychain via `safeStorage`, falling back to owner-only files)
+and plugins (`plugins/`). Set `LKV_USER_DATA_DIR` to use another folder.
 
 What leaves your machine:
 

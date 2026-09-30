@@ -13,6 +13,7 @@ import os from 'os'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { encryptSecret, decryptSecret } from './secret-store'
 import type {
   McpAddServerInput,
   McpCallToolResult,
@@ -149,7 +150,15 @@ function readServersFile(): StoredServersFile {
     const p = serversPath()
     if (!fs.existsSync(p)) return { servers: [] }
     const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as StoredServersFile
-    return { servers: Array.isArray(raw.servers) ? raw.servers : [] }
+    return {
+      servers: (Array.isArray(raw.servers) ? raw.servers : []).map((s) => {
+        if (s?.client?.client_secret) {
+          const secret = decryptSecret(s.client.client_secret)
+          return { ...s, client: { ...s.client, client_secret: secret ?? undefined } }
+        }
+        return s
+      }),
+    }
   } catch {
     return { servers: [] }
   }
@@ -158,14 +167,23 @@ function readServersFile(): StoredServersFile {
 function writeServersFile(data: StoredServersFile): void {
   const dir = resolveUserDataDir()
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(serversPath(), JSON.stringify(data, null, 2), 'utf8')
+  const safe: StoredServersFile = {
+    servers: data.servers.map((s) =>
+      s?.client?.client_secret
+        ? { ...s, client: { ...s.client, client_secret: encryptSecret(s.client.client_secret) } }
+        : s
+    ),
+  }
+  fs.writeFileSync(serversPath(), JSON.stringify(safe, null, 2), 'utf8')
 }
 
 function readTokensFile(): TokensFile {
   try {
     const p = tokensPath()
     if (!fs.existsSync(p)) return {}
-    return JSON.parse(fs.readFileSync(p, 'utf8')) as TokensFile
+    const decrypted = decryptSecret(fs.readFileSync(p, 'utf8'))
+    if (!decrypted) return {}
+    return JSON.parse(decrypted) as TokensFile
   } catch {
     return {}
   }
@@ -175,7 +193,8 @@ function writeTokensFile(data: TokensFile): void {
   const dir = resolveUserDataDir()
   fs.mkdirSync(dir, { recursive: true })
   const p = tokensPath()
-  fs.writeFileSync(p, JSON.stringify(data, null, 2), { encoding: 'utf8', mode: 0o600 })
+  const stored = encryptSecret(JSON.stringify(data, null, 2))
+  fs.writeFileSync(p, stored, { encoding: 'utf8', mode: 0o600 })
   try {
     fs.chmodSync(p, 0o600)
   } catch {

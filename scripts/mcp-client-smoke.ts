@@ -145,6 +145,8 @@ async function startMockServer(options?: {
   noAuthorizationServers?: boolean
   /** Override individual metadata fields (e.g. a malicious endpoint). */
   metadataOverrides?: Record<string, unknown>
+  /** Return a client_secret from dynamic registration. */
+  returnClientSecret?: boolean
 }): Promise<MockServer> {
   const sessions = new Map<string, { transport: StreamableHTTPServerTransport }>()
 
@@ -181,7 +183,11 @@ async function startMockServer(options?: {
         mockState.registrationCount++
         res.writeHead(201, { 'Content-Type': 'application/json' })
         res.end(
-          JSON.stringify({ client_id: 'mock-client-id', client_id_issued_at: 1_700_000_000 }),
+          JSON.stringify({
+            client_id: 'mock-client-id',
+            client_id_issued_at: 1_700_000_000,
+            ...(options?.returnClientSecret ? { client_secret: 'mock-client-secret' } : {}),
+          }),
         )
         return
       }
@@ -403,6 +409,17 @@ async function main(): Promise<void> {
   assert(removed === true, 'remove returns true')
   assert(!listMcpServers().some((s) => s.id === added.id), 'server is gone after remove')
 
+  // --- client_secret round-trips through the servers file (#35) ---
+  console.log('client_secret storage')
+  const secretMock = await startMockServer({ returnClientSecret: true })
+  const secretServer = addMcpServer({ name: 'Secret', url: secretMock.mcpUrl })
+  await connectWithOAuth(secretServer.id, nextAuthUrl)
+  await disconnectMcpServer(secretServer.id)
+  // Reconnect reads the stored client (with client_secret) back from disk.
+  const secretReconnected = await connectMcpServer(secretServer.id)
+  assert(secretReconnected.server.status === 'connected', 'reconnect with stored client_secret succeeds')
+  await removeMcpServer(secretServer.id)
+
   await mock.close()
   await refreshMock.close()
   await bad.close()
@@ -410,6 +427,7 @@ async function main(): Promise<void> {
   await badAuthEndpoint.close()
   await badTokenEndpoint.close()
   await badRegistrationEndpoint.close()
+  await secretMock.close()
   fs.rmSync(tmpDir, { recursive: true, force: true })
 
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`)
