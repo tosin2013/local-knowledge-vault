@@ -7,6 +7,9 @@ code fits together, read [docs/development.md](docs/development.md). Providers a
 
 These rules apply to people and to AI coding agents alike.
 
+Found a security problem? Don't open an issue; report it privately as described in
+[SECURITY.md](SECURITY.md).
+
 ## Start from an issue
 
 Every change starts from a GitHub issue. The repository is governed by
