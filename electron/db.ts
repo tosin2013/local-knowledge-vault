@@ -35,8 +35,11 @@ export function initDb(dbPath: string): Database.Database {
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
+  // Was this vault created before the seeded flag existed? An existing vault
+  // must never get sample notes re-injected on launch (#41).
+  const alreadyExisting = tableExists(db, 'items')
   migrate(db)
-  seedIfEmpty(db)
+  seedSampleNotes(db, alreadyExisting)
   seedPromptsIfEmpty(db)
   ensureFriendlyGroundedHelper(db)
   return db
@@ -49,7 +52,24 @@ export function closeDb(): void {
   }
 }
 
+/**
+ * Versioned migrations driven by `PRAGMA user_version` (#41). `migrateV1` is
+ * the original schema; every statement is an idempotent `CREATE IF NOT EXISTS`,
+ * so it is safe to run against a fresh file or a pre-versioned v0.2 vault.
+ * Future schema changes append `migrateV2`, `migrateV3`, … and bump
+ * `SCHEMA_VERSION` rather than editing v1 in place.
+ */
+const SCHEMA_VERSION = 1
+
 function migrate(database: Database.Database): void {
+  const version = Number(database.pragma('user_version', { simple: true }))
+  if (version < 1) {
+    migrateV1(database)
+  }
+  database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+function migrateV1(database: Database.Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
@@ -132,8 +152,39 @@ function migrate(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_chat_profiles_name
       ON chat_profiles(name);
+
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `)
   ensureTrigramFts(database)
+}
+
+/** Key in the `meta` table recording that sample notes were already seeded (#41). */
+const SAMPLE_NOTES_SEEDED_KEY = 'sample_notes_seeded'
+
+function tableExists(database: Database.Database, name: string): boolean {
+  const row = database
+    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`)
+    .get(name)
+  return !!row
+}
+
+function getMeta(database: Database.Database, key: string): string | null {
+  const row = database.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined
+  return row ? String(row.value) : null
+}
+
+function setMeta(database: Database.Database, key: string, value: string): void {
+  database
+    .prepare(
+      `INSERT INTO meta (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    )
+    .run(key, value)
 }
 
 /**
@@ -805,9 +856,20 @@ function seedPromptsIfEmpty(database: Database.Database): void {
   }
 }
 
-function seedIfEmpty(database: Database.Database): void {
-  const row = database.prepare('SELECT COUNT(*) AS c FROM items').get() as { c: number }
-  if (row.c > 0) return
+/**
+ * Seed the first-launch sample notes exactly once, keyed off a persisted
+ * `meta` flag rather than whether `items` is empty (#41). A user who deletes
+ * every sample note keeps an empty vault on relaunch, and a pre-existing
+ * vault is never re-seeded.
+ */
+function seedSampleNotes(database: Database.Database, alreadyExisting: boolean): void {
+  if (getMeta(database, SAMPLE_NOTES_SEEDED_KEY) === '1') return
+  // A vault that predates the seeded flag already had its chance to show (and
+  // maybe delete) the samples — mark it seeded without injecting anything.
+  if (alreadyExisting) {
+    setMeta(database, SAMPLE_NOTES_SEEDED_KEY, '1')
+    return
+  }
 
   const seeds: CreateItemInput[] = [
     {
@@ -878,6 +940,7 @@ Kept for reference; no longer an active resource.`,
     for (const s of seeds) {
       createItem(s)
     }
+    setMeta(database, SAMPLE_NOTES_SEEDED_KEY, '1')
   } finally {
     db = prev ?? database
   }
