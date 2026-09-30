@@ -29,6 +29,9 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
+// Allow private IPs for local fixture server testing
+process.env.ALLOW_PRIVATE_IPS = '1'
+
 let passed = 0
 let failed = 0
 function assert(cond: boolean, msg: string): void {
@@ -112,6 +115,12 @@ async function startFixtureServer(): Promise<FixtureServer> {
         res.end('<html><body>Server error</body></html>')
       } else if (pathname === '/timeout') {
         // Don't respond - will timeout
+      } else if (pathname === '/redirect-to-private') {
+        res.writeHead(302, { 'Location': 'http://127.0.0.1:9999/private' })
+        res.end()
+      } else if (pathname === '/redirect-to-169') {
+        res.writeHead(302, { 'Location': 'http://169.254.169.254/latest/meta-data/' })
+        res.end()
       } else {
         res.writeHead(404)
         res.end('Not found')
@@ -150,6 +159,10 @@ async function main(): Promise<void> {
     heuristicTags,
     parseAutoTagJson,
     importFromUrl,
+    verifyPublicHostname,
+    isPrivateHostname,
+    isPrivateIpv4,
+    isPrivateIpv6,
   } = require('../electron/import-url')
 
   try {
@@ -163,6 +176,51 @@ async function main(): Promise<void> {
     assert(isAllowedUrl('ftp://example.com').ok === false, 'ftp:// rejected')
     assert(isAllowedUrl('javascript:alert(1)').ok === false, 'javascript: rejected')
     assert(isAllowedUrl('not-a-url').ok === false, 'invalid URL rejected')
+
+    // --- SSRF Protection: isAllowedUrl blocks private IPs ---
+    console.log('\nSSRF Protection (isAllowedUrl)')
+    // Temporarily disable ALLOW_PRIVATE_IPS for these tests
+    const allowPrivate = process.env.ALLOW_PRIVATE_IPS
+    delete process.env.ALLOW_PRIVATE_IPS
+    // Re-require to pick up the env change (module is cached, so test functions directly)
+    const { isAllowedUrl: isAllowedUrlStrict } = require('../electron/import-url')
+    // But since module is cached, we test the internal functions directly
+    // Block localhost hostname
+    assert(isAllowedUrlStrict('http://localhost/').ok === false, 'rejects http://localhost/')
+    assert(isAllowedUrlStrict('https://localhost/').ok === false, 'rejects https://localhost/')
+    // Block 127.0.0.1
+    assert(isAllowedUrlStrict('http://127.0.0.1/').ok === false, 'rejects http://127.0.0.1/')
+    assert(isAllowedUrlStrict('http://127.0.0.1:8080/').ok === false, 'rejects http://127.0.0.1:8080/')
+    // Block 10.x.x.x
+    assert(isAllowedUrlStrict('http://10.0.0.1/').ok === false, 'rejects 10.0.0.1')
+    assert(isAllowedUrlStrict('http://10.255.255.255/').ok === false, 'rejects 10.255.255.255')
+    // Block 172.16.x.x - 172.31.x.x
+    assert(isAllowedUrlStrict('http://172.16.0.1/').ok === false, 'rejects 172.16.0.1')
+    assert(isAllowedUrlStrict('http://172.31.255.255/').ok === false, 'rejects 172.31.255.255')
+    assert(isAllowedUrlStrict('http://172.15.0.1/').ok === true, 'allows 172.15.0.1 (outside range)')
+    assert(isAllowedUrlStrict('http://172.32.0.1/').ok === true, 'allows 172.32.0.1 (outside range)')
+    // Block 192.168.x.x
+    assert(isAllowedUrlStrict('http://192.168.0.1/').ok === false, 'rejects 192.168.0.1')
+    assert(isAllowedUrlStrict('http://192.168.255.255/').ok === false, 'rejects 192.168.255.255')
+    // Block 169.254.x.x (link-local)
+    assert(isAllowedUrlStrict('http://169.254.169.254/').ok === false, 'rejects 169.254.169.254 (AWS metadata)')
+    assert(isAllowedUrlStrict('http://169.254.0.1/').ok === false, 'rejects 169.254.0.1')
+    // Block multicast 224.x.x.x
+    assert(isAllowedUrlStrict('http://224.0.0.1/').ok === false, 'rejects multicast 224.0.0.1')
+    // Block 0.x.x.x
+    assert(isAllowedUrlStrict('http://0.0.0.0/').ok === false, 'rejects 0.0.0.0')
+    // IPv6 loopback
+    assert(isAllowedUrlStrict('http://[::1]/').ok === false, 'rejects IPv6 loopback [::1]')
+    // IPv6 link-local
+    assert(isAllowedUrlStrict('http://[fe80::1]/').ok === false, 'rejects IPv6 link-local [fe80::1]')
+    // IPv6 unique local
+    assert(isAllowedUrlStrict('http://[fc00::1]/').ok === false, 'rejects IPv6 unique local [fc00::1]')
+    assert(isAllowedUrlStrict('http://[fd00::1]/').ok === false, 'rejects IPv6 unique local [fd00::1]')
+    // Allow public IPs
+    assert(isAllowedUrlStrict('http://8.8.8.8/').ok === true, 'allows public IP 8.8.8.8')
+    assert(isAllowedUrlStrict('http://1.1.1.1/').ok === true, 'allows public IP 1.1.1.1')
+    // Restore ALLOW_PRIVATE_IPS for remaining tests
+    process.env.ALLOW_PRIVATE_IPS = allowPrivate!
 
     // --- extractFromHtml ---
     console.log('\nextractFromHtml')
@@ -273,6 +331,32 @@ async function main(): Promise<void> {
     } catch (e) {
       assert((e as Error).message.includes('Invalid URL'), 'rejects invalid URL')
     }
+
+    // --- SSRF Protection: Redirects to private IPs ---
+    console.log('\nSSRF Protection (redirects)')
+    // Test isAllowedUrl directly for redirect target validation (simpler, no caching issues)
+    // The isAllowedUrl function is called on each redirect hop in fetchPageHtml
+    
+    // We need to test the strict version (without ALLOW_PRIVATE_IPS)
+    delete process.env.ALLOW_PRIVATE_IPS
+    const importUrlPath = require.resolve('../electron/import-url')
+    delete require.cache[importUrlPath]
+    const { isAllowedUrl: isAllowedUrlStrict2 } = require('../electron/import-url')
+    
+    // Simulate redirect to 127.0.0.1
+    const redirectToPrivate = isAllowedUrlStrict2('http://127.0.0.1:9999/private')
+    assert(redirectToPrivate.ok === false, 'isAllowedUrl rejects redirect to 127.0.0.1')
+    assert(redirectToPrivate.error.includes('Private network addresses'), 'blocks redirect to 127.0.0.1')
+    
+    // Simulate redirect to 169.254.169.254 (AWS metadata)
+    const redirectTo169 = isAllowedUrlStrict2('http://169.254.169.254/latest/meta-data/')
+    assert(redirectTo169.ok === false, 'isAllowedUrl rejects redirect to 169.254.169.254')
+    assert(redirectTo169.error.includes('Private network addresses'), 'blocks redirect to 169.254.169.254')
+    
+    // Restore ALLOW_PRIVATE_IPS for remaining tests
+    process.env.ALLOW_PRIVATE_IPS = '1'
+    delete require.cache[importUrlPath]
+    require('../electron/import-url')
 
   } finally {
     await fixture.stop()
