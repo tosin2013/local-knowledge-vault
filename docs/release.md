@@ -69,4 +69,4 @@ npm run dist         # current platform
 
 Icon source of truth: `build/icon.png` (1024×1024). macOS CI converts PNG → ICNS; Windows uses `build/icon.ico`.
 
-Unsigned mac builds skip Gatekeeper notarization (`CSC_IDENTITY_AUTO_DISCOVERY=false` in CI). For distribution outside your machine, add Apple signing secrets later.
+Mac builds are ad-hoc signed (`"identity": "-"` in `build.mac`) and not notarized. Ad-hoc signing seals the whole bundle, so a downloaded copy gets Gatekeeper's "Open Anyway" prompt instead of "is damaged and can't be opened" (#23). Hardened runtime is off because it only matters for notarization. Check a build with `codesign --verify --deep --strict release/mac-arm64/Vault.app`. Developer ID signing and notarization (with hardened runtime back on) need an Apple Developer Program membership and signing secrets in CI.

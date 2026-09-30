@@ -29,11 +29,13 @@ first release is up, [build from source](#build-from-source).
 `sudo dnf install ./local-knowledge-vault-*.x86_64.rpm`. The snap is confined, so **Media chat** can't reach a
 `yt-dlp` installed outside it; use the `.deb`, `.rpm` or AppImage if you need YouTube import.
 
-**macOS: the app is not signed yet.** The first time you open it, macOS will block it:
+**macOS: the app is not notarized yet.** The first time you open it, macOS says it can't verify
+the app. Click **Done**, then go to **System Settings → Privacy & Security**, click **Open Anyway**
+and confirm. You only need to do this once. On macOS 14 and earlier, right-click (or Control-click)
+**Vault.app** → **Open** → **Open** also works.
 
-- Right-click (or Control-click) **Vault.app** → **Open** → **Open**, or
-- Try to open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**
-  (on recent macOS versions this is the only route).
+If macOS says Vault "is damaged and can't be opened", remove the download quarantine flag and open
+it again: `xattr -dr com.apple.quarantine /Applications/Vault.app`.
 
 ## Quick start (local first)
 
