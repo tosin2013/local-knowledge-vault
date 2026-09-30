@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #172: a security policy and a private way to report vulnerabilities. 1-2 fail on main (no SECURITY.md). 3 checks the repo setting the policy points to; it is a maintainer toggle (Settings -> Code security -> Private vulnerability reporting), failed before it was enabled, and needs gh with network access.",
+  "authority_id": "172",
+  "criteria": [
+    { "check": "file_exists", "target": "SECURITY.md" },
+    { "check": "command_exit", "target": "grep -q 'Report a vulnerability' SECURITY.md" },
+    { "check": "command_exit", "target": "gh api repos/tosin2013/local-knowledge-vault/private-vulnerability-reporting --jq .enabled | grep -qx true" }
+  ]
+}
