@@ -63,10 +63,16 @@ function MockBrowserWindow(opts?: Record<string, unknown>) {
 MockBrowserWindow.getAllWindows = () => []
 const mockBrowserWindow = MockBrowserWindow
 
+// Mutable dialog results so tests can exercise the post-dialog (bless/install/export) paths.
+const dialogState = {
+  open: { canceled: true as boolean, filePaths: [] as string[] },
+  save: { canceled: true as boolean, filePath: undefined as string | undefined },
+}
+
 const mockDialog = {
   showMessageBox: async (opts: unknown) => ({ response: 0 }),
-  showOpenDialog: async (opts: unknown) => ({ canceled: true, filePaths: [] }),
-  showSaveDialog: async (opts: unknown) => ({ canceled: true, filePath: undefined }),
+  showOpenDialog: async (opts: unknown) => ({ ...dialogState.open }),
+  showSaveDialog: async (opts: unknown) => ({ ...dialogState.save }),
 }
 
 const ipcRendererMock = {
@@ -350,11 +356,76 @@ async function main(): Promise<void> {
   await (pluginsApi.listBundled as () => Promise<unknown>)()
   await (pluginsApi.listRemoved as () => Promise<unknown>)()
   await (pluginsApi.preview as (kind?: string) => Promise<unknown>)('folder')
+  await (pluginsApi.install as (kind?: string) => Promise<unknown>)('folder')
   await (pluginsApi.installFromPath as (p: string) => Promise<unknown>)(path.join(__dirname, '../examples/plugins/study-buddy'))
   try {
     await (pluginsApi.restore as (key: string) => Promise<unknown>)('missing-key-123')
   } catch {
     /* expected */
+  }
+
+  // Dialog-backed install / preview / citation-pack export (post-dialog paths).
+  console.log('\nDialog-backed install / preview / citation export')
+  {
+    // A non-bundled valid plugin folder the "user picks" via the mock open dialog.
+    const pickedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-picked-'))
+    fs.writeFileSync(
+      path.join(pickedDir, 'plugin.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'picked-plugin',
+        name: 'Picked Plugin',
+        version: '1.0.0',
+        contributes: {
+          providers: [{ id: 'p1', label: 'P1', kind: 'openai-compatible', baseUrl: 'https://example.com/v1' }],
+        },
+      })
+    )
+
+    // preview() → open dialog returns the picked dir → blessed + previewed
+    dialogState.open = { canceled: false, filePaths: [pickedDir] }
+    const previewRes = await ipcRendererMock.invoke('plugins:preview', 'folder') as { preview?: { id?: string } }
+    assert(previewRes?.preview?.id === 'picked-plugin', 'plugins:preview previews a dialog-picked folder')
+
+    // installFromPath(pickedDir) succeeds because preview() blessed it
+    const pickedInstall = await ipcRendererMock.invoke('plugins:installFromPath', pickedDir) as { ok?: boolean }
+    assert(pickedInstall?.ok === true, 'plugins:installFromPath installs a dialog-blessed path')
+
+    // install() → open dialog returns the bundled example → installed
+    const bundledPath = path.join(__dirname, '../examples/plugins/study-buddy')
+    dialogState.open = { canceled: false, filePaths: [bundledPath] }
+    const installRes = await ipcRendererMock.invoke('plugins:install', 'folder') as { ok?: boolean }
+    assert(installRes?.ok === true, 'plugins:install installs a dialog-picked folder')
+
+    // citationPack:export writes to the save-dialog path (no renderer outputDir)
+    const { createSession, appendMessage, listItems } = require('../electron/db')
+    const item = listItems()[0] as { id: string; title: string }
+    const session = createSession({ title: 'Coverage export', mode: 'grounded' })
+    appendMessage({ session_id: session.id, role: 'user', content: 'What is PARA?' })
+    appendMessage({
+      session_id: session.id,
+      role: 'assistant',
+      content: `PARA answer [${item.id}]`,
+      citations_json: JSON.stringify([{ id: item.id, title: item.title }]),
+    })
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-cite-'))
+    const zipOut = path.join(outDir, 'coverage-pack.zip')
+    dialogState.save = { canceled: false, filePath: zipOut }
+    const exportRes = await ipcRendererMock.invoke('citationPack:export', { sessionId: session.id }) as { zipPath?: string; canceled?: boolean }
+    assert(exportRes?.zipPath === zipOut && !exportRes.canceled, 'citationPack:export writes to the save-dialog path')
+    assert(fs.existsSync(zipOut), 'citation pack zip written')
+
+    // A non-string srcPath hits the isAllowedPluginInstallPath catch branch.
+    let nonStringThrew = false
+    try {
+      await ipcRendererMock.invoke('plugins:installFromPath', { evil: true })
+    } catch {
+      nonStringThrew = true
+    }
+    assert(nonStringThrew, 'non-string install path is rejected')
+
+    fs.rmSync(pickedDir, { recursive: true, force: true })
+    fs.rmSync(outDir, { recursive: true, force: true })
   }
 
   // 6) Test main.ts lifecycle hooks

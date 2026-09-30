@@ -166,15 +166,10 @@ let mainWindow: BrowserWindow | null = null
  */
 const blessedPluginPaths = new Set<string>()
 
-function blessPluginPath(p: string | undefined): string | null {
-  if (!p) return null
-  try {
-    const resolved = path.resolve(p)
-    blessedPluginPaths.add(resolved)
-    return resolved
-  } catch {
-    return null
-  }
+function blessPluginPath(p: string): string {
+  const resolved = path.resolve(p)
+  blessedPluginPaths.add(resolved)
+  return resolved
 }
 
 function isAllowedPluginInstallPath(p: string): boolean {
@@ -481,7 +476,7 @@ function registerIpc(): void {
         : { title: 'Install plugin (folder with plugin.json)', properties: ['openDirectory'] }
     const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true }
-    return installPluginFrom(blessPluginPath(r.filePaths[0])!)
+    return installPluginFrom(blessPluginPath(r.filePaths[0]))
   })
 
   // Add-on preview (no install yet), bundled examples, and recoverable removed add-ons.
@@ -498,7 +493,7 @@ function registerIpc(): void {
             }
     const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || !r.filePaths[0]) return { canceled: true }
-    return previewPluginFrom(blessPluginPath(r.filePaths[0])!)
+    return previewPluginFrom(blessPluginPath(r.filePaths[0]))
   })
   ipcMain.handle('plugins:installFromPath', (_e, srcPath: string) => {
     // The renderer must not install from an arbitrary path: only bundled

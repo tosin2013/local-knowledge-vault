@@ -273,6 +273,7 @@ async function main(): Promise<void> {
     assert(pl.isBundledPluginPath(path.join(__dirname, '../examples/plugins/study-buddy')) === true, 'bundled path recognized')
     assert(pl.isBundledPluginPath(path.join(dir, 'elsewhere')) === false, 'non-bundled path rejected')
     assert(pl.isBundledPluginPath(path.join(__dirname, '../examples/plugins')) === true, 'bundled root recognized')
+    assert(pl.isBundledPluginPath({} as string) === false, 'non-string candidate rejected (catch branch)')
   }
 
   /* ---------- plugin install flows ---------- */
