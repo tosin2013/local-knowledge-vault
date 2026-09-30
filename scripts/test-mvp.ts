@@ -585,6 +585,57 @@ async function main(): Promise<void> {
   assert(migratedHits.hits.length >= 1, 'initDb migrates a unicode61 vault to trigram (CJK substring found)')
   assert(migratedHits.hits.some((h) => h.id === 'itm_old_cjk'), 'migrated CJK note is retrievable by substring')
 
+  // --- Versioned migrations + sample-note seed flag (#41) ---
+  console.log('\nVersioned migrations + sample-note seed flag (#41)')
+  {
+    // Fresh vault: user_version becomes 1 and sample notes are seeded once.
+    const freshFile = path.join(tmpDir, 'fresh.sqlite')
+    initDb(freshFile)
+    const probe = new Database(freshFile, { readonly: true })
+    const v = probe.pragma('user_version', { simple: true })
+    probe.close()
+    assert(v === 1, `fresh vault sets user_version = 1 (got ${v})`)
+    assert(countItems() >= 3, 'fresh vault seeds sample notes')
+    closeDb()
+
+    // Deleting every sample note must not resurrect them on relaunch.
+    const noReseedFile = path.join(tmpDir, 'no-reseed.sqlite')
+    initDb(noReseedFile)
+    for (const it of listItems()) trashItem(it.id)
+    emptyTrash()
+    assert(countItems() === 0, 'all sample notes deleted')
+    closeDb()
+    initDb(noReseedFile)
+    assert(countItems() === 0, 'deleted sample notes are not re-seeded on relaunch')
+    closeDb()
+
+    // A pre-versioned vault (tables exist, user_version = 0) is not re-seeded.
+    const legacyFile = path.join(tmpDir, 'legacy.sqlite')
+    {
+      const legacy = new Database(legacyFile)
+      legacy.exec(`
+        CREATE TABLE items (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          body TEXT NOT NULL DEFAULT '',
+          para TEXT NOT NULL CHECK(para IN ('projects','areas','resources','archives')),
+          kind TEXT NOT NULL DEFAULT 'note',
+          status TEXT NOT NULL DEFAULT 'active',
+          project TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO items (id, title, body, para, kind, status, created_at, updated_at)
+          VALUES ('itm_keep', 'Keep me', 'one note', 'resources', 'note', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+      `)
+      legacy.close()
+    }
+    initDb(legacyFile)
+    assert(countItems() === 1, 'pre-versioned vault keeps its note and is not re-seeded with samples')
+    closeDb()
+  }
+
   closeDb()
   fs.rmSync(tmpDir, { recursive: true, force: true })
 
