@@ -262,4 +262,30 @@ describe('useNotes', () => {
     })
     expect(lkv.items.emptyTrash).toHaveBeenCalled()
   })
+
+  it('reports a save failure instead of failing silently', async () => {
+    const lkv = window.lkv as any
+    lkv.items.create.mockRejectedValue(new Error('disk full'))
+    const deps = makeDeps()
+    const { result } = renderHook(() => useNotes(deps))
+    act(() => result.current.onNewNote())
+    await act(async () => {
+      await result.current.onSave()
+    })
+    expect(deps.setError).toHaveBeenCalledWith('disk full')
+  })
+
+  it('reports a delete failure instead of failing silently', async () => {
+    const lkv = window.lkv as any
+    lkv.items.get.mockResolvedValue(makeItem('itm_1'))
+    lkv.items.trash.mockRejectedValue(new Error('nope'))
+    const deps = makeDeps()
+    const { result } = renderHook(() => useNotes(deps))
+    act(() => result.current.selectItem('itm_1'))
+    await waitFor(() => expect(result.current.draft?.id).toBe('itm_1'))
+    await act(async () => {
+      await result.current.onDelete()
+    })
+    expect(deps.setError).toHaveBeenCalledWith('nope')
+  })
 })

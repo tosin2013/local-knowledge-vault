@@ -182,6 +182,11 @@ describe('ChatView', () => {
     expect(screen.getByLabelText('Ask a question')).toBeInTheDocument()
   })
 
+  it('marks the chat thread as a polite live region for screen readers', () => {
+    const { container } = render(<ChatView {...makeProps()} />)
+    expect(container.querySelector('[aria-live="polite"]')).toBeInTheDocument()
+  })
+
   it('saves an assistant answer as a note', () => {
     const props = makeProps({
       messages: [makeMessage({ role: 'assistant', content: 'Habits compound over time.', citations_json: null })],

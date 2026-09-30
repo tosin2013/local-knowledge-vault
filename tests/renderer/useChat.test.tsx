@@ -260,4 +260,26 @@ describe('useChat', () => {
       await sendPromise
     })
   })
+
+  it('reports a new-chat failure instead of failing silently', async () => {
+    const lkv = window.lkv as any
+    lkv.chat.createSession.mockRejectedValue(new Error('boom'))
+    const deps = makeDeps()
+    const { result } = renderHook(() => useChat(deps))
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    expect(deps.setError).toHaveBeenCalledWith('boom')
+  })
+
+  it('reports a delete-session failure instead of failing silently', async () => {
+    const lkv = window.lkv as any
+    lkv.chat.deleteSession.mockRejectedValue(new Error('boom'))
+    const deps = makeDeps()
+    const { result } = renderHook(() => useChat(deps))
+    await act(async () => {
+      await result.current.onDeleteSession('s_1')
+    })
+    expect(deps.setError).toHaveBeenCalledWith('boom')
+  })
 })
