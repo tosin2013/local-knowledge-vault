@@ -14,80 +14,21 @@ const SUMMARY_FALLBACK_CHARS = 240
 
 const PARA_SET = new Set<Para>(['projects', 'areas', 'resources', 'archives'])
 
-// Private/internal IP ranges to block (SSRF protection)
-const PRIVATE_IPV4_RANGES: [string, number][] = [
-  ['10.0.0.0', 8],        // 10.0.0.0/8
-  ['172.16.0.0', 12],     // 172.16.0.0/12
-  ['192.168.0.0', 16],    // 192.168.0.0/16
-  ['127.0.0.0', 8],       // 127.0.0.0/8 (loopback)
-  ['169.254.0.0', 16],    // 169.254.0.0/16 (link-local)
-  ['224.0.0.0', 4],       // 224.0.0.0/4 (multicast)
-  ['0.0.0.0', 8],         // 0.0.0.0/8 (reserved)
-]
-
-// IPv6 private ranges (simplified check for common cases)
-const PRIVATE_IPV6_PREFIXES = [
-  '::1',          // loopback
-  'fe80:',        // link-local
-  'fc00:',        // unique local
-  'fd00:',        // unique local
-]
-
-function ipToNumber(ip: string): number {
-  return ip.split('.').reduce((acc, octet) => (acc << 8) + Number(octet), 0) >>> 0
+export interface ExtractedPage {
+  title: string
+  text: string
 }
 
-function cidrMatch(ip: string, cidrIp: string, prefixLen: number): boolean {
-  const ipNum = ipToNumber(ip)
-  const cidrNum = ipToNumber(cidrIp)
-  const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0
-  return (ipNum & mask) === (cidrNum & mask)
+export interface AutoTags {
+  title: string
+  summary: string
+  para: Para
+  kind: string
+  project: string | null
+  status: string
 }
 
-function isPrivateIpv4(hostname: string): boolean {
-  // Check if hostname is an IPv4 address
-  if (!/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return false
-  for (const [cidrIp, prefixLen] of PRIVATE_IPV4_RANGES) {
-    if (cidrMatch(hostname, cidrIp, prefixLen)) return true
-  }
-  return false
-}
-
-function isPrivateIpv6(hostname: string): boolean {
-  // Check if hostname is an IPv6 address (simplified)
-  // URL parser returns IPv6 hostnames with brackets, e.g., "[::1]"
-  let addr = hostname.toLowerCase()
-  // Remove brackets if present
-  if (addr.startsWith('[') && addr.endsWith(']')) {
-    addr = addr.slice(1, -1)
-  }
-  // Remove zone ID if present (e.g., fe80::1%eth0)
-  addr = addr.split('%')[0]
-  if (!addr.includes(':')) return false
-  // Normalize IPv6 for prefix checks
-  if (addr === '::1') return true
-  if (addr.startsWith('fe80:')) return true
-  if (addr.startsWith('fc00:') || addr.startsWith('fd00:')) return true
-  // IPv4-mapped IPv6 addresses (::ffff:10.x.x.x, etc.)
-  const ipv4Mapped = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-  if (ipv4Mapped) return isPrivateIpv4(ipv4Mapped[1])
-  return false
-}
-
-function isPrivateHostname(hostname: string): boolean {
-  // Allow bypass for testing via environment variable
-  if (process.env.ALLOW_PRIVATE_IPS === '1') return false
-  // Direct IP address checks
-  if (isPrivateIpv4(hostname) || isPrivateIpv6(hostname)) return true
-  // Hostname-based checks for common localhost aliases
-  const lower = hostname.toLowerCase()
-  if (lower === 'localhost' || lower === 'localhost.localdomain') return true
-  // Note: We don't resolve hostnames here to avoid DNS rebinding.
-  // The actual IP check happens in fetchPageHtml after DNS resolution.
-  return false
-}
-
-/** Allow http(s) only; block file://, private IPs, localhost, and other schemes. */
+/** Allow http(s) only; optional localhost for testing; block file:// and other schemes. */
 export function isAllowedUrl(
   raw: string
 ): { ok: true; url: URL } | { ok: false; error: string } {
@@ -102,65 +43,7 @@ export function isAllowedUrl(
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return { ok: false, error: 'Only http and https URLs are allowed' }
   }
-  // Block private hostnames (localhost, IP literals)
-  if (isPrivateHostname(parsed.hostname)) {
-    return { ok: false, error: 'Private network addresses are not allowed' }
-  }
   return { ok: true, url: parsed }
-}
-
-/**
- * Resolve hostname and verify none of the resolved IPs are private/internal.
- * This prevents DNS rebinding attacks where a domain resolves to a private IP.
- */
-export async function verifyPublicHostname(hostname: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  // Allow bypass for testing via environment variable
-  if (process.env.ALLOW_PRIVATE_IPS === '1') return { ok: true }
-  // Skip if already an IP literal (already checked in isAllowedUrl)
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(':')) {
-    return { ok: true }
-  }
-  try {
-    const { promises: dns } = await import('dns')
-    const addresses = await dns.resolve4(hostname)
-    for (const addr of addresses) {
-      if (isPrivateIpv4(addr)) {
-        return { ok: false, error: `Hostname resolves to private IP: ${addr}` }
-      }
-    }
-    // Also check IPv6
-    try {
-      const addresses6 = await dns.resolve6(hostname)
-      for (const addr of addresses6) {
-        if (isPrivateIpv6(addr)) {
-          return { ok: false, error: `Hostname resolves to private IPv6: ${addr}` }
-        }
-      }
-    } catch {
-      // IPv6 not available or no AAAA records - that's fine
-    }
-    return { ok: true }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    // DNS resolution failure - could be network issue or domain doesn't exist
-    // We allow the fetch to proceed and let it fail naturally
-    console.warn(`DNS resolution failed for ${hostname}: ${msg}`)
-    return { ok: true }
-  }
-}
-
-export interface ExtractedPage {
-  title: string
-  text: string
-}
-
-export interface AutoTags {
-  title: string
-  summary: string
-  para: Para
-  kind: string
-  project: string | null
-  status: string
 }
 
 function decodeEntities(s: string): string {
@@ -383,11 +266,6 @@ async function fetchPageHtml(
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const allowed = isAllowedUrl(current)
     if (!allowed.ok) throw new Error(allowed.error)
-
-    // Verify the hostname resolves to a public IP (prevents DNS rebinding)
-    const hostname = new URL(current).hostname
-    const dnsCheck = await verifyPublicHostname(hostname)
-    if (!dnsCheck.ok) throw new Error(dnsCheck.error)
 
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
