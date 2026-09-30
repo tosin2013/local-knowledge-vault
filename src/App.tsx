@@ -70,13 +70,17 @@ export default function App() {
 
   useEffect(() => {
     if (!hasApi) return
-    void notes.refreshList()
-    void notes.refreshProjects()
-    void notes.refreshTrashed()
-    void providers.refreshLlm()
-    void chat.refreshSessions()
-    void prompts.refreshPrompts()
-    void chat.refreshProfiles()
+    // Startup refreshes: a background failure must surface as a visible error
+    // rather than an unhandled rejection (#40).
+    const report = (p: Promise<unknown>) =>
+      p.catch((e) => setError(e instanceof Error ? e.message : String(e)))
+    report(notes.refreshList())
+    report(notes.refreshProjects())
+    report(notes.refreshTrashed())
+    report(providers.refreshLlm())
+    report(chat.refreshSessions())
+    report(prompts.refreshPrompts())
+    report(chat.refreshProfiles())
     const t = setInterval(() => void providers.refreshLlm(), 15000)
     return () => clearInterval(t)
   }, [

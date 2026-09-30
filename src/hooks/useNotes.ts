@@ -247,6 +247,8 @@ export function useNotes(deps: UseNotesDeps) {
       setDirty(false)
       await refreshList()
       void refreshProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
@@ -303,15 +305,20 @@ export function useNotes(deps: UseNotesDeps) {
       return
     }
     // Soft-delete to trash (reversible — no confirm needed).
-    await window.lkv.items.trash(draft.id)
-    setSelectedId(null)
-    setDraft(null)
-    setDirty(false)
-    setNotePeekOpen(false)
-    setPeekEditing(false)
-    await refreshList()
-    void refreshProjects()
-    void refreshTrashed()
+    setError(null)
+    try {
+      await window.lkv.items.trash(draft.id)
+      setSelectedId(null)
+      setDraft(null)
+      setDirty(false)
+      setNotePeekOpen(false)
+      setPeekEditing(false)
+      await refreshList()
+      void refreshProjects()
+      void refreshTrashed()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   /** Refresh the trash list. */

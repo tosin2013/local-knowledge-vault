@@ -205,7 +205,11 @@ export function ChatView(props: ChatViewProps) {
           </Box>
         )}
 
-        <Box className="chat-thread" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, bgcolor: 'background.default' }}>
+        <Box
+          className="chat-thread"
+          aria-live="polite"
+          sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, bgcolor: 'background.default' }}
+        >
           {showFirstRun && llmStatus && (
             <FirstRunLocalCard
               status={llmStatus}

@@ -181,22 +181,27 @@ export function useChat(deps: UseChatDeps) {
 
   const onNewChat = async () => {
     if (!window.lkv) return
-    const session = await window.lkv.chat.createSession({ mode: 'grounded' })
-    await refreshSessions()
-    setActiveSessionId(session.id)
-    setMessages([])
-    setChatOffline(false)
-    setMode('chat')
-    // New sessions keep the last Profile (Personality + Project).
-    const promptId =
-      selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    const nextProject = project
-    if (promptId) {
-      persistProfile(
-        matchProfileId(promptId, nextProject, prompts),
-        promptId,
-        nextProject,
-      )
+    setError(null)
+    try {
+      const session = await window.lkv.chat.createSession({ mode: 'grounded' })
+      await refreshSessions()
+      setActiveSessionId(session.id)
+      setMessages([])
+      setChatOffline(false)
+      setMode('chat')
+      // New sessions keep the last Profile (Personality + Project).
+      const promptId =
+        selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
+      const nextProject = project
+      if (promptId) {
+        persistProfile(
+          matchProfileId(promptId, nextProject, prompts),
+          promptId,
+          nextProject,
+        )
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -210,12 +215,17 @@ export function useChat(deps: UseChatDeps) {
   const onDeleteSession = async (id: string) => {
     if (!window.lkv) return
     if (!confirm('Delete this chat session?')) return
-    await window.lkv.chat.deleteSession(id)
-    if (activeSessionId === id) {
-      setActiveSessionId(null)
-      setMessages([])
+    setError(null)
+    try {
+      await window.lkv.chat.deleteSession(id)
+      if (activeSessionId === id) {
+        setActiveSessionId(null)
+        setMessages([])
+      }
+      await refreshSessions()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
-    await refreshSessions()
   }
 
   const onExportCitationPack = async () => {
