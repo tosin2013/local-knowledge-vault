@@ -17,6 +17,7 @@ import {
   offlineCopy,
   extractCitedIds,
   validateCitations,
+  finalizeAnswer,
 } from './generate'
 
 const HISTORY_TURNS = 6 // last N user+assistant messages (pairs ≈ 3 rounds)
@@ -263,5 +264,5 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
   const validIds = validateCitations(rawCited, allowed)
   const citations = citationsFromIds(validIds)
 
-  return finish(gen.text.trim() || '(empty model response)', citations, hits)
+  return finish(finalizeAnswer(gen.text, allowed), citations, hits)
 }

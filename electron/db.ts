@@ -68,6 +68,7 @@ function migrate(database: Database.Database): void {
       title,
       summary,
       body,
+      tokenize='trigram',
       content='items',
       content_rowid='rowid'
     );
@@ -131,6 +132,50 @@ function migrate(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_chat_profiles_name
       ON chat_profiles(name);
+  `)
+  ensureTrigramFts(database)
+}
+
+/**
+ * Older vaults created `items_fts` with the default unicode61 tokenizer, which
+ * cannot segment CJK text (a whole run like "東京の天気" becomes one token, so
+ * a substring such as "天気" misses). Rebuild it with the trigram tokenizer for
+ * substring + CJK matching (#37). Idempotent: no-op when already trigram.
+ */
+function ensureTrigramFts(database: Database.Database): void {
+  const row = database
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'items_fts'`)
+    .get() as { sql?: string } | undefined
+  if (row?.sql && /trigram/.test(row.sql)) return
+
+  database.exec(`
+    DROP TRIGGER IF EXISTS items_ai;
+    DROP TRIGGER IF EXISTS items_ad;
+    DROP TRIGGER IF EXISTS items_au;
+    DROP TABLE IF EXISTS items_fts;
+    CREATE VIRTUAL TABLE items_fts USING fts5(
+      title,
+      summary,
+      body,
+      tokenize='trigram',
+      content='items',
+      content_rowid='rowid'
+    );
+    CREATE TRIGGER items_ai AFTER INSERT ON items BEGIN
+      INSERT INTO items_fts(rowid, title, summary, body)
+      VALUES (new.rowid, new.title, new.summary, new.body);
+    END;
+    CREATE TRIGGER items_ad AFTER DELETE ON items BEGIN
+      INSERT INTO items_fts(items_fts, rowid, title, summary, body)
+      VALUES ('delete', old.rowid, old.title, old.summary, old.body);
+    END;
+    CREATE TRIGGER items_au AFTER UPDATE ON items BEGIN
+      INSERT INTO items_fts(items_fts, rowid, title, summary, body)
+      VALUES ('delete', old.rowid, old.title, old.summary, old.body);
+      INSERT INTO items_fts(rowid, title, summary, body)
+      VALUES (new.rowid, new.title, new.summary, new.body);
+    END;
+    INSERT INTO items_fts(items_fts) VALUES('rebuild');
   `)
 }
 

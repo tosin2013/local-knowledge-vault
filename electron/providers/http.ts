@@ -60,7 +60,12 @@ export async function readErrorDetail(res: Response, prefix: string): Promise<st
 
 /** Reasoning models (qwen3, deepseek-r1 …) may inline <think>…</think>; never show it as the answer. */
 export function stripThinking(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^\s*<think>[\s\S]*$/i, '').trim()
+  // Closed blocks anywhere, then any unclosed block to end-of-string (not just
+  // a leading one), so a mid-answer unclosed <think> can't leak reasoning (#36).
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*$/gi, '')
+    .trim()
 }
 
 export function errMessage(err: unknown): string {
