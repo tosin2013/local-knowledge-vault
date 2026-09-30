@@ -48,6 +48,7 @@ import { ProvidersPanel } from '../components/ai/ProvidersPanel'
 export interface ChatViewProps {
   advanced: boolean
   busy: boolean
+  sending: boolean
   llmStatus: LlmStatus | null
   llmChecking: boolean
   showFirstRun: boolean
@@ -112,6 +113,7 @@ export function ChatView(props: ChatViewProps) {
   const {
     advanced,
     busy,
+    sending,
     llmStatus,
     llmChecking,
     showFirstRun,
@@ -533,7 +535,7 @@ export function ChatView(props: ChatViewProps) {
                 onChange={(e) => onChatInput(e.target.value)}
                 placeholder={chatPlaceholder}
                 aria-label="Ask a question"
-                disabled={busy}
+                disabled={busy || sending}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
@@ -543,9 +545,9 @@ export function ChatView(props: ChatViewProps) {
               />
               <IconButton
                 color="primary"
-                disabled={busy || !chatInput.trim()}
+                disabled={busy || sending || !chatInput.trim()}
                 onClick={onSend}
-                aria-label={busy ? 'Sending' : 'Send'}
+                aria-label={busy || sending ? 'Sending' : 'Send'}
                 sx={{
                   bgcolor: 'primary.main',
                   color: 'primary.contrastText',

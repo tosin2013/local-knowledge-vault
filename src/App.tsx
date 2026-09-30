@@ -284,6 +284,7 @@ export default function App() {
               <ChatView
                 advanced={ui.advanced}
                 busy={busy}
+                sending={chat.sending}
                 llmStatus={providers.llmStatus}
                 llmChecking={providers.llmChecking}
                 showFirstRun={showFirstRun}

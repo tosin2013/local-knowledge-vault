@@ -8,6 +8,7 @@ function makeProps(overrides: Partial<ChatViewProps> = {}): ChatViewProps {
   return {
     advanced: false,
     busy: false,
+    sending: false,
     llmStatus: makeLlmStatus(),
     llmChecking: false,
     showFirstRun: false,
@@ -90,6 +91,13 @@ describe('ChatView', () => {
     render(<ChatView {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(props.onSend).toHaveBeenCalled()
+  })
+
+  it('disables Send while a reply is in flight', () => {
+    const props = makeProps({ sending: true, chatInput: 'hello' })
+    render(<ChatView {...props} />)
+    const btn = screen.getByRole('button', { name: 'Sending' })
+    expect(btn).toBeDisabled()
   })
 
   it('creates a new chat and lists sessions', () => {

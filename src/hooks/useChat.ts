@@ -53,7 +53,13 @@ export function useChat(deps: UseChatDeps) {
   const [profileHydrated, setProfileHydrated] = useState(false)
   const [profilesLoaded, setProfilesLoaded] = useState(false)
   const [chatOffline, setChatOffline] = useState(false)
+  // Per-action busy state for chat sends, so a shared `busy` flag cleared by a
+  // concurrent Find search can't re-enable Send mid-request (#39).
+  const [sending, setSending] = useState(false)
   const threadEndRef = useRef<HTMLDivElement | null>(null)
+  // Synchronous mirror of the active session, so an in-flight reply can check
+  // whether the user switched sessions before applying the result (#39).
+  const activeSessionIdRef = useRef<string | null>(null)
 
   // User chat profiles (Personality + Project)
   const [userProfiles, setUserProfiles] = useState<ChatProfile[]>([])
@@ -161,6 +167,10 @@ export function useChat(deps: UseChatDeps) {
   ])
 
   useEffect(() => {
+    activeSessionIdRef.current = activeSessionId
+  }, [activeSessionId])
+
+  useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, busy])
 
@@ -244,7 +254,7 @@ export function useChat(deps: UseChatDeps) {
   }
 
   const onSendChat = async () => {
-    if (!window.lkv || !chatInput.trim()) return
+    if (!window.lkv || !chatInput.trim() || sending) return
     const text = chatInput.trim()
     let sessionId = activeSessionId
     const existing = sessionId ? sessions.find((s) => s.id === sessionId) : null
@@ -260,12 +270,28 @@ export function useChat(deps: UseChatDeps) {
       })
       sessionId = session.id
       setActiveSessionId(sessionId)
+      activeSessionIdRef.current = sessionId
       await refreshSessions()
     }
+    activeSessionIdRef.current = sessionId
     setChatInput('')
+    setSending(true)
     setBusy(true)
     setError(null)
     setChatOffline(false)
+    // Render the user's message immediately rather than waiting for the reply.
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+        session_id: sessionId,
+        role: 'user',
+        content: text,
+        citations_json: null,
+        hits_json: null,
+        created_at: new Date().toISOString(),
+      },
+    ])
     try {
       const res = await window.lkv.chat.send({
         sessionId,
@@ -277,7 +303,11 @@ export function useChat(deps: UseChatDeps) {
           undefined,
         limit: 8,
       })
-      setMessages(res.messages)
+      // Late-reply guard: a reply for a session the user has since left must
+      // not overwrite the messages of the session they are now viewing.
+      if (activeSessionIdRef.current === sessionId) {
+        setMessages(res.messages)
+      }
       setChatOffline(!!res.offline)
       // Belt-and-suspenders: rename untitled sessions from the first question
       if (
@@ -292,6 +322,7 @@ export function useChat(deps: UseChatDeps) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
+      setSending(false)
       setBusy(false)
     }
   }
@@ -517,6 +548,7 @@ export function useChat(deps: UseChatDeps) {
     askCustomizeOpen,
     setAskCustomizeOpen,
     chatOffline,
+    sending,
     threadEndRef,
     stayingInGorgias,
     scopeCoupleHint,
