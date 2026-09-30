@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #23: with CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder skipped signing, so the arm64 app kept only the linker's ad-hoc signature on the main binary with no sealed resources. codesign --verify failed ('code has no resources but signature indicates they must be present'), which a quarantined download reports as 'is damaged and can't be opened'. Fix: build.mac identity '-' (ad-hoc sign the whole bundle) and hardenedRuntime false (only matters for notarization; ad-hoc + hardened runtime risks library-validation launch failures). Criterion 1 fails on main (identity unset, hardenedRuntime true). 2 fails on main (README has no quarantine fallback). Verified by hand on macOS 26.6.2 arm64: codesign --verify --deep --strict passes, a quarantined copy of the .dmg's app is rejected by Gatekeeper only for 'Notary Ticket Missing' (the Open Anyway flow), and the app launches (see PR).",
+  "authority_id": "23",
+  "criteria": [
+    { "check": "command_exit", "target": "node -e \"const m=require('./package.json').build.mac; process.exit(m.identity==='-'&&m.hardenedRuntime===false?0:1)\"" },
+    { "check": "command_exit", "target": "grep -q 'xattr -dr com.apple.quarantine' README.md" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}
