@@ -77,6 +77,7 @@ export default function App() {
     report(notes.refreshList())
     report(notes.refreshProjects())
     report(notes.refreshTrashed())
+    report(notes.refreshSamples())
     report(providers.refreshLlm())
     report(chat.refreshSessions())
     report(prompts.refreshPrompts())
@@ -88,6 +89,7 @@ export default function App() {
     notes.refreshList,
     notes.refreshProjects,
     notes.refreshTrashed,
+    notes.refreshSamples,
     providers.refreshLlm,
     chat.refreshSessions,
     prompts.refreshPrompts,
@@ -236,6 +238,8 @@ export default function App() {
             onRailSort={notes.setRailSort}
             onShowTranscripts={notes.setShowTranscripts}
             onOpenTrash={() => setTrashOpen(true)}
+            hasSamples={notes.hasSamples}
+            onRemoveSamples={() => void notes.removeSamples()}
             bulkSelected={notes.bulkSelected}
             onToggleBulk={notes.toggleBulkSelect}
             onBulkTrash={() => void notes.bulkTrash()}

@@ -161,8 +161,14 @@ function migrateV1(database: Database.Database): void {
   ensureTrigramFts(database)
 }
 
+/** Project all first-run sample notes are seeded into (#139). */
+export const SAMPLE_NOTES_PROJECT = 'Getting started'
+
 /** Key in the `meta` table recording that sample notes were already seeded (#41). */
 const SAMPLE_NOTES_SEEDED_KEY = 'sample_notes_seeded'
+
+/** Key in the `meta` table recording the ids of the seeded sample notes (#139). */
+const SAMPLE_NOTE_IDS_KEY = 'sample_note_ids'
 
 function tableExists(database: Database.Database, name: string): boolean {
   const row = database
@@ -857,10 +863,11 @@ function seedPromptsIfEmpty(database: Database.Database): void {
 }
 
 /**
- * Seed the first-launch sample notes exactly once, keyed off a persisted
- * `meta` flag rather than whether `items` is empty (#41). A user who deletes
- * every sample note keeps an empty vault on relaunch, and a pre-existing
- * vault is never re-seeded.
+ * Seed the first-launch sample notes exactly once, into a single "Getting
+ * started" project, and record their ids so they can be removed together
+ * (#139). Keyed off a persisted `meta` flag rather than whether `items` is
+ * empty (#41): a user who deletes every sample keeps an empty vault on
+ * relaunch, and a pre-existing vault is never re-seeded.
  */
 function seedSampleNotes(database: Database.Database, alreadyExisting: boolean): void {
   if (getMeta(database, SAMPLE_NOTES_SEEDED_KEY) === '1') return
@@ -873,75 +880,113 @@ function seedSampleNotes(database: Database.Database, alreadyExisting: boolean):
 
   const seeds: CreateItemInput[] = [
     {
-      title: 'Getting Things Done — capture and clarify',
-      summary: 'Core GTD workflow notes',
-      body: `Productivity systems work best when capture is frictionless.
-Clarify every inbox item: is it actionable? If yes, next action or project.
-If not, trash, incubate, or reference. Weekly reviews keep the system honest.
-PARA maps Projects (outcomes with deadlines), Areas (standards to maintain),
-Resources (topics of interest), and Archives (inactive).`,
+      title: '1 · Ask a question about these notes',
+      summary: 'Try Ask: answers come from your notes, with citations',
+      body: `Use the Ask box to question your own notes. Type a topic — like "citation" or "video" — and the answer comes only from what you have saved, citing the notes it used with a numbered marker you can click.
+
+Every answer either cites a note or tells you it couldn't find it.`,
       para: 'resources',
       kind: 'note',
       status: 'active',
-      project: null,
+      project: SAMPLE_NOTES_PROJECT,
     },
     {
-      title: 'Atomic Habits — book notes',
-      summary: 'James Clear — identity-based habit change',
-      body: `Fake book note for Local Knowledge Vault demos.
-Key idea: habits compound. Focus on systems over goals.
-Cue → Craving → Response → Reward. Make good habits obvious, attractive,
-easy, and satisfying. Environment design beats willpower.
-1% better every day is ~37x better in a year.`,
+      title: '2 · Click a citation',
+      summary: 'Citations are clickable and open the note they came from',
+      body: `Answers cite their sources. A citation marker links back to a note; click it (or the chip below the answer) to open that note.
+
+Citations only ever point at notes that were actually retrieved, so you can trace any claim to its source.`,
       para: 'resources',
-      kind: 'book',
+      kind: 'note',
       status: 'active',
-      project: null,
+      project: SAMPLE_NOTES_PROJECT,
     },
     {
-      title: 'Local Knowledge Vault MVP',
-      summary: 'Ship searchable local notes with optional grounded Ask',
-      body: `Project: build an Electron app that stores notes in SQLite with PARA metadata,
-full-text search via FTS5 BM25, metadata filters, and optional Ollama Q&A
-that only cites retrieved item IDs. Search must work offline without Ollama.
-Success: create/list/filter/search notes, ask with citation chips.`,
+      title: '3 · Add your own note',
+      summary: 'Create a note with a project, group, type, and status',
+      body: `Click "New note" to write your own. Each note has a title, body, a group (Projects, Areas, Resources, Archive), a type, and an optional project.
+
+Projects group related notes together; everything is searchable instantly after you save.`,
       para: 'projects',
       kind: 'note',
       status: 'active',
-      project: 'Local Knowledge Vault',
+      project: SAMPLE_NOTES_PROJECT,
     },
     {
-      title: 'Health & fitness standards',
-      summary: 'Ongoing area of responsibility',
-      body: `Area (not a project): maintain sleep, movement, and nutrition standards.
-No hard deadline — continuous. Track weekly activity minutes and bedtime.
-Archive old challenge logs under Archives when a challenge ends.`,
+      title: '4 · Try Media chat with a video',
+      summary: 'Media chat turns a video transcript into searchable notes',
+      body: `Media chat ingests a YouTube video (or a local file with captions) and turns its transcript into notes you can ask about.
+
+It is available from the Plugins menu. Ask a question and it will cite the exact transcript passages it used.`,
       para: 'areas',
       kind: 'note',
       status: 'active',
-      project: null,
+      project: SAMPLE_NOTES_PROJECT,
     },
     {
-      title: '2023 conference notes (archived)',
-      summary: 'Old talk notes moved to archives',
-      body: `Archived notes from a past conference on personal knowledge management.
-Topics included Zettelkasten, evergreen notes, and local-first software.
-Kept for reference; no longer an active resource.`,
+      title: '5 · When you\'re done, remove these samples',
+      summary: 'These sample notes can be removed together in one click',
+      body: `These five notes are sample content in the "Getting started" project, here to show how the vault works.
+
+When you are ready to replace them with your own notes, use "Remove samples" and they are deleted together — they will not come back.`,
       para: 'archives',
       kind: 'note',
-      status: 'archived',
-      project: null,
+      status: 'active',
+      project: SAMPLE_NOTES_PROJECT,
     },
   ]
 
   const prev = db
   db = database
   try {
+    const createdIds: string[] = []
     for (const s of seeds) {
-      createItem(s)
+      createdIds.push(createItem(s).id)
     }
+    setMeta(database, SAMPLE_NOTE_IDS_KEY, JSON.stringify(createdIds))
     setMeta(database, SAMPLE_NOTES_SEEDED_KEY, '1')
   } finally {
     db = prev ?? database
   }
+}
+
+/** Read the ids of the seeded sample notes from the `meta` table. */
+function getSampleNoteIds(database: Database.Database): string[] {
+  const raw = getMeta(database, SAMPLE_NOTE_IDS_KEY)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** Sample notes that still exist (empty once the user removed them, or for pre-#139 vaults). */
+export function listSampleNotes(): Item[] {
+  const database = getDb()
+  const ids = getSampleNoteIds(database)
+  if (ids.length === 0) return []
+  const found: Item[] = []
+  const get = database.prepare('SELECT * FROM items WHERE id = ?')
+  for (const id of ids) {
+    const row = get.get(id) as Record<string, unknown> | undefined
+    if (row) found.push(rowToItem(row))
+  }
+  return found
+}
+
+/** Delete the seeded sample notes in one transaction. Returns how many were removed. */
+export function removeSampleNotes(): number {
+  const database = getDb()
+  const ids = getSampleNoteIds(database)
+  if (ids.length === 0) return 0
+  return runInTransaction(() => {
+    const del = database.prepare('DELETE FROM items WHERE id = ?')
+    let removed = 0
+    for (const id of ids) {
+      removed += del.run(id).changes
+    }
+    return removed
+  })
 }

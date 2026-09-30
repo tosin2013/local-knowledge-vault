@@ -27,11 +27,13 @@ import {
   listPrompts,
   listSessions,
   listProjects,
+  listSampleNotes,
   listTrashedItems,
   renameProject,
   mergeProject,
   deleteProject,
   restoreItem,
+  removeSampleNotes,
   trashItem,
   updateChatProfile,
   updateItem,
@@ -417,6 +419,8 @@ function registerIpc(): void {
   ipcMain.handle('items:restore', (_e, id: string) => restoreItem(id))
   ipcMain.handle('items:listTrashed', () => listTrashedItems())
   ipcMain.handle('items:emptyTrash', () => emptyTrash())
+  ipcMain.handle('items:listSamples', () => listSampleNotes())
+  ipcMain.handle('items:removeSamples', () => removeSampleNotes())
 
   ipcMain.handle('search:query', (_e, input: SearchQueryInput) => {
     return searchQuery(input)

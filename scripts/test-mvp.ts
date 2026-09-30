@@ -27,6 +27,8 @@ import {
   listMessages,
   updateSessionTitle,
   listProjects,
+  listSampleNotes,
+  removeSampleNotes,
   renameProject,
   mergeProject,
   deleteProject,
@@ -100,23 +102,23 @@ async function main(): Promise<void> {
   console.log('\nFilters')
   const projects = listItems({ para: 'projects' })
   assert(projects.length >= 1 && projects.every((i) => i.para === 'projects'), 'para filter works')
-  const byProject = listItems({ project: 'Local Knowledge Vault' })
-  assert(byProject.length >= 1, 'project filter matches an exact project name')
+  const byProject = listItems({ project: 'Getting started' })
+  assert(byProject.length >= 1, 'project filter matches the Getting started project')
   // #127: the project filter must not substring-match across projects.
-  const leaked = listItems({ project: 'Knowledge' })
-  assert(leaked.length === 0, 'project filter does not substring-match ("Knowledge" leaks 0 notes)')
+  const leaked = listItems({ project: 'Getting' })
+  assert(leaked.length === 0, 'project filter does not substring-match ("Getting" leaks 0 notes)')
 
   // --- FTS ---
   console.log('\nFTS5 search')
   assert(buildFtsQuery('atomic habits').includes('atomic'), 'FTS query builder tokenizes')
-  const habitHits = searchQuery({ text: 'habits', limit: 10 })
-  assert(habitHits.hits.length >= 1, `search "habits" returns hits (got ${habitHits.hits.length})`)
+  const citationHits = searchQuery({ text: 'citation', limit: 10 })
+  assert(citationHits.hits.length >= 1, `search "citation" returns hits (got ${citationHits.hits.length})`)
   assert(
-    habitHits.hits.some((h) => /habit/i.test(h.title) || /habit/i.test(h.snippet)),
-    'habit hit relates to Atomic Habits / habits content'
+    citationHits.hits.some((h) => /citation/i.test(h.title) || /citation/i.test(h.snippet)),
+    'citation hit relates to the citation sample note'
   )
-  const gtd = searchQuery({ text: 'productivity capture', limit: 10 })
-  assert(gtd.hits.length >= 1, 'search productivity returns hits')
+  const media = searchQuery({ text: 'video', limit: 10 })
+  assert(media.hits.length >= 1, 'search video returns hits')
   const filtered = searchQuery({
     text: 'notes',
     filters: { para: 'archives' },
@@ -208,7 +210,7 @@ async function main(): Promise<void> {
 
   // --- Prompt includes systemExtra ---
   console.log('\nGrounded prompt extras')
-  const promptWithExtra = buildGroundedPrompt('What are habits?', habitHits.hits.slice(0, 2), {
+  const promptWithExtra = buildGroundedPrompt('What are citations?', citationHits.hits.slice(0, 2), {
     systemExtra: 'Answer in bullet points.',
     history: [
       { role: 'user', content: 'Hi' },
@@ -633,6 +635,35 @@ async function main(): Promise<void> {
     }
     initDb(legacyFile)
     assert(countItems() === 1, 'pre-versioned vault keeps its note and is not re-seeded with samples')
+    closeDb()
+  }
+
+  // --- Getting started samples + Remove samples (#139) ---
+  console.log('\nGetting started samples + Remove samples (#139)')
+  {
+    const file = path.join(tmpDir, 'samples.sqlite')
+    initDb(file)
+    const samples = listSampleNotes()
+    assert(samples.length >= 3, `fresh vault seeds sample notes (got ${samples.length})`)
+    assert(
+      samples.every((s) => s.project === 'Getting started'),
+      'all sample notes live in the Getting started project'
+    )
+    assert(
+      samples.some((s) => s.para === 'projects') && samples.some((s) => s.para === 'resources'),
+      'samples span PARA groups'
+    )
+
+    const removed = removeSampleNotes()
+    assert(removed === samples.length, `removeSampleNotes removes all samples (${removed})`)
+    assert(listSampleNotes().length === 0, 'no sample notes remain after removal')
+    assert(countItems() === 0, 'vault is empty after removing the only notes')
+    closeDb()
+
+    // Restart: the removed samples must not come back.
+    initDb(file)
+    assert(listSampleNotes().length === 0, 'samples do not come back after removal + restart')
+    assert(countItems() === 0, 'no re-seed after removal + restart')
     closeDb()
   }
 

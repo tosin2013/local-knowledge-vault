@@ -46,6 +46,8 @@ export function useNotes(deps: UseNotesDeps) {
   // Trash (soft-delete) + rail bulk-select.
   const [trashed, setTrashed] = useState<Item[]>([])
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
+  // True while the first-run "Getting started" sample notes exist (#139).
+  const [hasSamples, setHasSamples] = useState(false)
 
   const refreshList = useCallback(async () => {
     if (!window.lkv) return
@@ -327,6 +329,38 @@ export function useNotes(deps: UseNotesDeps) {
     setTrashed(await window.lkv.items.listTrashed())
   }
 
+  /** Refresh whether the first-run "Getting started" samples still exist (#139). */
+  const refreshSamples = async () => {
+    if (!window.lkv?.items?.listSamples) {
+      setHasSamples(false)
+      return
+    }
+    try {
+      const samples = await window.lkv.items.listSamples()
+      setHasSamples(samples.length > 0)
+    } catch {
+      setHasSamples(false)
+    }
+  }
+
+  /** Remove the "Getting started" sample notes in one action, after confirmation. */
+  const removeSamples = async () => {
+    if (!window.lkv?.items?.removeSamples) return
+    if (!confirm('Remove the “Getting started” sample notes?')) return
+    setBusy(true)
+    setError(null)
+    try {
+      await window.lkv.items.removeSamples()
+      setHasSamples(false)
+      await refreshList()
+      void refreshProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   /** Toggle one note in the rail bulk-selection set. */
   const toggleBulkSelect = (id: string) => {
     setBulkSelected((prev) => {
@@ -486,6 +520,9 @@ export function useNotes(deps: UseNotesDeps) {
     deleteItemById,
     trashed,
     refreshTrashed,
+    hasSamples,
+    refreshSamples,
+    removeSamples,
     bulkSelected,
     toggleBulkSelect,
     bulkTrash,
