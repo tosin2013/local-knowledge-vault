@@ -52,19 +52,20 @@ function throwsWith(fn: () => unknown, re: RegExp, msg: string): void {
 }
 
 /* Minimal stored/deflate zip builder (crc unchecked by readZip). */
-function buildZip(specs: Array<{ name: string; data: Buffer; method: number }>): Buffer {
+function buildZip(specs: Array<{ name: string; data: Buffer; method: number; sizeOverride?: number }>): Buffer {
   const chunks: Buffer[] = []
   const central: Buffer[] = []
   let off = 0
   for (const s of specs) {
     const nameBuf = Buffer.from(s.name, 'utf8')
     const comp = s.method === 8 ? zlib.deflateRawSync(s.data) : s.data
+    const declaredSize = s.sizeOverride ?? s.data.length
     const lh = Buffer.alloc(30)
     lh.writeUInt32LE(0x04034b50, 0)
     lh.writeUInt16LE(20, 4)
     lh.writeUInt16LE(s.method, 8)
     lh.writeUInt32LE(comp.length, 18)
-    lh.writeUInt32LE(s.data.length, 22)
+    lh.writeUInt32LE(declaredSize, 22)
     lh.writeUInt16LE(nameBuf.length, 26)
     chunks.push(lh, nameBuf, comp)
     const cd = Buffer.alloc(46)
@@ -73,7 +74,7 @@ function buildZip(specs: Array<{ name: string; data: Buffer; method: number }>):
     cd.writeUInt16LE(20, 6)
     cd.writeUInt16LE(s.method, 10)
     cd.writeUInt32LE(comp.length, 20)
-    cd.writeUInt32LE(s.data.length, 24)
+    cd.writeUInt32LE(declaredSize, 24)
     cd.writeUInt16LE(nameBuf.length, 28)
     cd.writeUInt32LE(off, 42)
     central.push(cd, nameBuf)
@@ -338,6 +339,12 @@ async function main(): Promise<void> {
     const ro = pl.installPluginFrom(mkFolder('plug-ro', 'ro-test', false))
     fs.chmodSync(root, 0o755)
     assert(ro.ok === false, 'read-only plugins root fails install')
+
+    const bigZip = path.join(dir, 'oversized.zip')
+    fs.writeFileSync(bigZip, Buffer.alloc(0))
+    fs.truncateSync(bigZip, 51 * 1024 * 1024)
+    const big = pl.installPluginFrom(bigZip)
+    assert(big.ok === false && /too large/i.test(big.errors.join(' ')), 'oversized zip file rejected before read')
   }
 
   /* ---------- zip-read ---------- */
@@ -355,6 +362,18 @@ async function main(): Promise<void> {
       () => readZip(buildZip([{ name: 'a.bin', data: Buffer.from('x'), method: 12 }])),
       /Unsupported zip compression method/,
       'unknown method rejected'
+    )
+    // Declared-huge entry (honest zip bomb): reject before decompression.
+    throwsWith(
+      () => readZip(buildZip([{ name: 'huge.txt', data: Buffer.from('x'), method: 0, sizeOverride: 30 * 1024 * 1024 }])),
+      /too large/,
+      'declared-huge entry rejected'
+    )
+    // High-ratio bomb with a lying declared size: inflate is bounded by maxOutputLength.
+    throwsWith(
+      () => readZip(buildZip([{ name: 'bomb.txt', data: Buffer.alloc(30 * 1024 * 1024, 0), method: 8, sizeOverride: 100 }])),
+      /too large/,
+      'zip bomb (lying size) rejected'
     )
   }
 

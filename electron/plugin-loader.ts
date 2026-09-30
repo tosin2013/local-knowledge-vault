@@ -440,6 +440,12 @@ function collectFolder(src: string): { files: Array<{ rel: string; data: Buffer 
 }
 
 function collectZip(zipPath: string): { files: Array<{ rel: string; data: Buffer }>; skipped: string[] } {
+  // Cap the raw zip before reading it fully into memory (prevents reading a giant file).
+  const MAX_ZIP_FILE_BYTES = 50 * 1024 * 1024
+  const zipStat = fs.statSync(zipPath)
+  if (zipStat.size > MAX_ZIP_FILE_BYTES) {
+    throw new Error(`Zip file too large (> ${MAX_ZIP_FILE_BYTES / (1024 * 1024)} MB)`)
+  }
   const entries = readZip(fs.readFileSync(zipPath))
   // Allow plugin.json at root or inside a single top-level folder.
   let prefix = ''
