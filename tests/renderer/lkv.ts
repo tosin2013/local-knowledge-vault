@@ -263,6 +263,8 @@ export function createLkvMock(): LkvMock {
       restore: vi.fn().mockResolvedValue(true),
       listTrashed: vi.fn().mockResolvedValue([]),
       emptyTrash: vi.fn().mockResolvedValue(0),
+      listSamples: vi.fn().mockResolvedValue([]),
+      removeSamples: vi.fn().mockResolvedValue(0),
     },
     search: {
       query: vi.fn().mockResolvedValue({ hits: [] }),

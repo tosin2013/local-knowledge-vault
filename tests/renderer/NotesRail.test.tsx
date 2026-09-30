@@ -28,6 +28,8 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     onRailSort: vi.fn(),
     onShowTranscripts: vi.fn(),
     onOpenTrash: vi.fn(),
+    hasSamples: false,
+    onRemoveSamples: vi.fn(),
     bulkSelected: new Set<string>(),
     onToggleBulk: vi.fn(),
     onBulkTrash: vi.fn(),
@@ -85,6 +87,18 @@ describe('NotesRail', () => {
     render(<NotesRail {...props} />)
     fireEvent.click(screen.getByText('Trash'))
     expect(props.onOpenTrash).toHaveBeenCalled()
+  })
+
+  it('shows the Remove samples action while samples exist', () => {
+    const props = makeProps({ hasSamples: true })
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove samples' }))
+    expect(props.onRemoveSamples).toHaveBeenCalled()
+  })
+
+  it('hides the Remove samples action when there are no samples', () => {
+    render(<NotesRail {...makeProps({ hasSamples: false })} />)
+    expect(screen.queryByRole('button', { name: 'Remove samples' })).not.toBeInTheDocument()
   })
 
   it('changes project filter', () => {

@@ -78,6 +78,8 @@ const api = {
     restore: (id: string): Promise<boolean> => ipcRenderer.invoke('items:restore', id),
     listTrashed: (): Promise<Item[]> => ipcRenderer.invoke('items:listTrashed'),
     emptyTrash: (): Promise<number> => ipcRenderer.invoke('items:emptyTrash'),
+    listSamples: (): Promise<Item[]> => ipcRenderer.invoke('items:listSamples'),
+    removeSamples: (): Promise<number> => ipcRenderer.invoke('items:removeSamples'),
   },
   search: {
     query: (input: SearchQueryInput): Promise<SearchQueryResult> =>

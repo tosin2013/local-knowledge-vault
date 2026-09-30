@@ -288,4 +288,25 @@ describe('useNotes', () => {
     })
     expect(deps.setError).toHaveBeenCalledWith('nope')
   })
+
+  it('detects the Getting started sample notes', async () => {
+    const lkv = window.lkv as any
+    lkv.items.listSamples.mockResolvedValue([makeItem('itm_s1', { project: 'Getting started' })])
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    await act(async () => {
+      await result.current.refreshSamples()
+    })
+    expect(result.current.hasSamples).toBe(true)
+  })
+
+  it('removes the samples after confirmation and clears the flag', async () => {
+    const lkv = window.lkv as any
+    lkv.items.removeSamples.mockResolvedValue(5)
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    await act(async () => {
+      await result.current.removeSamples()
+    })
+    expect(lkv.items.removeSamples).toHaveBeenCalled()
+    expect(result.current.hasSamples).toBe(false)
+  })
 })

@@ -53,6 +53,8 @@ export interface NotesRailProps {
   onRailSort: (v: 'updated' | 'title' | 'created') => void
   onShowTranscripts: (v: boolean) => void
   onOpenTrash: () => void
+  hasSamples: boolean
+  onRemoveSamples: () => void
   bulkSelected: Set<string>
   onToggleBulk: (id: string) => void
   onBulkTrash: () => void
@@ -86,6 +88,8 @@ export function NotesRail(props: NotesRailProps) {
     onRailSort,
     onShowTranscripts,
     onOpenTrash,
+    hasSamples,
+    onRemoveSamples,
     bulkSelected,
     onToggleBulk,
     onBulkTrash,
@@ -112,6 +116,21 @@ export function NotesRail(props: NotesRailProps) {
         >
           New note
         </Button>
+
+        {hasSamples && (
+          <Paper
+            variant="outlined"
+            sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75, bgcolor: 'action.hover' }}
+            data-testid="remove-samples"
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+              Sample notes in “Getting started” show how the vault works.
+            </Typography>
+            <Button size="small" color="error" variant="outlined" onClick={onRemoveSamples}>
+              Remove samples
+            </Button>
+          </Paper>
+        )}
 
         {bulkSelected.size > 0 ? (
           <Button

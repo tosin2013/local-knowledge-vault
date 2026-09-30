@@ -205,6 +205,7 @@ async function main(): Promise<void> {
   const expectedHandlers = [
     // items
     'items:list', 'items:create', 'items:get', 'items:update', 'items:delete',
+    'items:listSamples', 'items:removeSamples',
     // search
     'search:query',
     // ask
@@ -342,6 +343,8 @@ async function main(): Promise<void> {
 
   // Verify a few method signatures
   assert(typeof (api.items as Record<string, unknown>).list === 'function', 'items.list is function')
+  assert(typeof (api.items as Record<string, unknown>).listSamples === 'function', 'items.listSamples is function')
+  assert(typeof (api.items as Record<string, unknown>).removeSamples === 'function', 'items.removeSamples is function')
   assert(typeof (api.search as Record<string, unknown>).query === 'function', 'search.query is function')
   assert(typeof (api.ask as Record<string, unknown>).grounded === 'function', 'ask.grounded is function')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
