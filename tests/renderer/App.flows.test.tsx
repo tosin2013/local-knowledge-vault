@@ -208,12 +208,12 @@ describe('App flows — Notes rail + note peek', () => {
 })
 
 describe('App flows — Simple/Advanced', () => {
-  it('toggles Advanced mode, revealing the Personalities and import UI', async () => {
+  it('toggles Advanced mode, revealing the Personalities button', async () => {
     await renderApp()
 
-    // Simple mode: no Personalities button, no Add-from-URL import form.
+    // Simple mode: no Personalities button, but URL import is always visible.
     expect(screen.queryByText('Personalities')).not.toBeInTheDocument()
-    expect(screen.queryByText('Add from URL')).not.toBeInTheDocument()
+    expect(screen.getByText('Add from URL')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('checkbox', { name: /Advanced/ }))
 
@@ -226,9 +226,9 @@ describe('App flows — Simple/Advanced', () => {
     const toggle = screen.getByRole('checkbox', { name: /Advanced/ })
 
     fireEvent.click(toggle)
-    await waitFor(() => expect(screen.getByText('Add from URL')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Personalities')).toBeInTheDocument())
 
     fireEvent.click(toggle)
-    await waitFor(() => expect(screen.queryByText('Add from URL')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('Personalities')).not.toBeInTheDocument())
   })
 })

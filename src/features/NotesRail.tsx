@@ -155,48 +155,46 @@ export function NotesRail(props: NotesRailProps) {
           </Button>
         )}
 
-        {advanced && (
-          <Stack spacing={0.5}>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Add from URL
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
-              Public https pages / articles. Import enables when the URL looks like https://… — may take a few seconds.
-            </Typography>
-            <Stack direction="row" spacing={0.75}>
-              <TextField
-                size="small"
-                fullWidth
-                type="url"
-                placeholder="https://…"
-                value={importUrl}
-                disabled={importBusy || busy}
-                onChange={(e) => onImportUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    if (isValidHttpUrl(importUrl)) onImport()
-                  }
-                }}
-                aria-label="URL to import"
-              />
-              <Button
-                variant="outlined"
-                size="small"
-                disabled={importBusy || busy || !isValidHttpUrl(importUrl)}
-                onClick={onImport}
-                sx={{ flexShrink: 0 }}
-                title={
-                  isValidHttpUrl(importUrl)
-                    ? 'Fetch and save as a note'
-                    : 'Paste a full http:// or https:// URL to enable Import'
+        <Stack spacing={0.5}>
+          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+            Add from URL
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+            Public https pages / articles. Import enables when the URL looks like https://… — may take a few seconds.
+          </Typography>
+          <Stack direction="row" spacing={0.75}>
+            <TextField
+              size="small"
+              fullWidth
+              type="url"
+              placeholder="https://…"
+              value={importUrl}
+              disabled={importBusy || busy}
+              onChange={(e) => onImportUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (isValidHttpUrl(importUrl)) onImport()
                 }
-              >
-                {importBusy ? '…' : 'Import'}
-              </Button>
-            </Stack>
+              }}
+              aria-label="URL to import"
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={importBusy || busy || !isValidHttpUrl(importUrl)}
+              onClick={onImport}
+              sx={{ flexShrink: 0 }}
+              title={
+                isValidHttpUrl(importUrl)
+                  ? 'Fetch and save as a note'
+                  : 'Paste a full http:// or https:// URL to enable Import'
+              }
+            >
+              {importBusy ? '…' : 'Import'}
+            </Button>
           </Stack>
-        )}
+        </Stack>
 
         <Stack direction="row" spacing={0.5} alignItems="center">
           <FormControl fullWidth size="small">

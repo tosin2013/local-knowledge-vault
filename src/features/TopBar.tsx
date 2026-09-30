@@ -19,10 +19,12 @@ import SearchIcon from '@mui/icons-material/Search'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import ExtensionIcon from '@mui/icons-material/Extension'
+import SettingsIcon from '@mui/icons-material/Settings'
 import type { LlmStatus } from '../../electron/types'
 import type { Mode, ThemeMode } from '../domain'
 import type { VaultPlugin } from '../plugins/types'
 import { MANAGE_PLUGINS_ID } from '../plugins/manage'
+import { mediaChatPlugin } from '../plugins/media-chat'
 import type { RefObject } from 'react'
 
 export interface TopBarProps {
@@ -73,6 +75,8 @@ export function TopBar(props: TopBarProps) {
     onAdvanced,
     onTheme,
   } = props
+
+  const showMediaChat = visiblePlugins.some((p) => p.id === mediaChatPlugin.id)
 
   return (
     <AppBar position="sticky" sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', color: 'text.primary' }}>
@@ -148,6 +152,16 @@ export function TopBar(props: TopBarProps) {
             sx={{ maxWidth: 280 }}
             data-testid="ai-chip"
           />
+          {showMediaChat && (
+            <Button
+              size="small"
+              variant={activePluginId === mediaChatPlugin.id ? 'contained' : 'outlined'}
+              color="primary"
+              onClick={() => onSelectPlugin(mediaChatPlugin.id)}
+            >
+              Media chat
+            </Button>
+          )}
           {advanced && (
             <Button
               size="small"
@@ -207,6 +221,15 @@ export function TopBar(props: TopBarProps) {
               </Box>
             </MenuItem>
           </Menu>
+          <IconButton
+            size="small"
+            onClick={onAiSettings}
+            title="Settings"
+            aria-label="Settings"
+            sx={{ border: 1, borderColor: 'divider', borderRadius: 3 }}
+          >
+            <SettingsIcon fontSize="small" />
+          </IconButton>
           <FormControlLabel
             control={
               <Switch

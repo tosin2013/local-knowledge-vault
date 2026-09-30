@@ -78,4 +78,25 @@ describe('TopBar', () => {
     fireEvent.click(screen.getByLabelText('Toggle color theme'))
     expect(props.onTheme).toHaveBeenCalled()
   })
+
+  it('shows a Media chat button when the media-chat plugin is available', () => {
+    const props = makeProps({
+      visiblePlugins: [{ id: 'media-chat', name: 'Media chat', description: 'Chat with video', render: () => null }],
+    })
+    render(<TopBar {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Media chat' }))
+    expect(props.onSelectPlugin).toHaveBeenCalledWith('media-chat')
+  })
+
+  it('hides the Media chat button when the plugin is unavailable', () => {
+    render(<TopBar {...makeProps({ visiblePlugins: [] })} />)
+    expect(screen.queryByRole('button', { name: 'Media chat' })).not.toBeInTheDocument()
+  })
+
+  it('opens settings from the gear button', () => {
+    const props = makeProps()
+    render(<TopBar {...props} />)
+    fireEvent.click(screen.getByLabelText('Settings'))
+    expect(props.onAiSettings).toHaveBeenCalled()
+  })
 })
