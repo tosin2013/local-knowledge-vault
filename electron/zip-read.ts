@@ -48,18 +48,37 @@ export function readZip(buf: Buffer): ZipEntry[] {
     if (name.startsWith('/') || /^[a-zA-Z]:/.test(name) || name.split('/').includes('..')) {
       throw new Error(`Unsafe path in zip: ${name}`)
     }
-    total += size
-    if (total > MAX_TOTAL_BYTES) throw new Error('Zip contents too large (> 25 MB)')
+    // Reject entries whose declared uncompressed size is absurd (fast-fail zip bombs).
+    if (size > MAX_TOTAL_BYTES) throw new Error(`Zip entry too large (${name})`)
 
     if (buf.readUInt32LE(localOff) !== 0x04034b50) throw new Error(`Corrupt local header for ${name}`)
     const lNameLen = buf.readUInt16LE(localOff + 26)
     const lExtraLen = buf.readUInt16LE(localOff + 28)
     const start = localOff + 30 + lNameLen + lExtraLen
+    if (compSize > buf.length - start) throw new Error(`Corrupt zip: compressed size exceeds archive (${name})`)
     const raw = buf.slice(start, start + compSize)
+
     let data: Buffer
-    if (method === 0) data = Buffer.from(raw)
-    else if (method === 8) data = zlib.inflateRawSync(raw)
-    else throw new Error(`Unsupported zip compression method ${method} (${name})`)
+    if (method === 0) {
+      data = Buffer.from(raw)
+    } else if (method === 8) {
+      // Bound the inflation to the remaining budget so a high-ratio bomb can't
+      // allocate unbounded memory (the declared `size` above can lie).
+      const remaining = MAX_TOTAL_BYTES - total
+      try {
+        data = zlib.inflateRawSync(raw, { maxOutputLength: remaining })
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
+          throw new Error('Zip contents too large (> 25 MB)')
+        }
+        throw e
+      }
+    } else {
+      throw new Error(`Unsupported zip compression method ${method} (${name})`)
+    }
+    // Track the *actual* decompressed size (not the declared one) against the cap.
+    total += data.length
+    if (total > MAX_TOTAL_BYTES) throw new Error('Zip contents too large (> 25 MB)')
     out.push({ name, data })
   }
   return out
