@@ -6,6 +6,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import Database from 'better-sqlite3'
 import {
   initDb,
   closeDb,
@@ -542,6 +543,47 @@ async function main(): Promise<void> {
   } else {
     assert(true, `Ollama offline as expected in CI/headless (${health!.error ?? 'no error'})`)
   }
+
+  // --- FTS tokenizer migration: unicode61 → trigram (#37) ---
+  console.log('\nFTS tokenizer migration (unicode61 → trigram)')
+  // Build an "old" vault DB with the pre-trigram tokenizer and one CJK note,
+  // then re-open through initDb so migrate() detects and rebuilds it.
+  const oldDbFile = path.join(tmpDir, 'old-unicode61.sqlite')
+  {
+    const old = new Database(oldDbFile)
+    old.exec(`
+      CREATE TABLE items (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        summary TEXT,
+        body TEXT NOT NULL DEFAULT '',
+        para TEXT NOT NULL CHECK(para IN ('projects','areas','resources','archives')),
+        kind TEXT NOT NULL DEFAULT 'note',
+        status TEXT NOT NULL DEFAULT 'active',
+        project TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE VIRTUAL TABLE items_fts USING fts5(title, summary, body, content='items', content_rowid='rowid');
+      CREATE TRIGGER items_ai AFTER INSERT ON items BEGIN
+        INSERT INTO items_fts(rowid, title, summary, body) VALUES (new.rowid, new.title, new.summary, new.body);
+      END;
+      CREATE TRIGGER items_ad AFTER DELETE ON items BEGIN
+        INSERT INTO items_fts(items_fts, rowid, title, summary, body) VALUES ('delete', old.rowid, old.title, old.summary, old.body);
+      END;
+      CREATE TRIGGER items_au AFTER UPDATE ON items BEGIN
+        INSERT INTO items_fts(items_fts, rowid, title, summary, body) VALUES ('delete', old.rowid, old.title, old.summary, old.body);
+        INSERT INTO items_fts(rowid, title, summary, body) VALUES (new.rowid, new.title, new.summary, new.body);
+      END;
+      INSERT INTO items (id, title, body, para, kind, status, created_at, updated_at)
+        VALUES ('itm_old_cjk', 'CJK note', '東京の天気', 'resources', 'note', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+    `)
+    old.close()
+  }
+  initDb(oldDbFile)
+  const migratedHits = searchQuery({ text: 'の天気', limit: 5 })
+  assert(migratedHits.hits.length >= 1, 'initDb migrates a unicode61 vault to trigram (CJK substring found)')
+  assert(migratedHits.hits.some((h) => h.id === 'itm_old_cjk'), 'migrated CJK note is retrievable by substring')
 
   closeDb()
   fs.rmSync(tmpDir, { recursive: true, force: true })

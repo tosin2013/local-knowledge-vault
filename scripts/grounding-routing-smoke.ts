@@ -93,7 +93,7 @@ async function main(): Promise<void> {
     isGreetingOrSocial,
     parseCitations,
   } = require('../electron/chat')
-  const { pickModel, estimateNumCtx } = require('../electron/ollama')
+  const { pickModel, estimateNumCtx, readOllamaStream } = require('../electron/ollama')
   const { stripThinking } = require('../electron/providers/http')
 
   console.log('generate.ts — askGrounded & helpers')
@@ -331,6 +331,22 @@ async function main(): Promise<void> {
     estimateNumCtx(undefined, 'x'.repeat(4000), 1024) === 2048,
     'estimateNumCtx adds output headroom before crossing the floor'
   )
+
+  // --- readOllamaStream (#36): NDJSON loop skips thinking, flushes tail ---
+  const ndjson = [
+    JSON.stringify({ response: 'Hel', done: false }),
+    JSON.stringify({ thinking: 'internal reasoning to skip', done: false }),
+    JSON.stringify({ response: 'lo', done: false }),
+    JSON.stringify({ response: '!', done: true }),
+  ].join('\n')
+  const streamed = await readOllamaStream(new Response(ndjson))
+  assert(streamed === 'Hello!', 'readOllamaStream concatenates response and skips thinking')
+  const streamTail = await readOllamaStream(new Response('{"response":"tail"}'))
+  assert(streamTail === 'tail', 'readOllamaStream flushes a final line without a newline')
+  const streamMalformed = await readOllamaStream(new Response('{"response":"ok"}\nnot-json\n'))
+  assert(streamMalformed === 'ok', 'readOllamaStream skips a malformed line')
+  const streamBadTail = await readOllamaStream(new Response('not-json'))
+  assert(streamBadTail === '', 'readOllamaStream ignores a malformed tail')
 
   console.log('\nproviders/http.ts — stripThinking')
 

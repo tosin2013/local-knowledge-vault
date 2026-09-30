@@ -87,7 +87,7 @@ export function estimateNumCtx(
  * `response` chunks and skipping `thinking` chunks so reasoning tokens never
  * leak into the answer regardless of `<think>` tag handling.
  */
-async function readOllamaStream(res: Response): Promise<string> {
+export async function readOllamaStream(res: Response): Promise<string> {
   const body = res.body
   if (!body) return ''
   const reader = body.getReader()
