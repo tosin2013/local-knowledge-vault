@@ -14,6 +14,9 @@ import { searchQuery } from './search'
 import { llmGenerate, providerDisplayName } from './llm'
 
 const CITE_RE = /\[(itm_[a-zA-Z0-9]+)\]/g
+/** Same as CITE_RE but with optional leading spaces so a stripped marker does not
+ *  leave a stray double-space or a space before punctuation. */
+const STRIP_INVALID_RE = /[ \t]*\[(itm_[a-zA-Z0-9]+)\]/g
 
 /** Extract cited item ids from model answer text */
 export function extractCitedIds(answer: string): string[] {
@@ -42,6 +45,33 @@ export function validateCitations(
   const allowed = allowedIds instanceof Set ? allowedIds : new Set(allowedIds)
   return citedIds.filter((id) => allowed.has(id))
 }
+
+/**
+ * Remove citation markers whose id was not retrieved (hallucinations). Valid
+ * markers stay as grounding anchors; invalid ids are stripped so a user never
+ * sees a citation-looking marker that points nowhere (#38).
+ */
+export function stripInvalidCitations(answer: string, allowedIds: Set<string> | string[]): string {
+  const allowed = allowedIds instanceof Set ? allowedIds : new Set(allowedIds)
+  return answer.replace(STRIP_INVALID_RE, (full, id) => (allowed.has(id) ? full : ''))
+}
+
+/** Label prepended when a model answers but cites none of the retrieved notes. */
+export const UNCITED_LABEL = '⚠ No notes cited — this answer may not be grounded in your notes.'
+
+/**
+ * Finalize a model answer for display: strip hallucinated citation markers,
+ * apply the empty-response sentinel, and flag answers that cite nothing (#38).
+ */
+export function finalizeAnswer(text: string, allowedIds: Set<string> | string[]): string {
+  const cleaned = stripInvalidCitations(text, allowedIds).trim()
+  if (!cleaned) return '(empty model response)'
+  // After stripping, only valid markers remain — none left means it cites nothing.
+  if (extractCitedIds(cleaned).length === 0) return `${UNCITED_LABEL}\n\n${cleaned}`
+  return cleaned
+}
+
+const HISTORY_CHAR_CAP = 4000
 
 const GROUNDED_RULES = `You are a careful assistant for a personal notes vault.
 Answer the user's question ONLY using the numbered passages below.
@@ -89,8 +119,14 @@ export function buildGroundedMessages(
     const turns = history
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n\n')
-    historyBlock = `\n\nConversation so far:\n${turns}\n`
+    // Cap history by characters (not just turns) so a long chat can't push the
+    // prompt past the context window and silently truncate the rules (#36).
+    // Keep the most recent turns, dropping the oldest first.
+    let block = turns.join('\n\n')
+    for (let i = 1; i <= turns.length && block.length > HISTORY_CHAR_CAP; i++) {
+      block = turns.slice(i).join('\n\n')
+    }
+    historyBlock = `\n\nConversation so far:\n${block}\n`
   }
 
   return {
@@ -177,7 +213,7 @@ export async function askGrounded(input: AskGroundedInput): Promise<AskGroundedR
   const validIds = validateCitations(rawCited, allowed)
 
   return {
-    answer: gen.text.trim() || '(empty model response)',
+    answer: finalizeAnswer(gen.text, allowed),
     citations: citationsFromIds(validIds),
     hits,
   }

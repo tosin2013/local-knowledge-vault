@@ -62,6 +62,69 @@ export function pickModel(models: string[], sizes: Record<string, string> = {}):
   return pool[0]
 }
 
+const MIN_NUM_CTX = 2048
+const MAX_NUM_CTX = 8192
+
+/**
+ * Estimate the context window (`num_ctx`) a request needs. Ollama's default
+ * context silently truncates the leading system/rules once a chat grows, so we
+ * size num_ctx from the prompt plus room for the answer, within sane bounds.
+ * Rough heuristic: ~4 characters per token.
+ */
+export function estimateNumCtx(
+  system: string | undefined,
+  prompt: string,
+  maxTokens?: number
+): number {
+  const inputChars = (system?.length ?? 0) + prompt.length
+  const inputTokens = Math.ceil(inputChars / 4)
+  const outputTokens = maxTokens ?? 512
+  return Math.min(Math.max(inputTokens + outputTokens, MIN_NUM_CTX), MAX_NUM_CTX)
+}
+
+/**
+ * Read an Ollama `/api/generate` NDJSON stream (`stream: true`), concatenating
+ * `response` chunks and skipping `thinking` chunks so reasoning tokens never
+ * leak into the answer regardless of `<think>` tag handling.
+ */
+export async function readOllamaStream(res: Response): Promise<string> {
+  const body = res.body
+  if (!body) return ''
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let out = ''
+  let buffer = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let nl = buffer.indexOf('\n')
+    while (nl >= 0) {
+      const line = buffer.slice(0, nl).trim()
+      buffer = buffer.slice(nl + 1)
+      if (line) {
+        try {
+          const chunk = JSON.parse(line) as { response?: string }
+          if (chunk.response) out += chunk.response
+        } catch {
+          /* ignore a malformed/partial line */
+        }
+      }
+      nl = buffer.indexOf('\n')
+    }
+  }
+  const tail = (buffer + decoder.decode()).trim()
+  if (tail) {
+    try {
+      const chunk = JSON.parse(tail) as { response?: string }
+      if (chunk.response) out += chunk.response
+    } catch {
+      /* ignore */
+    }
+  }
+  return out
+}
+
 export async function ollamaGenerate(
   model: string,
   input: GenerateInput | string,
@@ -78,9 +141,13 @@ export async function ollamaGenerate(
           model,
           prompt: req.prompt,
           ...(req.system ? { system: req.system } : {}),
-          stream: false,
+          stream: true,
+          // qwen3 (first-preference model) thinks by default; disable it so it
+          // answers instead of burning the timeout in <think> reasoning (#36).
+          think: false,
           options: {
             temperature: 0.2,
+            num_ctx: estimateNumCtx(req.system, req.prompt, req.maxTokens),
             ...(req.maxTokens ? { num_predict: req.maxTokens } : {}),
           },
         }),
@@ -90,8 +157,8 @@ export async function ollamaGenerate(
     if (!res.ok) {
       return { ok: false, error: await readErrorDetail(res, 'Ollama') }
     }
-    const data = (await res.json()) as { response?: string }
-    return { ok: true, text: stripThinking(data.response ?? '') }
+    const text = await readOllamaStream(res)
+    return { ok: true, text: stripThinking(text) }
   } catch (err) {
     return { ok: false, error: errMessage(err) }
   }

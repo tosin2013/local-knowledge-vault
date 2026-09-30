@@ -75,7 +75,7 @@ async function main(): Promise<void> {
   const prompt = createPrompt({ name: 'Test Prompt', body: 'You are a test assistant', description: 'Test' })
 
   // 2) NOW require electron modules that depend on llm (AFTER mock is installed)
-  const { searchQuery, buildFtsQuery } = require('../electron/search')
+  const { searchQuery, buildFtsQuery, tokenizeFts } = require('../electron/search')
   const {
     askGrounded,
     buildGroundedMessages,
@@ -83,6 +83,9 @@ async function main(): Promise<void> {
     validateCitations,
     citationsFromIds,
     offlineCopy,
+    stripInvalidCitations,
+    finalizeAnswer,
+    UNCITED_LABEL,
   } = require('../electron/generate')
   const {
     sendChatTurn,
@@ -90,7 +93,7 @@ async function main(): Promise<void> {
     isGreetingOrSocial,
     parseCitations,
   } = require('../electron/chat')
-  const { pickModel } = require('../electron/ollama')
+  const { pickModel, estimateNumCtx, readOllamaStream } = require('../electron/ollama')
   const { stripThinking } = require('../electron/providers/http')
 
   console.log('generate.ts — askGrounded & helpers')
@@ -136,6 +139,15 @@ async function main(): Promise<void> {
   assert(msgs.prompt.includes('Passages:'), 'prompt includes passages')
   assert(msgs.prompt.includes('Question: test question'), 'prompt includes question')
   assert(msgs.prompt.includes('Answer (with [id] citations):'), 'prompt includes citation instruction')
+
+  // --- buildGroundedMessages: history char cap (#36) ---
+  const longHistory = Array.from({ length: 6 }, (_, i) => [
+    { role: 'user' as const, content: `question number ${i} ` + 'x'.repeat(900) },
+    { role: 'assistant' as const, content: `answer number ${i} ` + 'y'.repeat(900) },
+  ]).flat()
+  const capped = buildGroundedMessages('q', hits.hits, { history: longHistory })
+  assert(!capped.prompt.includes('question number 0'), 'history cap drops the oldest turns first')
+  assert(capped.prompt.includes('question number 5'), 'history cap keeps the most recent turns')
 
   // --- offlineCopy ---
   assert(
@@ -188,6 +200,34 @@ async function main(): Promise<void> {
   const withCitations = await askGrounded({ question: 'alpha', limit: 5 })
   assert(withCitations.citations.every((c: { id: string }) => c.id !== 'itm_999'), 'askGrounded drops hallucinated citations')
   assert(withCitations.citations.some((c: { id: string }) => c.id === validHitId), 'askGrounded keeps valid citations')
+  assert(!withCitations.answer.includes('itm_999'), 'askGrounded strips hallucinated marker from answer text')
+
+  // --- citation marker cleanup (#38) ---
+  console.log('\ngenerate.ts — citation marker cleanup (#38)')
+  assert(
+    stripInvalidCitations('Answer [itm_1] and [itm_fake].', ['itm_1']) === 'Answer [itm_1] and.',
+    'stripInvalidCitations removes the invalid marker, keeps the valid one'
+  )
+  assert(
+    stripInvalidCitations('Only [itm_fake] here.', ['itm_1']) === 'Only here.',
+    'stripInvalidCitations eats the leading space of a stripped marker'
+  )
+  assert(
+    stripInvalidCitations('No markers at all.', ['itm_1']) === 'No markers at all.',
+    'stripInvalidCitations leaves clean text untouched'
+  )
+  assert(
+    finalizeAnswer('Answer [itm_1].', ['itm_1']) === 'Answer [itm_1].',
+    'finalizeAnswer keeps a cited answer unchanged'
+  )
+  assert(
+    finalizeAnswer('Answer [itm_fake].', ['itm_1']) === `${UNCITED_LABEL}\n\nAnswer.`,
+    'finalizeAnswer labels an answer that cites nothing'
+  )
+  assert(
+    finalizeAnswer('   ', ['itm_1']) === '(empty model response)',
+    'finalizeAnswer empty text is the sentinel, not labelled'
+  )
 
   console.log('\nchat.ts — sendChatTurn & helpers')
 
@@ -247,6 +287,16 @@ async function main(): Promise<void> {
   const withPrompt = await sendChatTurn({ sessionId: session.id, text: 'test', promptId: prompt.id, filters: { project: 'test' } })
   assert(withPrompt.assistant.content.includes('Prompt answer'), 'sendChatTurn uses prompt body as systemExtra')
 
+  // --- sendChatTurn: uncited answer is labelled (#38) ---
+  setMockLlmGenerate({ ok: true, text: 'An answer that cites nothing' })
+  const uncited = await sendChatTurn({ sessionId: session.id, text: 'alpha', filters: { project: 'test' } })
+  assert(uncited.assistant.content.startsWith(UNCITED_LABEL), 'sendChatTurn labels an uncited answer')
+
+  // --- sendChatTurn: hallucinated marker stripped from persisted content (#38) ---
+  setMockLlmGenerate({ ok: true, text: 'Answer [itm_zzz999] only' })
+  const hallucinated = await sendChatTurn({ sessionId: session.id, text: 'alpha', filters: { project: 'test' } })
+  assert(!hallucinated.assistant.content.includes('[itm_zzz999]'), 'sendChatTurn strips a hallucinated marker from content')
+
   console.log('\nollama.ts — pickModel')
 
   // --- pickModel ---
@@ -263,6 +313,40 @@ async function main(): Promise<void> {
   const pickedEnv = pickModel(['model1', 'model2'], {})
   assert(pickedEnv === 'model2', 'pickModel respects LKV_OLLAMA_MODEL env')
   delete process.env.LKV_OLLAMA_MODEL
+
+  // --- estimateNumCtx (#36) ---
+  assert(
+    estimateNumCtx(undefined, 'hi', undefined) === 2048,
+    'estimateNumCtx floors at Ollama default (2048) for short prompts'
+  )
+  assert(
+    estimateNumCtx(undefined, 'x'.repeat(12000), undefined) > 2048,
+    'estimateNumCtx grows past the floor for a large prompt'
+  )
+  assert(
+    estimateNumCtx(undefined, 'x'.repeat(100_000), 1024) === 8192,
+    'estimateNumCtx caps at the max context (8192)'
+  )
+  assert(
+    estimateNumCtx(undefined, 'x'.repeat(4000), 1024) === 2048,
+    'estimateNumCtx adds output headroom before crossing the floor'
+  )
+
+  // --- readOllamaStream (#36): NDJSON loop skips thinking, flushes tail ---
+  const ndjson = [
+    JSON.stringify({ response: 'Hel', done: false }),
+    JSON.stringify({ thinking: 'internal reasoning to skip', done: false }),
+    JSON.stringify({ response: 'lo', done: false }),
+    JSON.stringify({ response: '!', done: true }),
+  ].join('\n')
+  const streamed = await readOllamaStream(new Response(ndjson))
+  assert(streamed === 'Hello!', 'readOllamaStream concatenates response and skips thinking')
+  const streamTail = await readOllamaStream(new Response('{"response":"tail"}'))
+  assert(streamTail === 'tail', 'readOllamaStream flushes a final line without a newline')
+  const streamMalformed = await readOllamaStream(new Response('{"response":"ok"}\nnot-json\n'))
+  assert(streamMalformed === 'ok', 'readOllamaStream skips a malformed line')
+  const streamBadTail = await readOllamaStream(new Response('not-json'))
+  assert(streamBadTail === '', 'readOllamaStream ignores a malformed tail')
 
   console.log('\nproviders/http.ts — stripThinking')
 
@@ -296,34 +380,53 @@ async function main(): Promise<void> {
     stripThinking('  <think>spaced</think>  Trimmed  ') === 'Trimmed',
     'stripThinking trims surrounding whitespace'
   )
+  assert(
+    stripThinking('Real answer <think>unclosed reasoning trailing') === 'Real answer',
+    'stripThinking removes a mid-answer unclosed think block (#36)'
+  )
 
-  console.log('\nsearch.ts — tricky FTS input (#43)')
+  console.log('\nsearch.ts — query building (#37) + tricky FTS input (#43)')
 
-  // --- buildFtsQuery: safe quoting, no bare FTS operators ---
+  // --- buildFtsQuery: stopwords dropped, terms quoted, no prefix `*` ---
   assert(buildFtsQuery('') === '', 'buildFtsQuery empty returns empty')
   assert(buildFtsQuery('   ') === '', 'buildFtsQuery whitespace returns empty')
   assert(buildFtsQuery('"\'*(){}[]^:~') === '', 'buildFtsQuery only-special-chars returns empty')
   assert(
-    buildFtsQuery('hello"world') === '"hello"* OR "world"*',
-    'buildFtsQuery splits on stripped quotes'
-  )
-  assert(
-    buildFtsQuery('a"b(c)d*e:f~g') === '"a"* OR "b"* OR "c"* OR "d"* OR "e"* OR "f"* OR "g"*',
-    'buildFtsQuery strips every FTS special char'
+    buildFtsQuery('hello"world') === '"hello" OR "world"',
+    'buildFtsQuery splits on stripped quotes and quotes terms'
   )
   const orInjection = buildFtsQuery('foo OR bar')
   assert(
-    orInjection === '"foo"* OR "OR"* OR "bar"*',
-    'buildFtsQuery quotes user OR so it cannot inject an operator'
+    orInjection === '"foo" OR "bar"',
+    'buildFtsQuery drops the "or" stopword (and cannot inject an operator)'
   )
   assert(
-    buildFtsQuery('"unterminated') === '"unterminated"*',
+    buildFtsQuery('"unterminated') === '"unterminated"',
     'buildFtsQuery quotes an unbalanced quote'
   )
   assert(
-    buildFtsQuery('café naïve') === '"café"* OR "naïve"*',
+    buildFtsQuery('café naïve') === '"café" OR "naïve"',
     'buildFtsQuery keeps unicode tokens'
   )
+  assert(
+    buildFtsQuery('what are my habits') === '"habits"',
+    'buildFtsQuery drops stopwords, keeps the meaningful term (#37)'
+  )
+  assert(
+    JSON.stringify(tokenizeFts("it's")) === '["s"]',
+    'tokenizeFts drops "it" stopword, keeps "s" so the query is not empty (#37)'
+  )
+  assert(
+    JSON.stringify(tokenizeFts('The Quick BROWN fox')) === '["quick","brown","fox"]',
+    'tokenizeFts lowercases and drops stopwords'
+  )
+
+  // --- CJK substring search via trigram (#37) ---
+  const cjk = createItem({ title: 'CJK note', body: '今日の東京の天気は晴れです', kind: 'note' })
+  const cjkHits = searchQuery({ text: 'の天気', limit: 5 })
+  assert(cjkHits.hits.some((h: { id: string }) => h.id === cjk.id), 'trigram finds a CJK substring (の天気)')
+  const cjkMiss = searchQuery({ text: '不存在の言葉', limit: 5 })
+  assert(!cjkMiss.hits.some((h: { id: string }) => h.id === cjk.id), 'unrelated CJK does not match the note')
 
   // --- searchQuery: tricky input never throws, always returns hits array ---
   const trickyInputs = [
