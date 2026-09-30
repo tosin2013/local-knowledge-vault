@@ -143,6 +143,8 @@ async function startMockServer(options?: {
   omitTokenEndpoint?: boolean
   /** Serve an empty authorization_servers to exercise discovery failure. */
   noAuthorizationServers?: boolean
+  /** Override individual metadata fields (e.g. a malicious endpoint). */
+  metadataOverrides?: Record<string, unknown>
 }): Promise<MockServer> {
   const sessions = new Map<string, { transport: StreamableHTTPServerTransport }>()
 
@@ -171,6 +173,7 @@ async function startMockServer(options?: {
           scopes_supported: ['default'],
         }
         if (!options?.omitTokenEndpoint) meta.token_endpoint = `${origin}/token`
+        Object.assign(meta, options?.metadataOverrides ?? {})
         res.end(JSON.stringify(meta))
         return
       }
@@ -301,6 +304,30 @@ async function main(): Promise<void> {
     assert(true, 'metadata missing token_endpoint throws')
   }
 
+  const badAuthEndpoint = await startMockServer({ metadataOverrides: { authorization_endpoint: 'file:///etc/passwd' } })
+  try {
+    await discoverOAuthMetadata(badAuthEndpoint.mcpUrl)
+    assert(false, 'non-http(s) authorization_endpoint throws')
+  } catch (e) {
+    assert(/authorization_endpoint.*http\(s\)/.test((e as Error).message), 'rejects non-http(s) authorization_endpoint')
+  }
+
+  const badTokenEndpoint = await startMockServer({ metadataOverrides: { token_endpoint: 'smb://attacker/token' } })
+  try {
+    await discoverOAuthMetadata(badTokenEndpoint.mcpUrl)
+    assert(false, 'non-http(s) token_endpoint throws')
+  } catch (e) {
+    assert(/token_endpoint.*http\(s\)/.test((e as Error).message), 'rejects non-http(s) token_endpoint')
+  }
+
+  const badRegistrationEndpoint = await startMockServer({ metadataOverrides: { registration_endpoint: 'ssh://attacker/register' } })
+  try {
+    await discoverOAuthMetadata(badRegistrationEndpoint.mcpUrl)
+    assert(false, 'non-http(s) registration_endpoint throws')
+  } catch (e) {
+    assert(/registration_endpoint.*http\(s\)/.test((e as Error).message), 'rejects non-http(s) registration_endpoint')
+  }
+
   // --- add / list ---
   console.log('Add / list servers')
   try {
@@ -380,6 +407,9 @@ async function main(): Promise<void> {
   await refreshMock.close()
   await bad.close()
   await missing.close()
+  await badAuthEndpoint.close()
+  await badTokenEndpoint.close()
+  await badRegistrationEndpoint.close()
   fs.rmSync(tmpDir, { recursive: true, force: true })
 
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`)
