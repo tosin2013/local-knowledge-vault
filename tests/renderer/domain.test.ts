@@ -22,6 +22,7 @@ import {
   PARA_OPTIONS,
   paraLabel,
   parseCitations,
+  parseInlineCitations,
   personalityDisplayName,
   resolveProfilePromptId,
   saveLastProfile,
@@ -93,6 +94,47 @@ describe('parseCitations', () => {
     expect(parseCitations(null)).toEqual([])
     expect(parseCitations('not json')).toEqual([])
     expect(parseCitations(JSON.stringify({ id: 'a' }))).toEqual([])
+  })
+})
+
+describe('parseInlineCitations', () => {
+  const cites = [
+    { id: 'itm_a', title: 'Note A', project: null },
+    { id: 'itm_b', title: 'Note B', project: null },
+  ]
+
+  it('turns valid markers into numbered citation segments', () => {
+    expect(parseInlineCitations('See [itm_a] and [itm_b].', cites)).toEqual([
+      { kind: 'text', text: 'See ' },
+      { kind: 'citation', number: 1, citation: cites[0] },
+      { kind: 'text', text: ' and ' },
+      { kind: 'citation', number: 2, citation: cites[1] },
+      { kind: 'text', text: '.' },
+    ])
+  })
+
+  it('repeats the same number for a repeated id', () => {
+    const segs = parseInlineCitations('[itm_a] … [itm_a]', cites)
+    expect(segs.filter((s) => s.kind === 'citation')).toEqual([
+      { kind: 'citation', number: 1, citation: cites[0] },
+      { kind: 'citation', number: 1, citation: cites[0] },
+    ])
+  })
+
+  it('leaves marker-free text as a single text segment', () => {
+    expect(parseInlineCitations('No markers here', cites)).toEqual([
+      { kind: 'text', text: 'No markers here' },
+    ])
+  })
+
+  it('keeps unknown markers as literal text', () => {
+    expect(parseInlineCitations('See [itm_unknown].', cites)).toEqual([
+      { kind: 'text', text: 'See [itm_unknown].' },
+    ])
+  })
+
+  it('returns an empty list for empty content', () => {
+    expect(parseInlineCitations('', cites)).toEqual([])
   })
 })
 

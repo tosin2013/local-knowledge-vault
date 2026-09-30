@@ -54,7 +54,7 @@ describe('App flows — Ask', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() => expect(screen.getByText('PARA is a note-organising method.')).toBeInTheDocument())
-    expect(screen.getByText('Cited note')).toBeInTheDocument()
+    expect(screen.getByText('[1] Cited note')).toBeInTheDocument()
     expect(lkv.chat.send).toHaveBeenCalled()
   })
 
