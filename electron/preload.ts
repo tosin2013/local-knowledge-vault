@@ -116,8 +116,8 @@ const api = {
     setEnabled: (id: string, enabled: boolean): Promise<PluginListResult> =>
       ipcRenderer.invoke('plugins:setEnabled', id, enabled),
     remove: (id: string): Promise<PluginListResult> => ipcRenderer.invoke('plugins:remove', id),
-    install: (kind?: 'folder' | 'zip', srcPath?: string): Promise<PluginInstallResult> =>
-      ipcRenderer.invoke('plugins:install', kind, srcPath),
+    install: (kind?: 'folder' | 'zip'): Promise<PluginInstallResult> =>
+      ipcRenderer.invoke('plugins:install', kind),
     preview: (kind?: 'folder' | 'zip'): Promise<PluginPreviewResult> =>
       ipcRenderer.invoke('plugins:preview', kind),
     installFromPath: (srcPath: string): Promise<PluginInstallResult> =>

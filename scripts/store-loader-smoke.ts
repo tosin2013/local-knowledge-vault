@@ -268,6 +268,11 @@ async function main(): Promise<void> {
     fs.writeFileSync(path.join(badDir, 'plugin.json'), '{invalid')
     const bad = pl.readPluginDir(badDir)
     assert(!bad.info && /not valid JSON/.test(bad.errors.join(' ')), 'malformed plugin.json rejected')
+
+    // isBundledPluginPath: only paths inside examples/plugins are installable from the renderer.
+    assert(pl.isBundledPluginPath(path.join(__dirname, '../examples/plugins/study-buddy')) === true, 'bundled path recognized')
+    assert(pl.isBundledPluginPath(path.join(dir, 'elsewhere')) === false, 'non-bundled path rejected')
+    assert(pl.isBundledPluginPath(path.join(__dirname, '../examples/plugins')) === true, 'bundled root recognized')
   }
 
   /* ---------- plugin install flows ---------- */

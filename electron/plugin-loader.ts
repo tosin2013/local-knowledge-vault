@@ -687,6 +687,20 @@ function bundledPluginsDir(): string {
   return path.join(__dirname, '..', 'examples', 'plugins')
 }
 
+/**
+ * True when `candidate` resolves inside the bundled examples/plugins directory.
+ * Used by the main process to keep the renderer from installing from arbitrary paths.
+ */
+export function isBundledPluginPath(candidate: string): boolean {
+  try {
+    const root = path.resolve(bundledPluginsDir()) + path.sep
+    const resolved = path.resolve(candidate)
+    return resolved === path.resolve(bundledPluginsDir()) || resolved.startsWith(root)
+  } catch {
+    return false
+  }
+}
+
 export function listBundledPlugins(): PluginPreview[] {
   const root = bundledPluginsDir()
   const out: PluginPreview[] = []
