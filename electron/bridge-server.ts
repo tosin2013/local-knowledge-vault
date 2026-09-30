@@ -14,6 +14,7 @@ import { askGrounded } from './generate'
 import { getPrompt, listItems } from './db'
 import { listMediaProjects } from './media-ingest'
 import { resolveUserDataDir } from './user-data'
+import { encryptSecret, decryptSecret } from './secret-store'
 import type { BridgeAskResult, Citation } from './types'
 
 export const BRIDGE_HOST = '127.0.0.1'
@@ -38,7 +39,7 @@ function randomToken(): string {
 function readTokenFile(p: string): string | null {
   try {
     if (!fs.existsSync(p)) return null
-    return fs.readFileSync(p, 'utf8').trim() || null
+    return decryptSecret(fs.readFileSync(p, 'utf8'))
   } catch {
     return null
   }
@@ -47,7 +48,7 @@ function readTokenFile(p: string): string | null {
 function writeTokenFile(p: string, token: string): void {
   const dir = resolveUserDataDir()
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(p, token, { encoding: 'utf8', mode: 0o600 })
+  fs.writeFileSync(p, encryptSecret(token), { encoding: 'utf8', mode: 0o600 })
   try {
     fs.chmodSync(p, 0o600)
   } catch {
@@ -55,13 +56,20 @@ function writeTokenFile(p: string, token: string): void {
   }
 }
 
+let cachedToken: string | null = null
+
 /** Read the stored token, generating + persisting (0600) one on first use. */
 export function getBridgeToken(): string {
+  if (cachedToken) return cachedToken
   const p = bridgeTokenPath()
   const existing = readTokenFile(p)
-  if (existing) return existing
+  if (existing) {
+    cachedToken = existing
+    return existing
+  }
   const token = randomToken()
   writeTokenFile(p, token)
+  cachedToken = token
   return token
 }
 
@@ -69,6 +77,7 @@ export function getBridgeToken(): string {
 export function rotateBridgeToken(): string {
   const token = randomToken()
   writeTokenFile(bridgeTokenPath(), token)
+  cachedToken = token
   return token
 }
 

@@ -73,8 +73,10 @@ Go to Advanced → AI providers → **Add provider**:
 ## Where keys live
 
 - Keys are **write-only** in the UI. The renderer only ever sees `hasKey` / `keySource`.
-- Keys you save are stored in `<userData>/lkv-keys/<provider-id>.key`. The directory is `0700`
-  and the file is `0600`.
+- Keys you save are stored in `<userData>/lkv-keys/<provider-id>.key`, encrypted with the OS
+  keychain via Electron `safeStorage` (macOS Keychain, Windows DPAPI, Linux libsecret/kwallet).
+  When OS encryption isn't available, they fall back to plaintext with `0700` directory and
+  `0600` file permissions.
 - Env vars win over files: `LKV_<PRESET>_API_KEY` or the provider's usual name (`OPENAI_API_KEY`,
   `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`,
   `DEEPSEEK_API_KEY`, `TOGETHER_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`).
