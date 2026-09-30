@@ -439,7 +439,7 @@ async function main(): Promise<void> {
   const badEmpty = isAllowedUrl('  ')
   assert(badEmpty.ok === false, 'blocks empty URL')
   const okLocal = isAllowedUrl('http://localhost:3000/page')
-  assert(okLocal.ok === true, 'allows localhost http for testing')
+  assert(okLocal.ok === false, 'blocks localhost (SSRF protection)')
 
   const html = `<!DOCTYPE html><html><head>
     <title>SpaceX Study Notes</title>
