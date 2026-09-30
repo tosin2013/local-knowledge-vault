@@ -156,6 +156,48 @@ export function parseCitations(json: string | null): Citation[] {
   }
 }
 
+/** A run of answer text, or a single inline citation that replaced a [itm_…] marker. */
+export type InlineSegment =
+  | { kind: 'text'; text: string }
+  | { kind: 'citation'; number: number; citation: Citation }
+
+/**
+ * Split answer text so valid `[itm_…]` markers become numbered inline
+ * citations ([1], [2], …) that map to the citation list, instead of rendering
+ * as raw text (#129). Unknown markers are left as literal text (defensive —
+ * the main process already strips hallucinations in #38).
+ */
+export function parseInlineCitations(content: string, citations: Citation[]): InlineSegment[] {
+  const indexById = new Map<string, number>()
+  citations.forEach((c, i) => indexById.set(c.id, i))
+
+  const segments: InlineSegment[] = []
+  const re = /\[(itm_[a-zA-Z0-9]+)\]/g
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(content)) !== null) {
+    if (m.index > last) segments.push({ kind: 'text', text: content.slice(last, m.index) })
+    const id = m[1]
+    const idx = indexById.get(id)
+    if (idx === undefined) {
+      segments.push({ kind: 'text', text: m[0] })
+    } else {
+      segments.push({ kind: 'citation', number: idx + 1, citation: citations[idx] })
+    }
+    last = m.index + m[0].length
+  }
+  if (last < content.length) segments.push({ kind: 'text', text: content.slice(last) })
+
+  // Coalesce adjacent text segments (e.g. unknown markers kept as literal text).
+  const merged: InlineSegment[] = []
+  for (const seg of segments) {
+    const prev = merged[merged.length - 1]
+    if (seg.kind === 'text' && prev && prev.kind === 'text') prev.text += seg.text
+    else merged.push(seg)
+  }
+  return merged
+}
+
 export const GORGIAS_READER_PROMPT_ID = 'prm_56ba1ab41bfe4042'
 export const GORGIAS_PROJECT = 'Gorgias'
 export const GORGIAS_READER_NAME = 'Gorgias reader'

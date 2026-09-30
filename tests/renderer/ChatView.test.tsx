@@ -78,12 +78,33 @@ describe('ChatView', () => {
     expect(props.onChatInput).toHaveBeenCalledWith('What did I write about habits?')
   })
 
-  it('renders messages with citation chips', () => {
+  it('renders messages with numbered citation chips', () => {
     const props = makeProps({ messages: [makeMessage({ content: 'Hello', citations_json: JSON.stringify([{ id: 'itm_1', title: 'Note A' }]) })] })
     render(<ChatView {...props} />)
     expect(screen.getByText('Hello')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Note A'))
+    fireEvent.click(screen.getByText('[1] Note A'))
     expect(props.onSelectNote).toHaveBeenCalledWith('itm_1')
+  })
+
+  it('renders valid citation markers as clickable numbered inline citations', () => {
+    const props = makeProps({
+      messages: [makeMessage({
+        role: 'assistant',
+        content: 'Habits compound [itm_1]. Environment matters [itm_2].',
+        citations_json: JSON.stringify([
+          { id: 'itm_1', title: 'Note A' },
+          { id: 'itm_2', title: 'Note B' },
+        ]),
+      })],
+    })
+    render(<ChatView {...props} />)
+    // Raw markers never surface in the text.
+    expect(screen.queryByText(/\[itm_1\]/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\[itm_2\]/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Citation 1: Note A' }))
+    expect(props.onSelectNote).toHaveBeenCalledWith('itm_1')
+    fireEvent.click(screen.getByRole('button', { name: 'Citation 2: Note B' }))
+    expect(props.onSelectNote).toHaveBeenCalledWith('itm_2')
   })
 
   it('sends a message', () => {
