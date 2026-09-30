@@ -283,6 +283,15 @@ async function main(): Promise<void> {
   ) as { ok?: boolean }
   assert(installed && installed.ok === true, 'plugins:installFromPath installs a bundled example')
 
+  // The renderer must not install from an arbitrary path (SSRF/path-traversal guard).
+  let arbitraryThrew = false
+  try {
+    await ipcRendererMock.invoke('plugins:installFromPath', path.join(os.tmpdir(), 'lkv-not-bundled'))
+  } catch (e) {
+    arbitraryThrew = /not authorized/.test((e as Error).message)
+  }
+  assert(arbitraryThrew, 'plugins:installFromPath rejects an arbitrary path')
+
   const sessions = await ipcRendererMock.invoke('chat:listSessions') as unknown[]
   assert(Array.isArray(sessions), 'chat:listSessions returns array')
 

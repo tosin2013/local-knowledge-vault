@@ -83,7 +83,6 @@ import {
 } from './mcp-client'
 import {
   buildCitationPackForSession,
-  writeCitationPack,
   writeCitationPackFolder,
   writeCitationPackZip,
 } from './citation-pack'
@@ -100,6 +99,7 @@ import {
 import {
   getPluginContributions,
   installPluginFrom,
+  isBundledPluginPath,
   listPluginsResult,
   listRemovedPlugins,
   listBundledPlugins,
@@ -158,6 +158,33 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+
+/**
+ * Paths the user explicitly picked via a native open dialog for plugin install.
+ * The renderer may only install from these (or from the bundled examples dir),
+ * never from an arbitrary path it supplies itself.
+ */
+const blessedPluginPaths = new Set<string>()
+
+function blessPluginPath(p: string | undefined): string | null {
+  if (!p) return null
+  try {
+    const resolved = path.resolve(p)
+    blessedPluginPaths.add(resolved)
+    return resolved
+  } catch {
+    return null
+  }
+}
+
+function isAllowedPluginInstallPath(p: string): boolean {
+  try {
+    const resolved = path.resolve(p)
+    return isBundledPluginPath(resolved) || blessedPluginPaths.has(resolved)
+  } catch {
+    return false
+  }
+}
 
 /** Keep the YouTube embed loading from the file:// renderer; see youtube-embed-headers.ts. */
 function fixYoutubeEmbedHeaders(): void {
@@ -443,22 +470,18 @@ function registerIpc(): void {
     const err = await shell.openPath(dir)
     return { path: dir, error: err || undefined }
   })
-  ipcMain.handle('plugins:install', async (_e, kind?: 'folder' | 'zip', srcPath?: string) => {
-    let src = srcPath
-    if (!src) {
-      const opts: OpenDialogOptions =
-        kind === 'zip'
-          ? {
-              title: 'Install plugin (.zip)',
-              properties: ['openFile'],
-              filters: [{ name: 'Plugin zip', extensions: ['zip'] }],
-            }
-          : { title: 'Install plugin (folder with plugin.json)', properties: ['openDirectory'] }
-      const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
-      if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true }
-      src = r.filePaths[0]
-    }
-    return installPluginFrom(src)
+  ipcMain.handle('plugins:install', async (_e, kind?: 'folder' | 'zip') => {
+    const opts: OpenDialogOptions =
+      kind === 'zip'
+        ? {
+            title: 'Install plugin (.zip)',
+            properties: ['openFile'],
+            filters: [{ name: 'Plugin zip', extensions: ['zip'] }],
+          }
+        : { title: 'Install plugin (folder with plugin.json)', properties: ['openDirectory'] }
+    const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true }
+    return installPluginFrom(blessPluginPath(r.filePaths[0])!)
   })
 
   // Add-on preview (no install yet), bundled examples, and recoverable removed add-ons.
@@ -475,9 +498,16 @@ function registerIpc(): void {
             }
     const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || !r.filePaths[0]) return { canceled: true }
-    return previewPluginFrom(r.filePaths[0])
+    return previewPluginFrom(blessPluginPath(r.filePaths[0])!)
   })
-  ipcMain.handle('plugins:installFromPath', (_e, srcPath: string) => installPluginFrom(srcPath))
+  ipcMain.handle('plugins:installFromPath', (_e, srcPath: string) => {
+    // The renderer must not install from an arbitrary path: only bundled
+    // examples (listBundled) or a path the user just picked via the dialog.
+    if (!srcPath || !isAllowedPluginInstallPath(srcPath)) {
+      throw new Error('Plugin install path not authorized — pick it from the file dialog')
+    }
+    return installPluginFrom(srcPath)
+  })
   ipcMain.handle('plugins:listRemoved', () => listRemovedPlugins())
   ipcMain.handle('plugins:restore', (_e, key: string) => restorePlugin(key))
   ipcMain.handle('plugins:listBundled', () => listBundledPlugins())
@@ -544,19 +574,8 @@ function registerIpc(): void {
       profileHint: input.profileHint,
     })
 
-    // Headless / smoke: write folder + zip under outputDir
-    if (input.outputDir) {
-      fs.mkdirSync(input.outputDir, { recursive: true })
-      const { folderPath, zipPath } = writeCitationPack(input.outputDir, pack)
-      return {
-        path: zipPath,
-        zipPath,
-        folderPath,
-        noteCount: pack.manifest.noteIds.length,
-        missingCount: pack.manifest.missingIds.length,
-      }
-    }
-
+    // The output location is always chosen by the main process (native save
+    // dialog, defaulting to Downloads) — never a renderer-supplied path.
     const downloads = app.getPath('downloads')
     const defaultName = `${pack.folderName}.zip`
     const saveOpts = {

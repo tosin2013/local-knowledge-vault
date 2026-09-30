@@ -467,8 +467,6 @@ export interface UpdateChatProfilePatch {
 
 export interface CitationPackExportInput {
   sessionId: string
-  /** If set, write pack folder (+ zip) here without a dialog. */
-  outputDir?: string
   /** Optional profile label for manifest.profileHint */
   profileHint?: string
 }
