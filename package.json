@@ -1,6 +1,6 @@
 {
   "name": "local-knowledge-vault",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local Knowledge Vault — PARA notes, FTS5 search, optional Ollama grounded Q&A",
   "license": "Apache-2.0",
   "main": "dist-electron/main.js",
