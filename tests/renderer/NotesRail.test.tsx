@@ -138,4 +138,10 @@ describe('NotesRail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
     expect(props.onImport).toHaveBeenCalled()
   })
+
+  it('shows the URL import form in simple mode', () => {
+    render(<NotesRail {...makeProps({ advanced: false })} />)
+    expect(screen.getByText('Add from URL')).toBeInTheDocument()
+    expect(screen.getByLabelText('URL to import')).toBeInTheDocument()
+  })
 })
