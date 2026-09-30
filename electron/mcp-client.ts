@@ -225,6 +225,19 @@ function clearTokens(id: string): void {
   writeTokensFile(all)
 }
 
+/** Reject non-http(s) endpoint URLs from untrusted server metadata. */
+function assertHttpUrl(value: string, label: string): void {
+  let scheme = 'invalid URL'
+  try {
+    const u = new URL(value)
+    scheme = u.protocol || 'invalid URL'
+    if (u.protocol === 'http:' || u.protocol === 'https:') return
+  } catch {
+    /* scheme already set to 'invalid URL' */
+  }
+  throw new Error(`OAuth ${label} must be an http(s) URL (got ${scheme})`)
+}
+
 /**
  * RFC 9470 protected-resource metadata discovery with common fallbacks.
  * Prefer path-aware well-known: /.well-known/oauth-protected-resource{path}
@@ -284,6 +297,14 @@ export async function discoverOAuthMetadata(mcpServerUrl: string): Promise<OAuth
   const metadata = (await metadataResponse.json()) as OAuthMetadata
   if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
     throw new Error('Missing required OAuth endpoints in metadata')
+  }
+  // Untrusted server metadata must not point at arbitrary URL schemes — the
+  // authorization_endpoint is handed to shell.openExternal, which would open
+  // file://, smb://, or custom schemes, and the others are used with fetch.
+  assertHttpUrl(metadata.authorization_endpoint, 'authorization_endpoint')
+  assertHttpUrl(metadata.token_endpoint, 'token_endpoint')
+  if (metadata.registration_endpoint) {
+    assertHttpUrl(metadata.registration_endpoint, 'registration_endpoint')
   }
   if (!metadata.code_challenge_methods_supported?.includes('S256')) {
     console.warn('[mcp] Server does not advertise S256 PKCE; using S256 anyway')
@@ -554,6 +575,9 @@ async function runOAuthFlow(
     // Lazy require so discovery smoke can run outside Electron
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { shell } = require('electron') as { shell: { openExternal: (url: string) => Promise<void> } }
+    // Final guard: never hand a non-http(s) URL to shell.openExternal, even if the
+    // cached metadata was tampered with on disk after discovery.
+    assertHttpUrl(metadata.authorization_endpoint, 'authorization_endpoint')
     await shell.openExternal(authUrl)
     const result = await waitForCode
     if ('error' in result) {
