@@ -188,4 +188,76 @@ describe('useChat', () => {
     const { result } = renderHook(() => useChat(makeDeps({ prompts })))
     expect(result.current.askEmpty.title).toContain('Ask anything')
   })
+
+  it('shows the user message optimistically before the reply arrives', async () => {
+    const lkv = window.lkv as any
+    let resolveSend!: (v: unknown) => void
+    lkv.chat.send.mockImplementation(() => new Promise((r) => { resolveSend = r }))
+    const { result } = renderHook(() => useChat(makeDeps()))
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    act(() => result.current.setChatInput('hello'))
+    let sendPromise!: Promise<void>
+    act(() => {
+      sendPromise = result.current.onSendChat()
+    })
+    expect(result.current.messages.some((m) => m.role === 'user' && m.content === 'hello')).toBe(true)
+    expect(result.current.sending).toBe(true)
+    await act(async () => {
+      resolveSend({ messages: [makeMessage()], session: makeSession('s_1'), offline: false })
+      await sendPromise
+    })
+    expect(result.current.messages).toEqual([makeMessage()])
+  })
+
+  it('does not overwrite another session when a reply arrives late', async () => {
+    const lkv = window.lkv as any
+    let resolveSend!: (v: unknown) => void
+    lkv.chat.send.mockImplementation(() => new Promise((r) => { resolveSend = r }))
+    const { result } = renderHook(() => useChat(makeDeps()))
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    act(() => result.current.setChatInput('hello'))
+    let sendPromise!: Promise<void>
+    act(() => {
+      sendPromise = result.current.onSendChat()
+    })
+    lkv.chat.listMessages.mockResolvedValue([makeMessage({ session_id: 's_2', content: 'other thread' })])
+    await act(async () => {
+      await result.current.onSelectSession('s_2')
+    })
+    await act(async () => {
+      resolveSend({ messages: [makeMessage()], session: makeSession('s_1'), offline: false })
+      await sendPromise
+    })
+    expect(result.current.messages).toEqual([
+      makeMessage({ session_id: 's_2', content: 'other thread' }),
+    ])
+  })
+
+  it('ignores a second send while one is in flight', async () => {
+    const lkv = window.lkv as any
+    let resolveSend!: (v: unknown) => void
+    lkv.chat.send.mockImplementation(() => new Promise((r) => { resolveSend = r }))
+    const { result } = renderHook(() => useChat(makeDeps()))
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    act(() => result.current.setChatInput('first'))
+    let sendPromise!: Promise<void>
+    act(() => {
+      sendPromise = result.current.onSendChat()
+    })
+    act(() => result.current.setChatInput('second'))
+    await act(async () => {
+      await result.current.onSendChat()
+    })
+    expect(lkv.chat.send).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      resolveSend({ messages: [makeMessage()], session: makeSession('s_1'), offline: false })
+      await sendPromise
+    })
+  })
 })
