@@ -19,9 +19,11 @@ type MockSafeStorage = {
   decryptString: (b: Buffer) => string
 }
 let mockSafeStorage: MockSafeStorage | null = null
+let throwOnElectron = false
 
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
+    if (throwOnElectron) throw new Error('no electron here')
     return { safeStorage: mockSafeStorage }
   }
   return origLoad.call(this, request, parent, isMain)
@@ -91,6 +93,33 @@ async function main(): Promise<void> {
   }
   assert(ss.decryptSecret(corrupt) === null, 'decrypt failure returns null (not throw)')
 
+  // isEncryptionAvailable throw → treated as unavailable
+  mockSafeStorage = {
+    isEncryptionAvailable: () => {
+      throw new Error('keyring unavailable')
+    },
+    encryptString: (s: string) => Buffer.from(`enc(${s})`),
+    decryptString: (b: Buffer) => b.toString().replace(/^enc\(|\)$/g, ''),
+  }
+  assert(ss.secretEncryptionAvailable() === false, 'isEncryptionAvailable throw → false')
+
+  // encryptString throw → falls through to plaintext
+  mockSafeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: () => {
+      throw new Error('encrypt failed')
+    },
+    decryptString: (b: Buffer) => b.toString().replace(/^enc\(|\)$/g, ''),
+  }
+  assert(ss.encryptSecret('sk-x') === 'sk-x', 'encryptString throw → plaintext fallback')
+
+  // require('electron') throw → treated as unavailable / plaintext
+  throwOnElectron = true
+  assert(ss.secretEncryptionAvailable() === false, 'electron require throw → unavailable')
+  assert(ss.encryptSecret('sk-y') === 'sk-y', 'electron require throw → plaintext')
+  assert(ss.decryptSecret('enc:v1:abcd') === null, 'electron require throw → encrypted undecryptable')
+  throwOnElectron = false
+
   // --- 3) Integration: API keys are written encrypted ---
   console.log('API key encryption (llm-settings)')
   mockSafeStorage = {
@@ -108,10 +137,14 @@ async function main(): Promise<void> {
   writeKeyFileAt(keyPath, null)
   assert(!fs.existsSync(keyPath), 'clearing removes the key file')
 
-  // --- 4) Integration: bridge token is written encrypted ---
+  // --- 4) Integration: bridge token (legacy read, then encrypted write) ---
   console.log('bridge token encryption (bridge-server)')
+  // A pre-existing plaintext token is read transparently and cached.
+  fs.writeFileSync(path.join(dir, 'lkv-bridge-token'), 'legacy-bridge-token')
   const { getBridgeToken, rotateBridgeToken } = require('../electron/bridge-server')
-  const token = getBridgeToken()
+  assert(getBridgeToken() === 'legacy-bridge-token', 'legacy plaintext bridge token read')
+
+  const token = rotateBridgeToken()
   const tokenPath = path.join(dir, 'lkv-bridge-token')
   const tokenOnDisk = fs.readFileSync(tokenPath, 'utf8')
   assert(tokenOnDisk.startsWith(ss.ENCRYPTED_PREFIX), 'bridge token written encrypted')
