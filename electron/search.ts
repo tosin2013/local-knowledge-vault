@@ -48,16 +48,12 @@ export function tokenizeFts(text: string): string[] {
  * with OR so a note matching any term still ranks (recall preserved for #138).
  */
 export function buildFtsQuery(text: string): string {
-  const terms = tokenizeFts(text)
+  // Deduplicate: chat merges earlier turns into the query, and a repeated term
+  // would count once per repeat in the BM25 score (#196).
+  const terms = [...new Set(tokenizeFts(text))]
   if (terms.length === 0) return ''
   return terms.map((t) => `"${t}"`).join(' OR ')
 }
-
-/**
- * Minimum BM25 rank to keep a hit. FTS5 bm25() is ≤ 0 with larger (closer to
- * zero) meaning better; this floor drops only clearly-irrelevant matches (#37).
- */
-const MIN_BM25 = -15
 
 export function searchQuery(input: SearchQueryInput): SearchQueryResult {
   const database = getDb()
@@ -103,12 +99,11 @@ export function searchQuery(input: SearchQueryInput): SearchQueryResult {
        FROM items_fts
        JOIN items i ON i.rowid = items_fts.rowid
        WHERE items_fts MATCH ?
-         AND bm25(items_fts) > ?
          AND i.id IN (SELECT id FROM items WHERE status != 'trashed'${filterSql})
        ORDER BY ${orderBy}
        LIMIT ?`
     )
-    .all(fts, MIN_BM25, ...filterParams, limit) as Record<string, unknown>[]
+    .all(fts, ...filterParams, limit) as Record<string, unknown>[]
 
   return { hits: rows.map(mapHit) }
 }

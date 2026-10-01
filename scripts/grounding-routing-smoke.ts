@@ -420,6 +420,26 @@ async function main(): Promise<void> {
     JSON.stringify(tokenizeFts('The Quick BROWN fox')) === '["quick","brown","fox"]',
     'tokenizeFts lowercases and drops stopwords'
   )
+  assert(
+    buildFtsQuery('alpha beta alpha Alpha beta') === '"alpha" OR "beta"',
+    'buildFtsQuery deduplicates repeated terms (#196)'
+  )
+
+  // --- A strong match is never dropped for scoring too well (#196) ---
+  // bm25() is more negative for better matches; the old `bm25 > -15` floor
+  // removed exactly these once the corpus and query grew.
+  for (let i = 0; i < 40; i++) {
+    createItem({ title: `Filler ${i}`, body: `Unrelated filler passage number ${i} about gardening`, kind: 'note', project: 'filler' })
+  }
+  const strong = createItem({
+    title: 'Quarterly kayak budget',
+    body: 'Kayak paddle budget quarterly forecast zephyr marigold lantern',
+    kind: 'note',
+    project: 'strong',
+  })
+  const strongHits = searchQuery({ text: 'kayak paddle budget quarterly forecast zephyr marigold lantern', limit: 5 })
+  assert(strongHits.hits[0]?.id === strong.id, 'a strong multi-term match is returned first, not filtered out (#196)')
+  assert(strongHits.hits[0]?.score < -15, 'the strong match scores below the old -15 floor (regression guard for #196)')
 
   // --- CJK substring search via trigram (#37) ---
   const cjk = createItem({ title: 'CJK note', body: '今日の東京の天気は晴れです', kind: 'note' })
