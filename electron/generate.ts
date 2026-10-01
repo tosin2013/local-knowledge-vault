@@ -3,6 +3,7 @@
  * Citations MUST be subset of retrieved hit IDs; hallucinated IDs are dropped.
  */
 import type {
+  AnswerProvider,
   AskGroundedInput,
   AskGroundedResult,
   ChatMessage,
@@ -169,6 +170,17 @@ export function offlineCopy(
   return `${msg}. ${suffix}.`
 }
 
+/** The provider that wrote an answer, in the shape the renderer shows (#45). */
+export function answerProvider(gen: {
+  provider: string
+  providerLabel: string
+  model: string
+  local: boolean
+  fallback: boolean
+}): AnswerProvider {
+  return { id: gen.provider, label: gen.providerLabel, model: gen.model, local: gen.local, fallback: gen.fallback }
+}
+
 export function citationsFromIds(ids: string[]): Citation[] {
   return ids.map((id) => {
     const item = getItem(id)
@@ -216,5 +228,6 @@ export async function askGrounded(input: AskGroundedInput): Promise<AskGroundedR
     answer: finalizeAnswer(gen.text, allowed),
     citations: citationsFromIds(validIds),
     hits,
+    provider: answerProvider(gen),
   }
 }

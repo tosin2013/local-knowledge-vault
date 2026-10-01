@@ -24,6 +24,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import type { VaultPluginRenderProps } from '../types'
 import { AI_DRAFT_STATUS, provenanceHeader } from '../../domain'
+import { AnswerProviderChip } from '../../components/ai/AnswerProviderChip'
 import type {
   ChatMessage,
   Citation,
@@ -671,6 +672,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         content: rawInput,
         citations_json: null,
         hits_json: null,
+        provider_json: null,
         created_at: new Date().toISOString(),
       },
     ])
@@ -948,6 +950,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                         ))}
                       </Stack>
                     )}
+                    {m.role === 'assistant' && <AnswerProviderChip providerJson={m.provider_json} />}
                     {m.role === 'assistant' && onNewDraft && (
                       <Button
                         size="small"

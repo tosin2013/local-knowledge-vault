@@ -7,6 +7,7 @@
  *   2. LM Studio (OpenAI-compatible server at :1234, models via /v1/models)
  *   3. Other enabled local providers (custom localhost URLs)
  *   4. Enabled cloud providers (only ones the user added/enabled, with a key) in list order
+ * Auto, local only ('auto-local'): steps 1–3, never a cloud provider (#45).
  * Explicit selection uses that provider only (no silent fallback to something else).
  */
 import { ollamaGenerate, ollamaHealth, pickModel } from './ollama'
@@ -18,6 +19,7 @@ import {
   getProviderConfig,
   getProviderKey,
   getSelection,
+  isAutoSelection,
   listProviderConfigs,
 } from './provider-store'
 import type {
@@ -91,7 +93,7 @@ function activeInfo(c: ResolvedCandidate): ActiveProviderInfo {
 /** Pure resolution from providers-with-health. Unit-testable without network. */
 export function resolveFromProviders(selected: ProviderSelection, providers: ProviderConfig[]): ResolveResult {
   const base = { selected, providers, recommendedLocalModel: RECOMMENDED_LOCAL_MODEL }
-  if (selected !== 'auto') {
+  if (!isAutoSelection(selected)) {
     const p = providers.find((x) => x.id === selected)
     if (!p) {
       return {
@@ -107,8 +109,9 @@ export function resolveFromProviders(selected: ProviderSelection, providers: Pro
     return { candidates: [], status: { ...base, active: null, needsSetup: false, message: `${r.reason} — search still works` } }
   }
 
+  const localOnly = selected === 'auto-local'
   const locals = providers.filter((p) => p.local)
-  const clouds = providers.filter((p) => !p.local)
+  const clouds = localOnly ? [] : providers.filter((p) => !p.local)
   const candidates: ResolvedCandidate[] = []
   for (const p of [...locals, ...clouds]) {
     const r = providerReadiness(p)
@@ -129,7 +132,9 @@ export function resolveFromProviders(selected: ProviderSelection, providers: Pro
   }
   const runningNoModels = locals.find((p) => p.enabled && p.health?.ok && !effectiveModel(p, p.health))
   const cloudEnabled = clouds.some((p) => p.enabled)
-  let message = 'No local model detected — start Ollama or LM Studio (search still works)'
+  let message = localOnly
+    ? 'No local model detected — start Ollama or LM Studio. Auto is set to local only, so cloud providers are not used (search still works)'
+    : 'No local model detected — start Ollama or LM Studio (search still works)'
   if (runningNoModels) {
     message =
       runningNoModels.kind === 'ollama'
@@ -188,12 +193,23 @@ export async function generateWith(
 }
 
 export type LlmGenerateResult =
-  | { ok: true; text: string; provider: string; providerLabel: string; local: boolean; model: string }
+  | {
+      ok: true
+      text: string
+      provider: string
+      providerLabel: string
+      /** False when the request left this computer (cloud provider or an Ollama `:cloud` model). */
+      local: boolean
+      model: string
+      /** True when Auto picked a cloud provider because no local model answered (#45). */
+      fallback: boolean
+    }
   | { ok: false; error: string; provider?: string | null; providerLabel?: string }
 
 /**
  * Generate text through the registry. In Auto, a hard failure falls through to the next
  * ready provider (local first). The prompt/grounding is identical for every provider.
+ * The result says whether the answer stayed local, so callers can flag cloud answers.
  */
 export async function llmGenerate(input: GenerateInput | string): Promise<LlmGenerateResult> {
   const req: GenerateInput = typeof input === 'string' ? { prompt: input } : input
@@ -205,13 +221,15 @@ export async function llmGenerate(input: GenerateInput | string): Promise<LlmGen
   for (const c of resolved.candidates) {
     const gen = await generateWith(c.provider, c.model, req)
     if (gen.ok) {
+      const local = c.provider.local && !isCloudModel(c.model)
       return {
         ok: true,
         text: gen.text,
         provider: c.provider.id,
         providerLabel: c.provider.label,
-        local: c.provider.local,
+        local,
         model: c.model,
+        fallback: !local && resolved.status.selected === 'auto',
       }
     }
     lastErr = { error: gen.error, provider: c.provider.id, providerLabel: c.provider.label }

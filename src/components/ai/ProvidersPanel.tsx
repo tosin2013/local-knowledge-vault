@@ -156,10 +156,15 @@ export function ProvidersPanel({
           <Select
             labelId="provider-selection-label"
             label="Use"
-            value={providers.some((p) => p.id === status.selected) ? status.selected : 'auto'}
+            value={
+              status.selected === 'auto-local' || providers.some((p) => p.id === status.selected)
+                ? status.selected
+                : 'auto'
+            }
             onChange={(e) => void run(() => window.lkv.providers.setSelected(String(e.target.value)))}
           >
             <MenuItem value="auto">Auto (local first, then enabled cloud)</MenuItem>
+            <MenuItem value="auto-local">Auto — local only (never cloud)</MenuItem>
             {providers
               .filter((p) => p.enabled)
               .map((p) => (
@@ -179,7 +184,18 @@ export function ProvidersPanel({
           {status.message}
         </Typography>
       </Stack>
-      {status.selected !== 'auto' && (
+      {status.selected === 'auto' && clouds.some((p) => p.enabled) && (
+        <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
+          If no local model answers, Auto uses an enabled cloud provider and marks that answer “Cloud fallback”. Pick
+          “Auto — local only” to never send anything to the cloud.
+        </Alert>
+      )}
+      {status.selected === 'auto-local' && (
+        <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
+          Local only: cloud providers are never used, even if they are enabled.
+        </Alert>
+      )}
+      {status.selected !== 'auto' && status.selected !== 'auto-local' && (
         <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
           Fixed to one provider: Vault won’t fall back to a local model if it fails. Pick “Auto” for local-first.
         </Alert>

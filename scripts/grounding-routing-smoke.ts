@@ -22,8 +22,11 @@ const Module = require('module') as {
 }
 const origLoad = Module._load
 
-let mockLlmGenerateResult: { ok: true; text: string } | { ok: false; error: string } = { ok: true, text: 'Test answer [itm_123]' }
-function setMockLlmGenerate(result: { ok: true; text: string } | { ok: false; error: string }) {
+type MockGen =
+  | { ok: true; text: string; provider?: string; providerLabel?: string; model?: string; local?: boolean; fallback?: boolean }
+  | { ok: false; error: string; provider?: string }
+let mockLlmGenerateResult: MockGen = { ok: true, text: 'Test answer [itm_123]' }
+function setMockLlmGenerate(result: MockGen) {
   mockLlmGenerateResult = result
 }
 
@@ -296,6 +299,21 @@ async function main(): Promise<void> {
   setMockLlmGenerate({ ok: true, text: 'Answer [itm_zzz999] only' })
   const hallucinated = await sendChatTurn({ sessionId: session.id, text: 'alpha', filters: { project: 'test' } })
   assert(!hallucinated.assistant.content.includes('[itm_zzz999]'), 'sendChatTurn strips a hallucinated marker from content')
+
+  // --- The answering provider is recorded so cloud answers can be flagged (#45) ---
+  setMockLlmGenerate({ ok: true, text: 'Cloud answer', provider: 'groq', providerLabel: 'Groq', model: 'gpt-oss-20b', local: false, fallback: true })
+  const cloudChat = await sendChatTurn({ sessionId: session.id, text: 'alpha', filters: { project: 'test' } })
+  const cloudProv = JSON.parse(cloudChat.assistant.provider_json ?? 'null')
+  assert(cloudProv?.id === 'groq' && cloudProv.local === false && cloudProv.fallback === true, 'sendChatTurn records a cloud fallback on the message')
+  assert(
+    cloudChat.messages.find((m: { id: string }) => m.id === cloudChat.assistant.id)?.provider_json === cloudChat.assistant.provider_json,
+    'the recorded provider survives a reload of the thread'
+  )
+  const cloudAsk = await askGrounded({ question: 'alpha', limit: 5 })
+  assert(cloudAsk.provider?.label === 'Groq' && cloudAsk.provider.fallback === true, 'askGrounded returns the answering provider')
+  setMockLlmGenerate({ ok: true, text: 'Should not be called' })
+  const cannedChat = await sendChatTurn({ sessionId: session.id, text: 'completely nonexistent topic xyz', filters: { project: 'nope' } })
+  assert(cannedChat.assistant.provider_json === null, 'a canned not-found reply records no provider')
 
   console.log('\nollama.ts — pickModel')
 

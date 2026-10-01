@@ -202,7 +202,7 @@ function sanitize(file: Partial<ProvidersFile>): ProvidersFile {
     if (!seen.has(b.id)) providers.unshift(b)
   }
   const selected =
-    typeof file.selected === 'string' && (file.selected === 'auto' || SAFE_ID.test(file.selected))
+    typeof file.selected === 'string' && (isAutoSelection(file.selected) || SAFE_ID.test(file.selected))
       ? file.selected
       : 'auto'
   const pluginOverrides =
@@ -384,15 +384,20 @@ export function getProviderConfig(id: string): ProviderConfig | undefined {
   return listProviderConfigs().find((p) => p.id === id)
 }
 
+/** Auto modes resolve a provider at call time instead of naming one. */
+export function isAutoSelection(sel: ProviderSelection): boolean {
+  return sel === 'auto' || sel === 'auto-local'
+}
+
 export function getSelection(): ProviderSelection {
   const sel = loadProvidersFile().selected
-  if (sel === 'auto') return sel
+  if (isAutoSelection(sel)) return sel
   return listProviderConfigs().some((p) => p.id === sel) ? sel : 'auto'
 }
 
 export function setSelection(sel: ProviderSelection): ProviderSelection {
   const file = loadProvidersFile()
-  if (sel !== 'auto' && !listProviderConfigs().some((p) => p.id === sel)) {
+  if (!isAutoSelection(sel) && !listProviderConfigs().some((p) => p.id === sel)) {
     throw new Error(`Unknown provider: ${sel}`)
   }
   saveProvidersFile({ ...file, selected: sel })
