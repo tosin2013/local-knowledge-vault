@@ -35,6 +35,9 @@ const mockApp = {
   },
   setPath: (_name: string, p: string) => { userDataDir = p },
   isPackaged: false,
+  isReady: () => true,
+  getVersion: () => '9.9.9',
+  requestSingleInstanceLock: () => true,
   quit: () => {},
   on: (event: string, listener: () => void) => {
     ;(appListeners[event] ||= []).push(listener)
@@ -44,8 +47,16 @@ const mockApp = {
   },
 }
 
+// Records what a second launch does to the existing window (#42).
+const windowCalls: string[] = []
+let windowMinimized = false
+
 function MockBrowserWindow(opts?: Record<string, unknown>) {
   const instance = {
+    isMinimized: () => windowMinimized,
+    restore: () => { windowCalls.push('restore'); windowMinimized = false },
+    show: () => { windowCalls.push('show') },
+    focus: () => { windowCalls.push('focus') },
     webContents: {
       setWindowOpenHandler: (h: (d: { url: string }) => { action: 'deny' }) => {},
       on: (event: string, listener: (e: unknown, url: string) => void) => {},
@@ -197,6 +208,18 @@ async function main(): Promise<void> {
 
   // 2) Wait for app.whenReady().then(...) to run (registers IPC)
   await new Promise(r => setTimeout(r, 200))
+
+  // Single-instance lock (#42): a second launch focuses the existing window.
+  console.log('Single instance (main.ts)')
+  const secondInstance = appListeners['second-instance'] ?? []
+  assert(secondInstance.length === 1, 'registers a second-instance listener when it holds the lock')
+  windowMinimized = true
+  windowCalls.length = 0
+  secondInstance[0]?.()
+  assert(windowCalls.join(',') === 'restore,show,focus', `second launch restores and focuses the window (${windowCalls.join(',')})`)
+  windowCalls.length = 0
+  secondInstance[0]?.()
+  assert(windowCalls.join(',') === 'show,focus', 'second launch does not restore a window that is not minimized')
 
   // 3) Test key IPC handlers are registered
   console.log('IPC handlers (main.ts)')

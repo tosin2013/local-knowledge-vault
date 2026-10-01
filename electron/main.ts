@@ -148,6 +148,16 @@ if (process.env.LKV_USER_DATA_DIR?.trim()) {
   app.setPath('userData', dir)
 }
 
+// Single instance (#42): a second launch would open the same database and fight
+// over the bridge port. The lock is per userData dir, so an isolated
+// LKV_USER_DATA_DIR profile can still run next to the real one.
+const hasInstanceLock = app.requestSingleInstanceLock()
+if (!hasInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => focusMainWindow())
+}
+
 
 // Custom protocol for local media playback in <video>/<audio>
 protocol.registerSchemesAsPrivileged([
@@ -279,6 +289,17 @@ function resolveAppIcon(): string | undefined {
     if (fs.existsSync(p)) return p
   }
   return undefined
+}
+
+/** Bring the existing window forward when the app is launched a second time. */
+function focusMainWindow(): void {
+  if (!mainWindow) {
+    if (app.isReady()) createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 function createWindow(): void {
@@ -775,6 +796,8 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  // The second instance is already quitting; don't open the DB or the bridge.
+  if (!hasInstanceLock) return
   fixYoutubeEmbedHeaders()
   protocol.handle('lkvmedia', async (request) => {
     try {
