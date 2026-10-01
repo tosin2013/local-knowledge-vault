@@ -508,6 +508,12 @@ export interface MediaIngestResult {
   mediaProtocolUrl?: string
 }
 
+/** Progress event emitted from main → renderer while a media ingest runs (#128). */
+export interface MediaIngestProgress {
+  stage: string
+  noteCount?: number
+}
+
 export interface MediaProjectInfo {
   project: string
   noteCount: number

@@ -121,6 +121,12 @@ describe('ChatView', () => {
     expect(btn).toBeDisabled()
   })
 
+  it('shows an answering indicator while a reply is in flight', () => {
+    render(<ChatView {...makeProps({ sending: true })} />)
+    expect(screen.getByTestId('answering-indicator')).toBeInTheDocument()
+    expect(screen.getByText('Answering from your notes…')).toBeInTheDocument()
+  })
+
   it('creates a new chat and lists sessions', () => {
     const props = makeProps({ sessions: [makeSession('s_1', 'My chat')], activeSessionId: 's_1' })
     render(<ChatView {...props} />)

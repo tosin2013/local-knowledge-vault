@@ -90,6 +90,17 @@ describe('MediaChatView', () => {
     expect(window.lkv.chat.send).toHaveBeenCalled()
   })
 
+  it('restores the question when a media send fails', async () => {
+    const lkv = await ingestYoutube()
+    lkv.chat.send.mockRejectedValue(new Error('boom'))
+
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi there' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+
+    await waitFor(() => expect(screen.getByText('boom')).toBeInTheDocument())
+    expect(screen.getByPlaceholderText('Ask about this media…')).toHaveValue('hi there')
+  })
+
   it('switches voice', async () => {
     await ingestYoutube()
     const chip = await screen.findByText('Desk cohost')

@@ -142,6 +142,17 @@ async function main(): Promise<void> {
     const appended = listItemsByProjectExact('AppendMe', 'transcript').length
     assert(appended === r1.noteCount * 2, `append doubles notes (${r1.noteCount} -> ${appended})`)
 
+    console.log('ingestLocalMedia progress stages (#128)')
+    {
+      const stages: string[] = []
+      ingestLocalMedia(
+        { mediaPath: mediaFile, captionsPath: capsFile, project: 'ProgressProj' },
+        { onProgress: (s: string) => stages.push(s) },
+      )
+      assert(stages.includes('Reading captions…'), 'emits Reading captions… stage')
+      assert(stages.some((s) => /^Writing \d+ notes…$/.test(s)), 'emits Writing N notes… stage')
+    }
+
     console.log('findExistingProjectBySource')
     const found = findExistingProjectBySource({ sourcePath: mediaFile })
     assert(found?.project === 'AppendMe', `existing project for mediaFile is AppendMe (got ${found?.project})`)
@@ -200,6 +211,18 @@ async function main(): Promise<void> {
     )
     assert(bigOut.stdout.length <= 1024, `output capped (${bigOut.stdout.length} bytes)`)
 
+    console.log('runYtDlp abort via signal (#128)')
+    {
+      const controller = new AbortController()
+      setTimeout(() => controller.abort(), 50)
+      const aborted = await runYtDlp(
+        process.execPath,
+        ['-e', 'setTimeout(() => {}, 5000)'],
+        { timeoutMs: 10000, signal: controller.signal },
+      )
+      assert(aborted.aborted === true, 'signal aborts a running yt-dlp child')
+    }
+
     console.log('ingestYoutubeMedia validation')
     try {
       await ingestYoutubeMedia({ url: '   ' })
@@ -257,6 +280,17 @@ async function main(): Promise<void> {
     console.log('ingestYoutubeMedia captionsPath + title probe')
     const ytOff = await ingestYoutubeMedia({ url: YT_URL, captionsPath: capsFile })
     assert(ytOff.title === 'Stub Video Title', 'offline branch uses probed title')
+
+    console.log('ingestYoutubeMedia progress stages (#128)')
+    {
+      const stages: string[] = []
+      await ingestYoutubeMedia(
+        { url: YT_URL, project: 'ProgYt' },
+        { onProgress: (s: string) => stages.push(s) },
+      )
+      assert(stages.includes('Fetching captions…'), 'emits Fetching captions… stage')
+      assert(stages.some((s) => /^Writing \d+ notes…$/.test(s)), 'emits Writing N notes… stage')
+    }
 
     console.log('ingestYoutubeMedia stubbed failures')
     process.env.LKV_STUB_MODE = 'noenglish'

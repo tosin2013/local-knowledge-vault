@@ -284,7 +284,15 @@ export function findCompanionCaptions(mediaPath: string): string | null {
 
 export { mediaProtocolUrlForPath }
 
-export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
+/** Progress + cancellation hooks threaded through the ingest functions (#128). */
+export interface MediaIngestOptions {
+  onProgress?: (stage: string, noteCount?: number) => void
+  signal?: AbortSignal
+}
+
+export function ingestLocalMedia(input: IngestLocalInput, opts: MediaIngestOptions = {}): MediaIngestResult {
+  if (opts.signal?.aborted) throw new Error('Ingest cancelled')
+  opts.onProgress?.('Reading captions…')
   const mediaPath = path.resolve(input.mediaPath)
   const captionsPath = path.resolve(input.captionsPath)
   if (!fs.existsSync(mediaPath)) throw new Error(`Media file not found: ${mediaPath}`)
@@ -296,6 +304,7 @@ export function ingestLocalMedia(input: IngestLocalInput): MediaIngestResult {
     throw new Error('No caption cues found in SRT/VTT file')
   }
   const chunks = chunkCues(cues)
+  opts.onProgress?.(`Writing ${chunks.length} notes…`)
   const source: MediaSource = { sourcePath: mediaPath }
   const baseName = (input.project?.trim() || stemFromPath(mediaPath)).slice(0, 120)
   const project = projectNameFor(baseName, source)
@@ -331,6 +340,8 @@ export interface YtDlpRunResult {
   signal: NodeJS.Signals | null
   /** True when the timeout killed the process before it exited. */
   timedOut: boolean
+  /** True when an AbortSignal cancelled the run. */
+  aborted?: boolean
   /** Set when the process could not be spawned at all (e.g. ENOENT). */
   error?: Error
 }
@@ -339,25 +350,41 @@ export interface YtDlpRunResult {
  * Run a yt-dlp command asynchronously, capturing stdout/stderr, with a hard timeout and an
  * optional output cap. Unlike `spawnSync` this never blocks the event loop, so a slow or hung
  * yt-dlp (or YouTube rate-limiting) can't freeze the app. On timeout the child is killed and
- * `timedOut` is set; a spawn failure surfaces via `error`.
+ * `timedOut` is set; on `opts.signal` abort the child is killed and `aborted` is set; a spawn
+ * failure surfaces via `error`.
  */
 export function runYtDlp(
   cmd: string,
   args: string[],
-  opts: { timeoutMs: number; maxBuffer?: number } = { timeoutMs: 60_000 }
+  opts: { timeoutMs: number; maxBuffer?: number; signal?: AbortSignal } = { timeoutMs: 60_000 }
 ): Promise<YtDlpRunResult> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
     let timedOut = false
+    let aborted = false
     let settled = false
 
     const finish = (result: YtDlpRunResult): void => {
       if (settled) return
       settled = true
+      opts.signal?.removeEventListener('abort', onAbort)
       resolve(result)
     }
+
+    if (opts.signal?.aborted) {
+      aborted = true
+      finish({ stdout: '', stderr: '', status: null, signal: 'SIGKILL', timedOut: false, aborted })
+      return
+    }
+
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+
+    const onAbort = (): void => {
+      aborted = true
+      child.kill('SIGKILL')
+    }
+    if (opts.signal) opts.signal.addEventListener('abort', onAbort, { once: true })
 
     const timer = setTimeout(() => {
       timedOut = true
@@ -384,7 +411,7 @@ export function runYtDlp(
 
     child.on('error', (err) => {
       clearTimeout(timer)
-      finish({ stdout, stderr, status: null, signal: null, timedOut, error: err })
+      finish({ stdout, stderr, status: null, signal: null, timedOut, aborted, error: err })
     })
 
     child.on('close', (code, signal) => {
@@ -395,6 +422,7 @@ export function runYtDlp(
         status: code,
         signal: signal as NodeJS.Signals | null,
         timedOut,
+        aborted,
       })
     })
   })
@@ -619,7 +647,7 @@ export function describeYtDlpFailure(
   return 'No captions/subtitles found for this YouTube URL (video may lack captions). Try another URL or ingest a local SRT/VTT.'
 }
 
-export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<MediaIngestResult> {
+export async function ingestYoutubeMedia(input: IngestYoutubeInput, opts: MediaIngestOptions = {}): Promise<MediaIngestResult> {
   const raw = input.url.trim()
   if (!raw) throw new Error('YouTube URL is required')
   const url = normalizeYoutubeUrl(raw)
@@ -628,6 +656,8 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
       'Invalid YouTube URL — paste a youtube.com / youtu.be watch, share, or embed link'
     )
   }
+  if (opts.signal?.aborted) throw new Error('Ingest cancelled')
+  opts.onProgress?.('Fetching captions…')
 
   const providedCaptions = input.captionsPath?.trim()
   if (providedCaptions) {
@@ -662,6 +692,8 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
     const source: MediaSource = { sourceUrl: url }
     const baseName = (input.project?.trim() || title).slice(0, 120)
     const project = projectNameFor(baseName, source)
+    if (opts.signal?.aborted) throw new Error('Ingest cancelled')
+    opts.onProgress?.(`Writing ${chunks.length} notes…`)
     const created = runInTransaction(() => {
       if (input.replaceExisting !== false) replaceProjectTranscripts(project, source)
       return writeChunksAsNotes(chunks, { project, sourceUrl: url })
@@ -697,8 +729,9 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
     const meta = await runYtDlp(
       ytdlp.cmd,
       [...ytdlp.argsPrefix, '-J', '--skip-download', '--no-warnings', ...extraArgs, '--', url],
-      { timeoutMs: 60_000, maxBuffer: 64 * 1024 * 1024 }
+      { timeoutMs: 60_000, maxBuffer: 64 * 1024 * 1024, signal: opts.signal }
     )
+    if (meta.aborted) throw new Error('Ingest cancelled')
     if (meta.status === 0 && meta.stdout) {
       const picked = pickCaptionTrack(JSON.parse(meta.stdout) as YtDlpCaptionInfo)
       if (!picked) {
@@ -716,7 +749,9 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
     const result = await runYtDlp(ytdlp.cmd, args, {
       timeoutMs: 180_000,
       maxBuffer: 20 * 1024 * 1024,
+      signal: opts.signal,
     })
+    if (result.aborted) throw new Error('Ingest cancelled')
 
     const files = fs.readdirSync(tmpDir)
     const captionCandidates = files
@@ -770,6 +805,8 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput): Promise<Med
     const source: MediaSource = { sourceUrl: url }
     const baseName = (input.project?.trim() || title).slice(0, 120)
     const project = projectNameFor(baseName, source)
+    if (opts.signal?.aborted) throw new Error('Ingest cancelled')
+    opts.onProgress?.(`Writing ${chunks.length} notes…`)
 
     const created = runInTransaction(() => {
       if (input.replaceExisting !== false) {

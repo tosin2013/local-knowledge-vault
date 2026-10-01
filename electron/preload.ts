@@ -15,6 +15,7 @@ import type {
   CreateChatProfileInput,
   CreateItemInput,
   MediaIngestLocalInput,
+  MediaIngestProgress,
   MediaIngestResult,
   MediaIngestYoutubeInput,
   MediaNotesNearInput,
@@ -212,6 +213,13 @@ const api = {
       ipcRenderer.invoke('media:createPersona', input),
     listVoicePacks: (): Promise<MediaVoicePackInfo[]> =>
       ipcRenderer.invoke('media:listVoicePacks'),
+    onIngestProgress: (callback: (progress: MediaIngestProgress) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, progress: MediaIngestProgress) =>
+        callback(progress)
+      ipcRenderer.on('media:ingestProgress', listener)
+      return () => ipcRenderer.removeListener('media:ingestProgress', listener)
+    },
+    cancelIngest: (): Promise<boolean> => ipcRenderer.invoke('media:cancelIngest'),
   },
   bridge: {
     status: (): Promise<{ running: boolean; host: string; port: number; version: string }> =>
