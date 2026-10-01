@@ -59,14 +59,25 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
   if (version < 1) {
     migrateV1(database)
   }
+  if (version < 2) {
+    migrateV2(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/** v2 (#45): record which provider wrote each assistant message. */
+function migrateV2(database: Database.Database): void {
+  const cols = database.prepare(`PRAGMA table_info(chat_messages)`).all() as { name: string }[]
+  if (!cols.some((c) => c.name === 'provider_json')) {
+    database.exec(`ALTER TABLE chat_messages ADD COLUMN provider_json TEXT`)
+  }
 }
 
 function migrateV1(database: Database.Database): void {
@@ -513,6 +524,7 @@ function rowToMessage(row: Record<string, unknown>): ChatMessage {
     content: String(row.content),
     citations_json: row.citations_json == null ? null : String(row.citations_json),
     hits_json: row.hits_json == null ? null : String(row.hits_json),
+    provider_json: row.provider_json == null ? null : String(row.provider_json),
     created_at: String(row.created_at),
   }
 }
@@ -589,6 +601,7 @@ export function appendMessage(input: {
   content: string
   citations_json?: string | null
   hits_json?: string | null
+  provider_json?: string | null
 }): ChatMessage {
   const id = newId('msg')
   const ts = nowIso()
@@ -599,12 +612,13 @@ export function appendMessage(input: {
     content: input.content,
     citations_json: input.citations_json ?? null,
     hits_json: input.hits_json ?? null,
+    provider_json: input.provider_json ?? null,
     created_at: ts,
   }
   getDb()
     .prepare(
-      `INSERT INTO chat_messages (id, session_id, role, content, citations_json, hits_json, created_at)
-       VALUES (@id, @session_id, @role, @content, @citations_json, @hits_json, @created_at)`
+      `INSERT INTO chat_messages (id, session_id, role, content, citations_json, hits_json, provider_json, created_at)
+       VALUES (@id, @session_id, @role, @content, @citations_json, @hits_json, @provider_json, @created_at)`
     )
     .run(msg)
   touchSession(input.session_id)

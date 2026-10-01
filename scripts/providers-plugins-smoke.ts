@@ -135,6 +135,7 @@ async function main() {
   assert(!r1.status.active?.smallModel, 'qwen3:8b not flagged small')
   const g1 = await llmGenerate({ system: 'RULES', prompt: 'Q?' })
   assert(g1.ok && g1.text === 'Local answer [1]' && g1.local, 'llmGenerate via Ollama strips <think>')
+  assert(g1.ok && g1.fallback === false, 'a local answer is not a cloud fallback (#45)')
   const genReq = ollama.seen.find((s) => s.url === '/api/generate')
   assert(genReq?.body?.system === 'RULES' && genReq?.body?.model === 'qwen3:8b', 'Ollama request carries system + model')
   // tiny-only install
@@ -174,6 +175,21 @@ async function main() {
   process.env.LKV_OLLAMA_URL = 'http://127.0.0.1:9'
   const r3 = await resolveProvider()
   assert(r3.status.active?.id === saved.id && !r3.status.active.local, 'Ollama down → falls to enabled cloud')
+  // #45: a cloud answer in Auto is flagged as a fallback; an explicit choice is not; local-only never calls it.
+  const gFallback = await llmGenerate({ prompt: 'Q?' })
+  assert(gFallback.ok && gFallback.local === false && gFallback.fallback === true, 'Auto answered by cloud → local=false, fallback=true')
+  setSelection(saved.id)
+  const gExplicit = await llmGenerate({ prompt: 'Q?' })
+  assert(gExplicit.ok && gExplicit.local === false && gExplicit.fallback === false, 'explicit cloud selection is not a fallback')
+  setSelection('auto-local')
+  const chatCallsBefore = oa.seen.filter((s) => s.url === '/v1/chat/completions').length
+  const gLocalOnly = await llmGenerate({ prompt: 'Q?' })
+  assert(gLocalOnly.ok === false, 'auto-local with no local model does not answer')
+  assert(
+    oa.seen.filter((s) => s.url === '/v1/chat/completions').length === chatCallsBefore,
+    'auto-local sends nothing to the enabled cloud provider'
+  )
+  setSelection('auto')
   setProviderEnabled(saved.id, false)
   const r4 = await resolveProvider()
   assert(r4.status.active === null && r4.status.needsSetup, 'disabled cloud is never used')

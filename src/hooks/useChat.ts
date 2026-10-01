@@ -306,6 +306,7 @@ export function useChat(deps: UseChatDeps) {
         content: text,
         citations_json: null,
         hits_json: null,
+        provider_json: null,
         created_at: new Date().toISOString(),
       },
     ])

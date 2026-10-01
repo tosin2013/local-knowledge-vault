@@ -100,6 +100,8 @@ export interface AskGroundedResult {
   answer: string
   citations: Citation[]
   hits: SearchHit[]
+  /** Set when a model produced the answer. */
+  provider?: AnswerProvider
   offline?: boolean
   error?: string
 }
@@ -137,6 +139,8 @@ export interface ChatMessage {
   content: string
   citations_json: string | null
   hits_json: string | null
+  /** JSON AnswerProvider for model-written assistant messages (#45). */
+  provider_json: string | null
   created_at: string
 }
 
@@ -194,8 +198,23 @@ export interface UpdatePromptPatch {
 /** Transport family. 'gemini' uses Google's official OpenAI-compatible endpoint. */
 export type ProviderKind = 'ollama' | 'openai-compatible' | 'anthropic' | 'gemini'
 export type ProviderSource = 'builtin' | 'user' | 'plugin'
-/** 'auto' = local-first resolution; otherwise a provider id. */
-export type ProviderSelection = 'auto' | string
+/**
+ * 'auto' = local-first resolution, then enabled cloud providers;
+ * 'auto-local' = the same, but never a cloud provider (#45);
+ * otherwise a provider id.
+ */
+export type ProviderSelection = 'auto' | 'auto-local' | string
+
+/** Which provider produced an answer, so the UI can flag cloud answers (#45). */
+export interface AnswerProvider {
+  id: string
+  label: string
+  model: string
+  /** False when the question and note passages left this computer. */
+  local: boolean
+  /** True when Auto picked a cloud provider (no local model answered). */
+  fallback: boolean
+}
 
 export interface ProviderHealth {
   ok: boolean
@@ -611,6 +630,8 @@ export interface BridgeAskInput {
 export interface BridgeAskResult {
   answer: string
   citations: Citation[]
+  /** Which provider wrote the answer, so bridge clients can flag cloud answers (#45). */
+  provider?: AnswerProvider
 }
 
 /* ---- MCP connections (in-app MCP client) ---- */

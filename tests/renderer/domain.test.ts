@@ -10,6 +10,7 @@ import {
   isBuiltinProfileId,
   isGorgiasReaderPrompt,
   isValidHttpUrl,
+  parseAnswerProvider,
   KIND_OPTIONS,
   LAST_PROFILE_KEY,
   listBuiltinProfiles,
@@ -268,5 +269,22 @@ describe('last-profile persistence', () => {
     expect(loadLastProfile()).toBeNull()
     localStorage.setItem(LAST_PROFILE_KEY, JSON.stringify({ profileId: 123 }))
     expect(loadLastProfile()).toBeNull()
+  })
+})
+
+describe('parseAnswerProvider (#45)', () => {
+  it('parses a recorded provider', () => {
+    const json = JSON.stringify({ id: 'groq', label: 'Groq', model: 'm', local: false, fallback: true })
+    expect(parseAnswerProvider(json)).toEqual({ id: 'groq', label: 'Groq', model: 'm', local: false, fallback: true })
+  })
+  it('returns null for missing, malformed or incomplete data', () => {
+    expect(parseAnswerProvider(null)).toBeNull()
+    expect(parseAnswerProvider(undefined)).toBeNull()
+    expect(parseAnswerProvider('not json')).toBeNull()
+    expect(parseAnswerProvider('null')).toBeNull()
+    expect(parseAnswerProvider(JSON.stringify({ label: 'Groq' }))).toBeNull()
+  })
+  it('defaults fallback to false', () => {
+    expect(parseAnswerProvider(JSON.stringify({ label: 'Groq', local: false }))?.fallback).toBe(false)
   })
 })
