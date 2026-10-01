@@ -1,11 +1,15 @@
 /**
- * In-app MCP client for Vault — OAuth (PKCE + dynamic registration) + Streamable HTTP / SSE.
- * Follows Notion's "Build an MCP client for Notion" guide (RFC 9470 → 8414 → 7591).
+ * In-app MCP client for Vault — Streamable HTTP / SSE with OAuth via the SDK's
+ * `authProvider` (RFC 9728 protected-resource metadata, RFC 8414 / OIDC
+ * authorization-server discovery, RFC 8707 `resource`, PKCE, dynamic client
+ * registration and token refresh are all delegated to the SDK). App-specific
+ * pieces — the loopback redirect listener + state check, `shell.openExternal`
+ * restricted to http(s), and encrypted client/token storage — stay here (#103).
  *
  * TODO(ask-chat): Wire connected MCP tools into Ask chat as optional tool sources.
  * Future: local stdio MCP servers.
  */
-import { createHash, randomBytes } from 'crypto'
+import { randomBytes } from 'crypto'
 import fs from 'fs'
 import http from 'http'
 import path from 'path'
@@ -13,6 +17,15 @@ import os from 'os'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import {
+  UnauthorizedError,
+  type OAuthClientProvider,
+} from '@modelcontextprotocol/sdk/client/auth.js'
+import type {
+  OAuthClientMetadata,
+  OAuthClientInformationMixed,
+  OAuthTokens,
+} from '@modelcontextprotocol/sdk/shared/auth.js'
 import { encryptSecret, decryptSecret } from './secret-store'
 import type {
   McpAddServerInput,
@@ -33,18 +46,6 @@ const SERVERS_FILE = 'mcp-servers.json'
 const TOKENS_FILE = 'mcp-tokens.json'
 const NOTION_MCP_URL = 'https://mcp.notion.com/mcp'
 const NOTION_PRESET_ID = 'notion'
-const REFRESH_SKEW_MS = 5 * 60 * 1000
-
-export type OAuthMetadata = {
-  issuer: string
-  authorization_endpoint: string
-  token_endpoint: string
-  registration_endpoint?: string
-  code_challenge_methods_supported?: string[]
-  grant_types_supported?: string[]
-  response_types_supported?: string[]
-  scopes_supported?: string[]
-}
 
 type ClientCredentials = {
   client_id: string
@@ -71,7 +72,6 @@ type StoredServer = {
   url: string
   preset?: 'notion' | null
   client?: ClientCredentials
-  oauthMetadataCache?: OAuthMetadata
 }
 
 type StoredServersFile = { servers: StoredServer[] }
@@ -87,9 +87,15 @@ type LiveSession = {
 let userDataOverride: string | null = null
 const live = new Map<string, LiveSession>()
 const statusOverride = new Map<string, { status: McpServerStatus; error?: string }>()
-const refreshLocks = new Map<string, Promise<TokenBundle>>()
-/** Active OAuth loopback waiters — cancelAuth settles these. */
-const oauthCancelers = new Map<string, () => void>()
+
+/** Active loopback OAuth wait — `cancelMcpAuth` settles it. */
+type AuthWaiter = {
+  state: string
+  resolve: (code: string) => void
+  reject: (err: Error) => void
+}
+let authWaiter: AuthWaiter | null = null
+let callbackServer: http.Server | null = null
 
 export function setMcpUserDataDir(dir: string | null): void {
   userDataOverride = dir
@@ -119,22 +125,6 @@ function tokensPath(): string {
 
 function redirectUri(): string {
   return `http://127.0.0.1:${CALLBACK_PORT}${CALLBACK_PATH}`
-}
-
-function base64URLEncode(buf: Buffer): string {
-  return buf
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
-}
-
-function generateCodeVerifier(): string {
-  return base64URLEncode(randomBytes(32))
-}
-
-function generateCodeChallenge(verifier: string): string {
-  return base64URLEncode(createHash('sha256').update(verifier).digest())
 }
 
 function generateState(): string {
@@ -232,7 +222,7 @@ function getTokens(id: string): TokenBundle | undefined {
   return readTokensFile()[id]
 }
 
-function saveTokens(id: string, tokens: TokenBundle): void {
+function persistTokens(id: string, tokens: TokenBundle): void {
   const all = readTokensFile()
   all[id] = tokens
   writeTokensFile(all)
@@ -257,203 +247,10 @@ function assertHttpUrl(value: string, label: string): void {
   throw new Error(`OAuth ${label} must be an http(s) URL (got ${scheme})`)
 }
 
-/**
- * RFC 9470 protected-resource metadata discovery with common fallbacks.
- * Prefer path-aware well-known: /.well-known/oauth-protected-resource{path}
- */
-export async function discoverOAuthMetadata(mcpServerUrl: string): Promise<OAuthMetadata> {
-  const url = new URL(mcpServerUrl)
-  const candidates: string[] = []
-
-  // RFC 9470 path-aware
-  const pathPart = url.pathname.replace(/\/$/, '')
-  if (pathPart && pathPart !== '/') {
-    candidates.push(`${url.origin}/.well-known/oauth-protected-resource${pathPart}`)
-  }
-  candidates.push(`${url.origin}/.well-known/oauth-protected-resource`)
-  // Some hosts publish under the resource path itself
-  candidates.push(new URL('/.well-known/oauth-protected-resource', url).toString())
-  if (!url.pathname.endsWith('/')) {
-    candidates.push(`${mcpServerUrl}/.well-known/oauth-protected-resource`)
-  }
-
-  let authServers: string[] | undefined
-  let lastErr = ''
-  for (const candidate of candidates) {
-    try {
-      const res = await fetch(candidate, {
-        headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
-      })
-      if (!res.ok) {
-        lastErr = `${candidate} → ${res.status}`
-        continue
-      }
-      const body = (await res.json()) as { authorization_servers?: string[] }
-      if (Array.isArray(body.authorization_servers) && body.authorization_servers.length > 0) {
-        authServers = body.authorization_servers
-        break
-      }
-      lastErr = `${candidate} → no authorization_servers`
-    } catch (e) {
-      lastErr = `${candidate} → ${e instanceof Error ? e.message : String(e)}`
-    }
-  }
-
-  if (!authServers?.length) {
-    throw new Error(`OAuth protected-resource discovery failed (${lastErr})`)
-  }
-
-  const authServerUrl = authServers[0]
-  const metadataUrl = new URL('/.well-known/oauth-authorization-server', authServerUrl)
-  const metadataResponse = await fetch(metadataUrl.toString(), {
-    headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
-  })
-  if (!metadataResponse.ok) {
-    throw new Error(
-      `Failed to fetch authorization server metadata: ${metadataResponse.status}`
-    )
-  }
-  const metadata = (await metadataResponse.json()) as OAuthMetadata
-  if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
-    throw new Error('Missing required OAuth endpoints in metadata')
-  }
-  // Untrusted server metadata must not point at arbitrary URL schemes — the
-  // authorization_endpoint is handed to shell.openExternal, which would open
-  // file://, smb://, or custom schemes, and the others are used with fetch.
-  assertHttpUrl(metadata.authorization_endpoint, 'authorization_endpoint')
-  assertHttpUrl(metadata.token_endpoint, 'token_endpoint')
-  if (metadata.registration_endpoint) {
-    assertHttpUrl(metadata.registration_endpoint, 'registration_endpoint')
-  }
-  if (!metadata.code_challenge_methods_supported?.includes('S256')) {
-    console.warn('[mcp] Server does not advertise S256 PKCE; using S256 anyway')
-  }
-  return metadata
-}
-
-async function registerClient(
-  metadata: OAuthMetadata,
-  redirect: string
-): Promise<ClientCredentials> {
-  if (!metadata.registration_endpoint) {
-    throw new Error('Server does not support dynamic client registration')
-  }
-  const registrationRequest = {
-    client_name: CLIENT_NAME,
-    client_uri: CLIENT_URI,
-    redirect_uris: [redirect],
-    grant_types: ['authorization_code', 'refresh_token'],
-    response_types: ['code'],
-    token_endpoint_auth_method: 'none',
-    scope: metadata.scopes_supported?.includes('default')
-      ? 'default'
-      : (metadata.scopes_supported?.[0] ?? undefined),
-  }
-  const response = await fetch(metadata.registration_endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      'User-Agent': USER_AGENT,
-    },
-    body: JSON.stringify(registrationRequest),
-  })
-  if (!response.ok) {
-    const errorBody = await response.text()
-    throw new Error(`Client registration failed: ${response.status} - ${errorBody}`)
-  }
-  const credentials = (await response.json()) as {
-    client_id: string
-    client_secret?: string
-    client_id_issued_at?: number
-    client_secret_expires_at?: number
-  }
-  if (!credentials.client_id) throw new Error('Registration response missing client_id')
-  return {
-    client_id: credentials.client_id,
-    client_secret: credentials.client_secret,
-    client_id_issued_at: credentials.client_id_issued_at,
-    client_secret_expires_at: credentials.client_secret_expires_at,
-    redirect_uri: redirect,
-  }
-}
-
-function buildAuthorizationUrl(
-  metadata: OAuthMetadata,
-  clientId: string,
-  redirect: string,
-  codeChallenge: string,
-  state: string,
-  scopes: string[]
-): string {
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: clientId,
-    redirect_uri: redirect,
-    state,
-    code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
-    prompt: 'consent',
-  })
-  if (scopes.length) params.set('scope', scopes.join(' '))
-  return `${metadata.authorization_endpoint}?${params.toString()}`
-}
-
-type TokenResponse = {
-  access_token: string
-  token_type?: string
-  expires_in?: number
-  refresh_token?: string
-  scope?: string
-  user_id?: string
-  workspace_id?: string
-  email_domain?: string
-  error?: string
-  error_description?: string
-}
-
-async function postToken(
-  metadata: OAuthMetadata,
-  params: URLSearchParams,
-  clientSecret?: string
-): Promise<TokenResponse> {
-  if (clientSecret) params.set('client_secret', clientSecret)
-  const response = await fetch(metadata.token_endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json',
-      'User-Agent': USER_AGENT,
-    },
-    body: params.toString(),
-  })
-  const text = await response.text()
-  let body: TokenResponse
-  try {
-    body = JSON.parse(text) as TokenResponse
-  } catch {
-    throw new Error(`Token endpoint returned non-JSON: ${response.status} ${text.slice(0, 200)}`)
-  }
-  if (!response.ok) {
-    if (body.error === 'invalid_grant') {
-      const err = new Error('REAUTH_REQUIRED')
-      ;(err as Error & { code?: string }).code = 'invalid_grant'
-      throw err
-    }
-    throw new Error(
-      `Token request failed: ${response.status} - ${body.error || text.slice(0, 200)}`
-    )
-  }
-  if (!body.access_token) throw new Error('Missing access_token in response')
-  return body
-}
-
-function tokenResponseToBundle(
-  tokens: TokenResponse,
-  previous?: TokenBundle
-): TokenBundle {
+/** Convert the SDK's token shape into the persisted bundle (absolute expiry). */
+function tokensToBundle(tokens: OAuthTokens, previous?: TokenBundle): TokenBundle {
   const expires_at =
-    typeof tokens.expires_in === 'number'
+    typeof tokens.expires_in === 'number' && tokens.expires_in > 0
       ? Date.now() + tokens.expires_in * 1000
       : previous?.expires_at
   return {
@@ -462,266 +259,191 @@ function tokenResponseToBundle(
     token_type: tokens.token_type ?? 'Bearer',
     expires_at,
     scope: tokens.scope ?? previous?.scope,
-    // Identity only on auth-code exchange; keep prior on refresh
-    user_id: tokens.user_id ?? previous?.user_id,
-    workspace_id: tokens.workspace_id ?? previous?.workspace_id,
-    email_domain: tokens.email_domain ?? previous?.email_domain,
+    // Notion-specific identity only survives as long as it was already stored;
+    // the SDK's spec-compliant token parsing does not carry these extras.
+    user_id: previous?.user_id,
+    workspace_id: previous?.workspace_id,
+    email_domain: previous?.email_domain,
   }
 }
 
-async function exchangeCodeForTokens(
-  code: string,
-  codeVerifier: string,
-  metadata: OAuthMetadata,
-  client: ClientCredentials
-): Promise<TokenBundle> {
-  const params = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    client_id: client.client_id,
-    redirect_uri: client.redirect_uri,
-    code_verifier: codeVerifier,
-  })
-  const tokens = await postToken(metadata, params, client.client_secret)
-  return tokenResponseToBundle(tokens)
+/** Convert a persisted bundle back into the SDK's token shape (relative expiry). */
+function bundleToTokens(bundle: TokenBundle): OAuthTokens | undefined {
+  if (!bundle?.access_token) return undefined
+  const expires_in =
+    bundle.expires_at != null
+      ? Math.max(0, Math.floor((bundle.expires_at - Date.now()) / 1000))
+      : undefined
+  return {
+    access_token: bundle.access_token,
+    token_type: bundle.token_type ?? 'Bearer',
+    refresh_token: bundle.refresh_token,
+    expires_in,
+    scope: bundle.scope,
+  }
 }
 
-async function refreshAccessToken(
-  refreshToken: string,
-  metadata: OAuthMetadata,
-  client: ClientCredentials,
-  previous?: TokenBundle
-): Promise<TokenBundle> {
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: client.client_id,
-  })
-  const tokens = await postToken(metadata, params, client.client_secret)
-  return tokenResponseToBundle(tokens, previous)
+/** Open the authorization URL in the user's browser, restricted to http(s). */
+async function openExternal(url: string): Promise<void> {
+  assertHttpUrl(url, 'authorization_endpoint')
+  // Lazy require so the smoke tests can run outside a real Electron renderer.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { shell } = require('electron') as { shell: { openExternal: (u: string) => Promise<void> } }
+  await shell.openExternal(url)
 }
 
-async function ensureValidTokens(
-  id: string,
-  server: StoredServer,
-  metadata: OAuthMetadata
-): Promise<TokenBundle> {
-  const existing = getTokens(id)
-  if (!existing?.access_token) {
-    throw Object.assign(new Error('No tokens — authorization required'), {
-      code: 'needs_auth',
-    })
-  }
-  const stillValid =
-    existing.expires_at && existing.expires_at > Date.now() + REFRESH_SKEW_MS
-  if (stillValid) return existing
-  if (!existing.refresh_token) {
-    clearTokens(id)
-    statusOverride.set(id, { status: 'needs_auth', error: 'Session expired' })
-    throw Object.assign(new Error('REAUTH_REQUIRED'), { code: 'invalid_grant' })
-  }
-  if (!server.client) {
-    throw Object.assign(new Error('Missing client credentials'), { code: 'needs_auth' })
-  }
+/** Start the loopback callback server once and leave it running. */
+function ensureCallbackServer(): http.Server {
+  if (callbackServer) return callbackServer
 
-  const pending = refreshLocks.get(id)
-  if (pending) return pending
+  const page = (title: string, body: string) =>
+    `<!doctype html><html><body style="font-family:system-ui;padding:2rem;background:#0F1419;color:#e7ecf3">
+      <h2>${title}</h2><p>${body}</p></body></html>`
 
-  const job = (async () => {
-    try {
-      const next = await refreshAccessToken(
-        existing.refresh_token!,
-        metadata,
-        server.client!,
-        existing
-      )
-      // Persist rotated refresh token atomically before use
-      saveTokens(id, next)
-      return next
-    } catch (e) {
-      if (e instanceof Error && (e.message === 'REAUTH_REQUIRED' || (e as Error & { code?: string }).code === 'invalid_grant')) {
-        clearTokens(id)
-        statusOverride.set(id, {
-          status: 'needs_auth',
-          error: 'Re-authorization required',
-        })
-      }
-      throw e
-    } finally {
-      refreshLocks.delete(id)
+  callbackServer = http.createServer((req, res) => {
+    const settle = (waiter: AuthWaiter | null, result: { error?: string; code?: string }) => {
+      authWaiter = null
+      if (result.error) waiter?.reject(new Error(result.error))
+      else if (result.code) waiter?.resolve(result.code)
     }
-  })()
-  refreshLocks.set(id, job)
-  return job
-}
+    try {
+      const u = new URL(req.url || '/', `http://127.0.0.1:${CALLBACK_PORT}`)
+      if (u.pathname !== CALLBACK_PATH) {
+        res.writeHead(404)
+        res.end('Not found')
+        return
+      }
+      const code = u.searchParams.get('code') || undefined
+      const state = u.searchParams.get('state') || undefined
+      const error = u.searchParams.get('error') || undefined
+      const error_description = u.searchParams.get('error_description') || undefined
+      const waiter = authWaiter
 
-type CallbackResult = { code: string; state: string } | { error: string; error_description?: string }
+      if (error) {
+        res.writeHead(400, { 'Content-Type': 'text/html' })
+        res.end(page('Authorization failed', error_description || error))
+        settle(waiter, { error: error_description || error })
+        return
+      }
+      if (!code || !state) {
+        res.writeHead(400, { 'Content-Type': 'text/html' })
+        res.end(page('Authorization failed', 'Missing code'))
+        settle(waiter, { error: 'Missing code' })
+        return
+      }
+      if (waiter && state !== waiter.state) {
+        res.writeHead(400, { 'Content-Type': 'text/html' })
+        res.end(page('Authorization failed', 'Invalid state'))
+        settle(waiter, { error: 'State mismatch' })
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end(page('Vault connected', 'You can close this window and return to Vault.'))
+      settle(waiter, { code })
+    } catch (e) {
+      res.writeHead(500)
+      res.end('Error')
+      settle(authWaiter, { error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+
+  callbackServer.on('error', () => {
+    /* port-in-use etc.: the pending wait rejects via cancel/auth error paths */
+  })
+  callbackServer.listen(CALLBACK_PORT, '127.0.0.1')
+  return callbackServer
+}
 
 /**
- * Run loopback OAuth: listen → open browser → wait for code → exchange → close.
+ * Implements the SDK's `OAuthClientProvider` for one MCP server, keeping the
+ * app-specific loopback redirect, state check, and encrypted storage.
  */
-async function runOAuthFlow(
-  id: string,
-  server: StoredServer,
-  metadata: OAuthMetadata,
-  client: ClientCredentials
-): Promise<TokenBundle> {
-  const codeVerifier = generateCodeVerifier()
-  const codeChallenge = generateCodeChallenge(codeVerifier)
-  const state = generateState()
-  const scopes =
-    metadata.scopes_supported?.includes('default')
-      ? ['default']
-      : metadata.scopes_supported?.slice(0, 1) ?? []
+class VaultOAuthProvider implements OAuthClientProvider {
+  readonly id: string
+  private server: StoredServer
+  private pendingCode: Promise<string> | null = null
+  private verifier: string | null = null
 
-  const authUrl = buildAuthorizationUrl(
-    metadata,
-    client.client_id,
-    client.redirect_uri,
-    codeChallenge,
-    state,
-    scopes
-  )
-
-  const { waitForCode, close, cancel } = await listenForCallback(state)
-  statusOverride.set(id, {
-    status: 'authorizing',
-    error: 'Waiting for authorization in browser…',
-  })
-  oauthCancelers.set(id, cancel)
-
-  try {
-    // Lazy require so discovery smoke can run outside Electron
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { shell } = require('electron') as { shell: { openExternal: (url: string) => Promise<void> } }
-    // Final guard: never hand a non-http(s) URL to shell.openExternal, even if the
-    // cached metadata was tampered with on disk after discovery.
-    assertHttpUrl(metadata.authorization_endpoint, 'authorization_endpoint')
-    await shell.openExternal(authUrl)
-    const result = await waitForCode
-    if ('error' in result) {
-      const friendly =
-        result.error === 'cancelled'
-          ? 'Sign-in cancelled'
-          : result.error === 'timeout'
-            ? 'Sign-in timed out — try Connect again'
-            : `OAuth error: ${result.error}${result.error_description ? ` — ${result.error_description}` : ''}`
-      statusOverride.set(id, {
-        status: result.error === 'cancelled' || result.error === 'timeout' ? 'needs_auth' : 'error',
-        error: friendly,
-      })
-      throw new Error(friendly)
-    }
-    const tokens = await exchangeCodeForTokens(
-      result.code,
-      codeVerifier,
-      metadata,
-      client
-    )
-    saveTokens(id, tokens)
-    statusOverride.delete(id)
-    return tokens
-  } catch (e) {
-    // Preserve statusOverride set above for cancel/timeout; otherwise mark failed
-    const override = statusOverride.get(id)
-    if (!override || override.status === 'authorizing') {
-      const msg = e instanceof Error ? e.message : String(e)
-      statusOverride.set(id, { status: 'error', error: msg })
-    }
-    throw e
-  } finally {
-    oauthCancelers.delete(id)
-    await close()
+  constructor(id: string, server: StoredServer) {
+    this.id = id
+    this.server = server
   }
-}
 
-function listenForCallback(expectedState: string): Promise<{
-  waitForCode: Promise<CallbackResult>
-  close: () => Promise<void>
-  cancel: () => void
-}> {
-  return new Promise((resolveListen, rejectListen) => {
-    let settleCode: ((r: CallbackResult) => void) | null = null
-    let settled = false
-    const waitForCode = new Promise<CallbackResult>((resolve) => {
-      settleCode = (r) => {
-        if (settled) return
-        settled = true
-        resolve(r)
-      }
-    })
+  get redirectUrl(): string {
+    return redirectUri()
+  }
 
-    const server = http.createServer((req, res) => {
-      try {
-        const u = new URL(req.url || '/', `http://127.0.0.1:${CALLBACK_PORT}`)
-        if (u.pathname !== CALLBACK_PATH) {
-          res.writeHead(404)
-          res.end('Not found')
-          return
-        }
-        const code = u.searchParams.get('code') || undefined
-        const state = u.searchParams.get('state') || undefined
-        const error = u.searchParams.get('error') || undefined
-        const error_description =
-          u.searchParams.get('error_description') || undefined
-
-        const page = (title: string, body: string) =>
-          `<!doctype html><html><body style="font-family:system-ui;padding:2rem;background:#0F1419;color:#e7ecf3">
-            <h2>${title}</h2><p>${body}</p></body></html>`
-
-        if (error) {
-          res.writeHead(400, { 'Content-Type': 'text/html' })
-          res.end(page('Authorization failed', error_description || error))
-          settleCode?.({ error, error_description })
-          return
-        }
-        if (!code || !state) {
-          res.writeHead(400, { 'Content-Type': 'text/html' })
-          res.end(page('Authorization failed', 'Missing code'))
-          settleCode?.({ error: 'missing_code' })
-          return
-        }
-        if (state !== expectedState) {
-          res.writeHead(400, { 'Content-Type': 'text/html' })
-          res.end(page('Authorization failed', 'Invalid state'))
-          settleCode?.({ error: 'invalid_state', error_description: 'State mismatch' })
-          return
-        }
-        res.writeHead(200, { 'Content-Type': 'text/html' })
-        res.end(page('Vault connected', 'You can close this window and return to Vault.'))
-        settleCode?.({ code, state })
-      } catch (e) {
-        res.writeHead(500)
-        res.end('Error')
-        settleCode?.({ error: e instanceof Error ? e.message : String(e) })
-      }
-    })
-
-    const timer = setTimeout(() => {
-      settleCode?.({ error: 'timeout', error_description: 'OAuth timed out' })
-      server.close()
-    }, 5 * 60 * 1000)
-
-    const close = (): Promise<void> =>
-      new Promise((resClose) => {
-        clearTimeout(timer)
-        server.close(() => resClose())
-      })
-
-    const cancel = () => {
-      settleCode?.({ error: 'cancelled', error_description: 'Cancelled by user' })
-      server.close()
+  get clientMetadata(): OAuthClientMetadata {
+    return {
+      redirect_uris: [redirectUri()],
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      client_name: CLIENT_NAME,
+      client_uri: CLIENT_URI,
     }
+  }
 
-    server.on('error', (err) => {
-      clearTimeout(timer)
-      rejectListen(err)
-    })
+  state(): string {
+    return generateState()
+  }
 
-    server.listen(CALLBACK_PORT, '127.0.0.1', () => {
-      resolveListen({ waitForCode, close, cancel })
+  clientInformation(): OAuthClientInformationMixed | undefined {
+    const c = this.server.client
+    if (!c?.client_id) return undefined
+    return {
+      client_id: c.client_id,
+      client_secret: c.client_secret,
+      client_id_issued_at: c.client_id_issued_at,
+      client_secret_expires_at: c.client_secret_expires_at,
+    }
+  }
+
+  saveClientInformation(info: OAuthClientInformationMixed): void {
+    this.server = updateServer(this.id, {
+      client: {
+        client_id: info.client_id,
+        client_secret: info.client_secret,
+        client_id_issued_at: info.client_id_issued_at,
+        client_secret_expires_at: info.client_secret_expires_at,
+        redirect_uri: redirectUri(),
+      },
     })
-  })
+  }
+
+  tokens(): OAuthTokens | undefined {
+    const bundle = getTokens(this.id)
+    return bundle ? bundleToTokens(bundle) : undefined
+  }
+
+  saveTokens(tokens: OAuthTokens): void {
+    persistTokens(this.id, tokensToBundle(tokens, getTokens(this.id)))
+  }
+
+  async saveCodeVerifier(codeVerifier: string): Promise<void> {
+    this.verifier = codeVerifier
+  }
+
+  async codeVerifier(): Promise<string> {
+    if (!this.verifier) throw new Error('Missing PKCE code verifier')
+    return this.verifier
+  }
+
+  async redirectToAuthorization(authorizationUrl: URL): Promise<void> {
+    const state = authorizationUrl.searchParams.get('state') ?? ''
+    assertHttpUrl(authorizationUrl.toString(), 'authorization_endpoint')
+    ensureCallbackServer()
+    this.pendingCode = new Promise<string>((resolve, reject) => {
+      authWaiter = { state, resolve, reject }
+    })
+    await openExternal(authorizationUrl.toString())
+  }
+
+  /** Resolve with the authorization code captured by the loopback listener. */
+  waitForCode(): Promise<string> {
+    if (!this.pendingCode) throw new Error('No pending OAuth authorization')
+    return this.pendingCode
+  }
 }
 
 function sseUrlFromMcp(mcpUrl: string): string {
@@ -741,52 +463,60 @@ function sseUrlFromMcp(mcpUrl: string): string {
 
 async function connectMcpSession(
   mcpUrl: string,
-  accessToken?: string
+  provider: VaultOAuthProvider
 ): Promise<LiveSession> {
-  const headers: Record<string, string> = {
-    'User-Agent': USER_AGENT,
+  const makeTransport = (kind: 'streamable-http' | 'sse') => {
+    const url = kind === 'streamable-http' ? new URL(mcpUrl) : new URL(sseUrlFromMcp(mcpUrl))
+    const opts = {
+      authProvider: provider,
+      requestInit: { headers: { 'User-Agent': USER_AGENT } },
+    }
+    return kind === 'streamable-http'
+      ? new StreamableHTTPClientTransport(url, opts)
+      : new SSEClientTransport(url, opts)
   }
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
 
-  const tryStreamable = async (): Promise<LiveSession> => {
-    const client = new Client(
-      { name: CLIENT_NAME, version: '1.0.0' },
-      { capabilities: {} }
-    )
-    const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
-      requestInit: { headers },
-    })
-    await client.connect(transport)
+  const connectOnce = async (kind: 'streamable-http' | 'sse'): Promise<LiveSession> => {
+    let transport = makeTransport(kind)
+    let client = new Client({ name: CLIENT_NAME, version: '1.0.0' }, { capabilities: {} })
+
+    try {
+      await client.connect(transport)
+    } catch (e) {
+      if (!(e instanceof UnauthorizedError)) throw e
+      // Interactive auth: the provider opened the browser. Wait for the loopback
+      // code, exchange it via finishAuth, then retry with a fresh client+transport
+      // (the SDK's Client.connect can only start a transport once).
+      try {
+        await client.close()
+      } catch {
+        /* ignore */
+      }
+      statusOverride.set(provider.id, {
+        status: 'authorizing',
+        error: 'Waiting for authorization in browser…',
+      })
+      const code = await provider.waitForCode()
+      await transport.finishAuth(code)
+      statusOverride.delete(provider.id)
+      transport = makeTransport(kind)
+      client = new Client({ name: CLIENT_NAME, version: '1.0.0' }, { capabilities: {} })
+      await client.connect(transport)
+    }
+
     const listed = await client.listTools()
     const tools: McpToolSummary[] = (listed.tools || []).map((t) => ({
       name: t.name,
       description: t.description,
     }))
-    return { client, tools, transport: 'streamable-http' }
-  }
-
-  const trySse = async (): Promise<LiveSession> => {
-    const client = new Client(
-      { name: CLIENT_NAME, version: '1.0.0' },
-      { capabilities: {} }
-    )
-    const transport = new SSEClientTransport(new URL(sseUrlFromMcp(mcpUrl)), {
-      requestInit: { headers },
-    })
-    await client.connect(transport)
-    const listed = await client.listTools()
-    const tools: McpToolSummary[] = (listed.tools || []).map((t) => ({
-      name: t.name,
-      description: t.description,
-    }))
-    return { client, tools, transport: 'sse' }
+    return { client, tools, transport: kind }
   }
 
   try {
-    return await tryStreamable()
+    return await connectOnce('streamable-http')
   } catch (err) {
     console.warn('[mcp] Streamable HTTP failed, falling back to SSE:', err)
-    return await trySse()
+    return await connectOnce('sse')
   }
 }
 
@@ -890,21 +620,15 @@ export async function removeMcpServer(id: string): Promise<boolean> {
   return data.servers.length < before
 }
 
-
 export function cancelMcpAuth(id: string): McpServerSummary | null {
-  const cancel = oauthCancelers.get(id)
-  if (cancel) {
-    cancel()
-    statusOverride.set(id, {
-      status: 'needs_auth',
-      error: 'Sign-in cancelled — click Connect to try again',
-    })
-  } else if (statusOverride.get(id)?.status === 'authorizing') {
-    statusOverride.set(id, {
-      status: 'needs_auth',
-      error: 'Sign-in cancelled — click Connect to try again',
-    })
+  if (authWaiter) {
+    authWaiter.reject(new Error('Sign-in cancelled'))
+    authWaiter = null
   }
+  statusOverride.set(id, {
+    status: 'needs_auth',
+    error: 'Sign-in cancelled — click Connect to try again',
+  })
   const s = getServer(id)
   return s ? summarizeServer(s) : null
 }
@@ -919,69 +643,15 @@ export async function disconnectMcpServer(id: string): Promise<McpServerSummary>
 
 export async function connectMcpServer(id: string): Promise<McpConnectResult> {
   ensureNotionPreset()
-  let server = getServer(id)
+  const server = getServer(id)
   if (!server) throw new Error(`MCP server not found: ${id}`)
 
   statusOverride.delete(id)
-
-  let metadata: OAuthMetadata | undefined = server.oauthMetadataCache
-  let discoveryError: string | undefined
-  try {
-    metadata = await discoverOAuthMetadata(server.url)
-    server = updateServer(id, { oauthMetadataCache: metadata })
-  } catch (e) {
-    discoveryError = e instanceof Error ? e.message : String(e)
-    if (!metadata) metadata = undefined
-  }
-
-  const requiresOauth =
-    server.preset === 'notion' ||
-    Boolean(metadata?.registration_endpoint) ||
-    Boolean(getTokens(id)?.access_token) ||
-    Boolean(server.client)
-
-  let accessToken: string | undefined
-
-  if (requiresOauth || metadata?.registration_endpoint) {
-    if (!metadata) {
-      const msg = discoveryError || 'OAuth discovery failed'
-      statusOverride.set(id, { status: 'error', error: msg })
-      throw new Error(msg)
-    }
-
-    // Reuse dynamic client registration across sessions
-    let clientCreds = server.client
-    const redirect = redirectUri()
-    if (!clientCreds || clientCreds.redirect_uri !== redirect) {
-      clientCreds = await registerClient(metadata, redirect)
-      server = updateServer(id, { client: clientCreds })
-    }
-
-    let tokens = getTokens(id)
-    if (!tokens?.access_token) {
-      tokens = await runOAuthFlow(id, server, metadata, clientCreds)
-    } else {
-      try {
-        tokens = await ensureValidTokens(id, server, metadata)
-      } catch (e) {
-        if (
-          e instanceof Error &&
-          (e.message === 'REAUTH_REQUIRED' ||
-            (e as Error & { code?: string }).code === 'invalid_grant' ||
-            (e as Error & { code?: string }).code === 'needs_auth')
-        ) {
-          tokens = await runOAuthFlow(id, server, metadata, clientCreds)
-        } else {
-          throw e
-        }
-      }
-    }
-    accessToken = tokens.access_token
-  }
-
   await disconnectLive(id)
+
+  const provider = new VaultOAuthProvider(id, server)
   try {
-    const session = await connectMcpSession(server.url, accessToken)
+    const session = await connectMcpSession(server.url, provider)
     live.set(id, session)
     statusOverride.set(id, { status: 'connected' })
     const summary = summarizeServer(getServer(id)!)
@@ -998,38 +668,14 @@ export async function connectMcpServer(id: string): Promise<McpConnectResult> {
 export async function listMcpTools(id: string): Promise<McpToolSummary[]> {
   const session = live.get(id)
   if (!session) throw new Error('Not connected — connect first')
-  try {
-    const listed = await session.client.listTools()
-    const tools: McpToolSummary[] = (listed.tools || []).map((t) => ({
-      name: t.name,
-      description: t.description,
-    }))
-    session.tools = tools
-    return tools
-  } catch (e) {
-    // Token may have expired mid-session — try refresh + reconnect once
-    const server = getServer(id)
-    if (!server?.oauthMetadataCache) throw e
-    try {
-      const tokens = await ensureValidTokens(id, server, server.oauthMetadataCache)
-      await disconnectLive(id)
-      const next = await connectMcpSession(server.url, tokens.access_token)
-      live.set(id, next)
-      return next.tools
-    } catch (inner) {
-      if (
-        inner instanceof Error &&
-        (inner.message === 'REAUTH_REQUIRED' ||
-          (inner as Error & { code?: string }).code === 'invalid_grant')
-      ) {
-        statusOverride.set(id, {
-          status: 'needs_auth',
-          error: 'Re-authorization required',
-        })
-      }
-      throw inner
-    }
-  }
+  // The transport re-authenticates (refresh or re-auth) on a 401 mid-session.
+  const listed = await session.client.listTools()
+  const tools: McpToolSummary[] = (listed.tools || []).map((t) => ({
+    name: t.name,
+    description: t.description,
+  }))
+  session.tools = tools
+  return tools
 }
 
 export async function callMcpTool(
@@ -1048,4 +694,3 @@ export async function callMcpTool(
     isError: Boolean(result.isError),
   }
 }
-

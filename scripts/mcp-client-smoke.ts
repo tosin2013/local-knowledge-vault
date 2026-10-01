@@ -1,9 +1,11 @@
 /**
  * Headless MCP client smoke — a local mock Streamable-HTTP + OAuth server, no network.
  *
- * Covers discovery, the OAuth loopback flow (PKCE + dynamic registration + token
- * exchange), tool listing/calls, and error + reconnect + refresh paths, against the
- * current hand-written client in electron/mcp-client.ts.
+ * Covers the SDK-driven OAuth flow (RFC 9728 protected-resource discovery,
+ * dynamic registration, PKCE, token exchange/refresh), tool listing/calls, and
+ * the #103 spec-conformance requirements: a server that requires `resource`,
+ * advertises resource metadata only through the 401 WWW-Authenticate header,
+ * and uses an issuer URL with a path.
  *
  *   npm run test:mcp
  *
@@ -20,7 +22,6 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import {
   setMcpUserDataDir,
-  discoverOAuthMetadata,
   listMcpServers,
   addMcpServer,
   removeMcpServer,
@@ -49,6 +50,10 @@ const mockState = {
   exchangeCount: 0,
   registrationCount: 0,
   openExternalCount: 0,
+  /** Reject `mock-access-token` (simulates an expired access token) to force refresh. */
+  rejectAccessToken: false,
+  /** `resource` values seen by the token endpoint. */
+  resources: [] as (string | null)[],
 }
 
 function mockElectronShell(): {
@@ -139,78 +144,96 @@ async function createMcpSession(): Promise<{
 }
 
 async function startMockServer(options?: {
-  /** Omit token_endpoint to exercise a missing-endpoints error. */
-  omitTokenEndpoint?: boolean
-  /** Serve an empty authorization_servers to exercise discovery failure. */
-  noAuthorizationServers?: boolean
-  /** Override individual metadata fields (e.g. a malicious endpoint). */
-  metadataOverrides?: Record<string, unknown>
+  /** Advertise protected-resource metadata only via the 401 WWW-Authenticate header. */
+  wwwAuthenticateOnly?: boolean
+  /** Serve the authorization server under a path (e.g. /issuer). */
+  issuerPath?: boolean
+  /** Token endpoint rejects requests missing `resource` (RFC 8707). */
+  requireResource?: boolean
   /** Return a client_secret from dynamic registration. */
   returnClientSecret?: boolean
 }): Promise<MockServer> {
   const sessions = new Map<string, { transport: StreamableHTTPServerTransport }>()
+  const issuerPath = options?.issuerPath ? '/issuer' : ''
+  let origin = ''
+
+  const json = (res: http.ServerResponse, status: number, body: unknown) => {
+    res.writeHead(status, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(body))
+  }
 
   const server = http.createServer(async (req, res) => {
     const u = new URL(req.url || '/', 'http://127.0.0.1')
     const p = u.pathname
+    const issuer = `${origin}${issuerPath}`
+
     try {
-      if (req.method === 'GET' && p === '/.well-known/oauth-protected-resource') {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(
-          JSON.stringify({
-            authorization_servers: options?.noAuthorizationServers ? [] : [origin],
-          }),
-        )
-        return
+      // RFC 9728 well-known (skipped when metadata is only via WWW-Authenticate).
+      if (req.method === 'GET' && p === '/.well-known/oauth-protected-resource' && !options?.wwwAuthenticateOnly) {
+        return json(res, 200, { resource: origin, authorization_servers: [issuer] })
       }
-      if (req.method === 'GET' && p === '/.well-known/oauth-authorization-server') {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        const meta: Record<string, unknown> = {
-          issuer: origin,
-          authorization_endpoint: `${origin}/authorize`,
-          registration_endpoint: `${origin}/register`,
+      // Resource metadata served at a custom URL, referenced by the 401 header.
+      if (req.method === 'GET' && p === '/resource-metadata') {
+        return json(res, 200, { resource: origin, authorization_servers: [issuer] })
+      }
+      // RFC 8414 authorization-server metadata (well-known inserted before the issuer path).
+      if (req.method === 'GET' && p === `/.well-known/oauth-authorization-server${issuerPath}`) {
+        return json(res, 200, {
+          issuer,
+          authorization_endpoint: `${issuer}/authorize`,
+          token_endpoint: `${issuer}/token`,
+          registration_endpoint: `${issuer}/register`,
           code_challenge_methods_supported: ['S256'],
           grant_types_supported: ['authorization_code', 'refresh_token'],
           response_types_supported: ['code'],
           scopes_supported: ['default'],
-        }
-        if (!options?.omitTokenEndpoint) meta.token_endpoint = `${origin}/token`
-        Object.assign(meta, options?.metadataOverrides ?? {})
-        res.end(JSON.stringify(meta))
-        return
+        })
       }
-      if (req.method === 'POST' && p === '/register') {
+      if (req.method === 'POST' && p === `${issuerPath}/register`) {
         mockState.registrationCount++
-        res.writeHead(201, { 'Content-Type': 'application/json' })
-        res.end(
-          JSON.stringify({
-            client_id: 'mock-client-id',
-            client_id_issued_at: 1_700_000_000,
-            ...(options?.returnClientSecret ? { client_secret: 'mock-client-secret' } : {}),
-          }),
-        )
-        return
+        return json(res, 201, {
+          client_id: 'mock-client-id',
+          client_id_issued_at: 1_700_000_000,
+          redirect_uris: ['http://127.0.0.1:17342/oauth/callback'],
+          token_endpoint_auth_method: 'none',
+          grant_types: ['authorization_code', 'refresh_token'],
+          response_types: ['code'],
+          client_name: 'Vault',
+          ...(options?.returnClientSecret ? { client_secret: 'mock-client-secret' } : {}),
+        })
       }
-      if (req.method === 'POST' && p === '/token') {
-        // The client POSTs the token request as application/x-www-form-urlencoded.
+      if (req.method === 'POST' && p === `${issuerPath}/token`) {
         const raw = await readRawBody(req)
         const params = new URLSearchParams(raw)
         const grantType = params.get('grant_type') ?? ''
+        mockState.resources.push(params.get('resource'))
+        if (options?.requireResource && !params.get('resource')) {
+          return json(res, 400, { error: 'invalid_target', error_description: 'resource is required' })
+        }
         if (grantType === 'refresh_token') mockState.refreshCount++
         else mockState.exchangeCount++
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(
-          JSON.stringify({
-            access_token: grantType === 'refresh_token' ? 'mock-refreshed-token' : 'mock-access-token',
-            token_type: 'Bearer',
-            expires_in: mockState.expiresIn,
-            refresh_token: 'mock-refresh-token',
-            scope: 'default',
-          }),
-        )
-        return
+        return json(res, 200, {
+          access_token: grantType === 'refresh_token' ? 'mock-refreshed-token' : 'mock-access-token',
+          token_type: 'Bearer',
+          expires_in: mockState.expiresIn,
+          refresh_token: 'mock-refresh-token',
+          scope: 'default',
+        })
       }
+
       if (req.method === 'POST' && p === '/mcp') {
+        const auth = req.headers['authorization'] || ''
+        const valid =
+          auth === 'Bearer mock-refreshed-token' ||
+          (auth === 'Bearer mock-access-token' && !mockState.rejectAccessToken)
+        if (!valid) {
+          const wwwAuth = options?.wwwAuthenticateOnly
+            ? `Bearer resource_metadata="${origin}/resource-metadata"`
+            : 'Bearer'
+          res.writeHead(401, { 'WWW-Authenticate': wwwAuth })
+          res.end()
+          return
+        }
         const body = await readJsonBody(req)
         const msg = Array.isArray(body) ? body[0] : body
         const sid = req.headers['mcp-session-id'] as string | undefined
@@ -250,7 +273,7 @@ async function startMockServer(options?: {
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const addr = server.address() as { port: number }
-  const origin = `http://127.0.0.1:${addr.port}`
+  origin = `http://127.0.0.1:${addr.port}`
 
   return {
     origin,
@@ -285,57 +308,9 @@ async function main(): Promise<void> {
   setMcpUserDataDir(tmpDir)
   const { nextAuthUrl } = mockElectronShell()
 
-  // --- discovery ---
-  console.log('Discovery')
-  const mock = await startMockServer()
-  const meta = await discoverOAuthMetadata(mock.mcpUrl)
-  assert(meta.authorization_endpoint === `${mock.origin}/authorize`, 'discovers authorization endpoint')
-  assert(meta.token_endpoint === `${mock.origin}/token`, 'discovers token endpoint')
-  assert(meta.registration_endpoint === `${mock.origin}/register`, 'discovers registration endpoint')
-  assert(meta.code_challenge_methods_supported?.includes('S256') === true, 'advertises S256 PKCE')
-
-  const bad = await startMockServer({ noAuthorizationServers: true })
-  try {
-    await discoverOAuthMetadata(bad.mcpUrl)
-    assert(false, 'discovery with no authorization_servers throws')
-  } catch {
-    assert(true, 'discovery with no authorization_servers throws')
-  }
-
-  const missing = await startMockServer({ omitTokenEndpoint: true })
-  try {
-    await discoverOAuthMetadata(missing.mcpUrl)
-    assert(false, 'metadata missing token_endpoint throws')
-  } catch {
-    assert(true, 'metadata missing token_endpoint throws')
-  }
-
-  const badAuthEndpoint = await startMockServer({ metadataOverrides: { authorization_endpoint: 'file:///etc/passwd' } })
-  try {
-    await discoverOAuthMetadata(badAuthEndpoint.mcpUrl)
-    assert(false, 'non-http(s) authorization_endpoint throws')
-  } catch (e) {
-    assert(/authorization_endpoint.*http\(s\)/.test((e as Error).message), 'rejects non-http(s) authorization_endpoint')
-  }
-
-  const badTokenEndpoint = await startMockServer({ metadataOverrides: { token_endpoint: 'smb://attacker/token' } })
-  try {
-    await discoverOAuthMetadata(badTokenEndpoint.mcpUrl)
-    assert(false, 'non-http(s) token_endpoint throws')
-  } catch (e) {
-    assert(/token_endpoint.*http\(s\)/.test((e as Error).message), 'rejects non-http(s) token_endpoint')
-  }
-
-  const badRegistrationEndpoint = await startMockServer({ metadataOverrides: { registration_endpoint: 'ssh://attacker/register' } })
-  try {
-    await discoverOAuthMetadata(badRegistrationEndpoint.mcpUrl)
-    assert(false, 'non-http(s) registration_endpoint throws')
-  } catch (e) {
-    assert(/registration_endpoint.*http\(s\)/.test((e as Error).message), 'rejects non-http(s) registration_endpoint')
-  }
-
   // --- add / list ---
   console.log('Add / list servers')
+  const mock = await startMockServer()
   try {
     addMcpServer({ name: '', url: mock.mcpUrl })
     assert(false, 'empty name is rejected')
@@ -360,7 +335,7 @@ async function main(): Promise<void> {
   assert(duplicate.id === added.id, 'adding the same URL returns the existing server')
   assert(listMcpServers().some((s) => s.id === added.id), 'server appears in listMcpServers')
 
-  // --- connect (full OAuth flow) ---
+  // --- connect (full OAuth flow, driven by the SDK's authProvider) ---
   console.log('Connect (OAuth)')
   const connected = await connectWithOAuth(added.id, nextAuthUrl)
   assert(connected.server.status === 'connected', 'connect sets status connected')
@@ -389,16 +364,18 @@ async function main(): Promise<void> {
   assert(reconnected.server.status === 'connected', 'reconnect succeeds')
   assert(mockState.openExternalCount === beforeOpen, 'reconnect does not re-open the browser (valid tokens)')
 
-  // --- reconnect after expiry (refresh path, against a fresh server) ---
+  // --- reconnect after expiry (refresh path) ---
   console.log('Refresh (expired tokens)')
   const refreshMock = await startMockServer()
-  mockState.expiresIn = -1 // the OAuth exchange issues an already-expired token
   const refreshServer = addMcpServer({ name: 'Refresh', url: refreshMock.mcpUrl })
   await connectWithOAuth(refreshServer.id, nextAuthUrl)
   await disconnectMcpServer(refreshServer.id)
+  // Simulate the access token expiring before the next connect.
+  mockState.rejectAccessToken = true
   const beforeRefresh = mockState.refreshCount
   const beforeRefreshOpen = mockState.openExternalCount
   const refreshed = await connectMcpServer(refreshServer.id)
+  mockState.rejectAccessToken = false
   assert(refreshed.server.status === 'connected', 'refresh + reconnect succeeds')
   assert(mockState.refreshCount > beforeRefresh, 'refresh token flow was used')
   assert(mockState.openExternalCount === beforeRefreshOpen, 'refresh did not re-open the browser')
@@ -415,23 +392,39 @@ async function main(): Promise<void> {
   const secretServer = addMcpServer({ name: 'Secret', url: secretMock.mcpUrl })
   await connectWithOAuth(secretServer.id, nextAuthUrl)
   await disconnectMcpServer(secretServer.id)
-  // Reconnect reads the stored client (with client_secret) back from disk.
   const secretReconnected = await connectMcpServer(secretServer.id)
   assert(secretReconnected.server.status === 'connected', 'reconnect with stored client_secret succeeds')
   await removeMcpServer(secretServer.id)
 
+  // --- #103: requires resource, metadata only via WWW-Authenticate, issuer with path ---
+  console.log('#103 spec conformance (resource + WWW-Authenticate + issuer path)')
+  const specMock = await startMockServer({
+    wwwAuthenticateOnly: true,
+    issuerPath: true,
+    requireResource: true,
+  })
+  const specServer = addMcpServer({ name: 'Spec', url: specMock.mcpUrl })
+  const specConnected = await connectWithOAuth(specServer.id, nextAuthUrl)
+  assert(specConnected.server.status === 'connected', 'connect succeeds against a strict spec server')
+  assert(
+    specConnected.tools.length === 2,
+    'tools listed against a strict spec server',
+  )
+  assert(
+    mockState.resources.some((r) => r != null && r.length > 0),
+    'token request included the resource indicator (RFC 8707)',
+  )
+  await removeMcpServer(specServer.id)
+
   await mock.close()
   await refreshMock.close()
-  await bad.close()
-  await missing.close()
-  await badAuthEndpoint.close()
-  await badTokenEndpoint.close()
-  await badRegistrationEndpoint.close()
   await secretMock.close()
+  await specMock.close()
   fs.rmSync(tmpDir, { recursive: true, force: true })
 
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`)
-  if (failed > 0) process.exit(1)
+  // The loopback callback server is persistent, so exit explicitly.
+  process.exit(failed > 0 ? 1 : 0)
 }
 
 main().catch((err) => {
