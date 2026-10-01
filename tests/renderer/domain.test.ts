@@ -30,6 +30,7 @@ import {
   THEME_KEY,
   titleFromFirstQuestion,
   UI_MODE_KEY,
+  VAULT_GUIDE_PROJECT,
 } from '../../src/domain'
 import { makeProfile, makePrompt } from './lkv'
 
@@ -211,6 +212,11 @@ describe('askEmptyStateCopy', () => {
   })
   it('describes grounded-helper mode', () => {
     expect(askEmptyStateCopy('grounded-helper', [], '', '', []).title).toContain('Ask anything')
+  })
+  it('describes the first-run Vault guide scope', () => {
+    expect(askEmptyStateCopy('grounded-helper', [], '', VAULT_GUIDE_PROJECT, []).title).toBe(
+      'Ask about the Vault guide',
+    )
   })
   it('describes a user profile', () => {
     const prompts = [makePrompt('prm_g', 'Grounded default')]
