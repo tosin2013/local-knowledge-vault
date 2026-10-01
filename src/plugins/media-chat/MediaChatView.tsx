@@ -4,9 +4,11 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   FormControlLabel,
   IconButton,
+  LinearProgress,
   Link,
   MenuItem,
   Paper,
@@ -164,6 +166,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [active, setActive] = useState<ActiveMedia | null>(null)
   const [ytUrl, setYtUrl] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [ingestStage, setIngestStage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -190,6 +194,14 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   useEffect(() => {
     void refreshProjects()
   }, [refreshProjects])
+
+  // Subscribe to main-process ingest progress so the UI can show a stage + cancel (#128).
+  useEffect(() => {
+    const unsubscribe = window.lkv?.media?.onIngestProgress?.((p) => {
+      setIngestStage(p.stage)
+    })
+    return () => unsubscribe?.()
+  }, [])
 
   const refreshVoices = useCallback(async (): Promise<MediaVoiceOption[]> => {
     if (!window.lkv?.prompts?.list) {
@@ -416,6 +428,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const onPickLocal = async () => {
     if (!window.lkv?.media) return
     setError(null)
+    setIngestStage(null)
     setBusy(true)
     try {
       const pick = await window.lkv.media.pickLocal()
@@ -439,8 +452,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       })
       await applyIngestResult(res)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg === 'Ingest cancelled') setStatus('Ingest cancelled')
+      else setError(msg)
     } finally {
+      setIngestStage(null)
       setBusy(false)
     }
   }
@@ -453,6 +469,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       return
     }
     setError(null)
+    setIngestStage(null)
     setBusy(true)
     try {
       const existing = await window.lkv.media.findExistingProject?.({ url })
@@ -467,8 +484,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       await applyIngestResult(res)
       setYtUrl('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg === 'Ingest cancelled') setStatus('Ingest cancelled')
+      else setError(msg)
     } finally {
+      setIngestStage(null)
       setBusy(false)
     }
   }
@@ -633,11 +653,27 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   }
 
   const onSend = async (opts?: { aboutMoment?: boolean }) => {
-    if (!window.lkv || !active || !chatInput.trim()) return
-    const text = buildQuestion(chatInput, !!opts?.aboutMoment)
+    if (!window.lkv || !active || !chatInput.trim() || sending) return
+    const rawInput = chatInput
+    const text = buildQuestion(rawInput, !!opts?.aboutMoment)
+    const optimisticId = `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
     setChatInput('')
+    setSending(true)
     setBusy(true)
     setError(null)
+    // Render the user's message immediately rather than waiting for the reply.
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: optimisticId,
+        session_id: sessionId ?? '',
+        role: 'user',
+        content: rawInput,
+        citations_json: null,
+        hits_json: null,
+        created_at: new Date().toISOString(),
+      },
+    ])
     try {
       let sid = sessionId
       if (!sid) {
@@ -660,7 +696,12 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       setMessages(res.messages)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // A failed send must not lose the question: roll back the optimistic
+      // bubble and put the text back in the composer (#128).
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+      setChatInput(rawInput)
     } finally {
+      setSending(false)
       setBusy(false)
     }
   }
@@ -928,6 +969,26 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                   </Box>
                 )
               })}
+              {sending && (
+                <Box
+                  sx={{
+                    alignSelf: 'flex-start',
+                    bgcolor: 'action.hover',
+                    px: 1.25,
+                    py: 1,
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                  }}
+                  data-testid="answering-indicator"
+                >
+                  <CircularProgress size={14} />
+                  <Typography variant="body2" color="text.secondary">
+                    Answering from your notes…
+                  </Typography>
+                </Box>
+              )}
             </Stack>
           )}
         </Box>
@@ -1047,6 +1108,23 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                 Ingest YouTube
               </Button>
             </Stack>
+            {ingestStage && (
+              <Stack spacing={0.75} data-testid="ingest-progress">
+                <LinearProgress />
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                    {ingestStage}
+                  </Typography>
+                  <Button
+                    size="small"
+                    color="error"
+                    onClick={() => void window.lkv?.media?.cancelIngest?.()}
+                  >
+                    Cancel
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
             <Typography variant="caption" color="text.secondary">
               Captions become searchable transcript notes in your vault.
             </Typography>

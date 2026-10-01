@@ -282,4 +282,19 @@ describe('useChat', () => {
     })
     expect(deps.setError).toHaveBeenCalledWith('boom')
   })
+
+  it('restores the question when a send fails', async () => {
+    const lkv = window.lkv as any
+    lkv.chat.send.mockRejectedValue(new Error('boom'))
+    const { result } = renderHook(() => useChat(makeDeps()))
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    act(() => result.current.setChatInput('my question'))
+    await act(async () => {
+      await result.current.onSendChat()
+    })
+    expect(result.current.chatInput).toBe('my question')
+    expect(result.current.messages).toEqual([])
+  })
 })

@@ -290,10 +290,11 @@ export function useChat(deps: UseChatDeps) {
     setError(null)
     setChatOffline(false)
     // Render the user's message immediately rather than waiting for the reply.
+    const optimisticId = `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
     setMessages((prev) => [
       ...prev,
       {
-        id: `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+        id: optimisticId,
         session_id: sessionId,
         role: 'user',
         content: text,
@@ -331,6 +332,10 @@ export function useChat(deps: UseChatDeps) {
       await refreshSessions()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      // A failed send must not lose the question: roll back the optimistic
+      // bubble and put the text back in the composer (#128).
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+      setChatInput(text)
     } finally {
       setSending(false)
       setBusy(false)

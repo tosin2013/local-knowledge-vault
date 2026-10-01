@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Collapse,
   Divider,
   FormControl,
@@ -316,6 +317,32 @@ export function ChatView(props: ChatViewProps) {
               </Box>
             )
           })}
+          {sending && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, textTransform: 'capitalize' }}>
+                assistant
+              </Typography>
+              <Paper
+                sx={{
+                  px: 2,
+                  py: 1.25,
+                  borderRadius: 4,
+                  bgcolor: 'background.paper',
+                  border: 1,
+                  borderColor: 'divider',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+                data-testid="answering-indicator"
+              >
+                <CircularProgress size={14} />
+                <Typography variant="body2" color="text.secondary">
+                  Answering from your notes…
+                </Typography>
+              </Paper>
+            </Box>
+          )}
           {chatOffline && (
             <Alert severity="warning">
               AI unavailable — your message was saved; reply is a status notice.

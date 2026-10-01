@@ -374,6 +374,8 @@ export function createLkvMock(): LkvMock {
         Promise.resolve({ promptId: 'prm_new', name: input.name }),
       ),
       listVoicePacks: vi.fn().mockResolvedValue([]),
+      onIngestProgress: vi.fn().mockReturnValue(() => {}),
+      cancelIngest: vi.fn().mockResolvedValue(true),
     },
     mcp: {
       listServers: vi.fn().mockResolvedValue([]),

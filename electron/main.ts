@@ -393,6 +393,9 @@ function buildApplicationMenu(): Menu {
   return Menu.buildFromTemplate(template)
 }
 
+/** Abort controller for the in-flight media ingest, if any (#128). */
+let currentIngestController: AbortController | null = null
+
 function registerIpc(): void {
   ipcMain.handle('items:list', (_e, input?: ListItemsInput) => {
     return listItems(input?.filters)
@@ -649,12 +652,39 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle('media:ingestLocal', (_e, input: MediaIngestLocalInput) => {
-    return ingestLocalMedia(input)
+  ipcMain.handle('media:ingestLocal', async (_e, input: MediaIngestLocalInput) => {
+    const controller = new AbortController()
+    currentIngestController = controller
+    try {
+      return await ingestLocalMedia(input, {
+        onProgress: (stage, noteCount) => {
+          _e.sender.send('media:ingestProgress', { stage, noteCount })
+        },
+        signal: controller.signal,
+      })
+    } finally {
+      if (currentIngestController === controller) currentIngestController = null
+    }
   })
 
-  ipcMain.handle('media:ingestYoutube', (_e, input: MediaIngestYoutubeInput) => {
-    return ingestYoutubeMedia(input)
+  ipcMain.handle('media:ingestYoutube', async (_e, input: MediaIngestYoutubeInput) => {
+    const controller = new AbortController()
+    currentIngestController = controller
+    try {
+      return await ingestYoutubeMedia(input, {
+        onProgress: (stage, noteCount) => {
+          _e.sender.send('media:ingestProgress', { stage, noteCount })
+        },
+        signal: controller.signal,
+      })
+    } finally {
+      if (currentIngestController === controller) currentIngestController = null
+    }
+  })
+
+  ipcMain.handle('media:cancelIngest', () => {
+    currentIngestController?.abort()
+    return true
   })
 
   ipcMain.handle('media:listProjects', () => listMediaProjects())
