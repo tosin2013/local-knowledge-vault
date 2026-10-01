@@ -62,6 +62,28 @@ npm run dev
 
 This opens Electron with Vite HMR. If the machine has no display, use the headless checks below.
 
+### Test a fresh install (default state)
+
+Vault keeps its notes, settings and keys in a per-machine user-data folder (see the
+[environment table](#environment-overrides) below). Because a lot of onboarding work runs once per
+install — the seeded "Vault guide" project, the `sample_notes_seeded` flag, versioned migrations —
+re-running `npm run dev` against your normal profile reuses that state, so first-run changes may not
+show up.
+
+To see a clean first-run experience, point the app at an empty folder:
+
+```bash
+LKV_USER_DATA_DIR=/tmp/vault-fresh npm run dev
+```
+
+Any empty directory works. A shell alias makes this quick:
+
+```bash
+alias vault-fresh='LKV_USER_DATA_DIR="$(mktemp -d /tmp/vault-fresh.XXXXXX)" npm run dev'
+```
+
+Make sure you are on the branch with the change — `main` does not contain unmerged feature branches.
+
 ## Checks (headless)
 
 | Script | What it does |

@@ -75,6 +75,14 @@ request adds or changes need 70% coverage. The main process (`electron/`) is gat
 Open `coverage/lcov-report/index.html` after `npm run coverage` to see which lines your change left untested.
 
 UI changes also need a manual check in `npm run dev`, because no test mounts the renderer yet.
+Onboarding and first-run changes seed state only once per install, so verify them against a fresh
+profile rather than your normal one:
+
+```bash
+LKV_USER_DATA_DIR=/tmp/vault-fresh npm run dev
+```
+
+See [docs/development.md](docs/development.md#test-a-fresh-install-default-state).
 
 ### Scripts that touch SQLite
 
