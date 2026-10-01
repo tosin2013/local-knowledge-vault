@@ -93,6 +93,7 @@ personas, URL auto-tag and the HTTP bridge.
   Bearer <token>` and JSON bodies are size-capped.
 - `citation-pack.ts`: exports an Ask session with its cited notes and a manifest.
 - `import-url.ts`: fetches a page, extracts text and auto-tags it into a note.
+- `import-markdown.ts`: bulk-imports a folder of `.md`/Obsidian notes (frontmatter + wiki-link aware).
 - `user-data.ts`: resolves userData, honoring the `LKV_USER_DATA_DIR` override.
 
 ## Gotchas

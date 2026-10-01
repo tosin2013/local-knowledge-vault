@@ -439,6 +439,19 @@ export interface ImportFromUrlResult {
   warning?: string
 }
 
+/* ---- Import Markdown / Obsidian notes from a folder ---- */
+
+export interface MarkdownImportResult {
+  /** True when the user cancelled the folder picker. */
+  canceled?: boolean
+  imported: number
+  skipped: number
+  /** Ids of the notes that were created (in walk order). */
+  itemIds: string[]
+  /** Per-file human-readable problems (empty files are silent, not listed). */
+  errors: string[]
+}
+
 
 /* ---- Chat profiles (user-saved Personality + Project) ---- */
 
