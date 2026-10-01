@@ -203,6 +203,9 @@ export const GORGIAS_PROJECT = 'Gorgias'
 export const GORGIAS_READER_NAME = 'Gorgias reader'
 export const GROUNDED_DEFAULT_NAMES = ['Grounded default', 'Grounded helper']
 
+/** Project the first-run self-documenting guide is seeded into (#163). */
+export const VAULT_GUIDE_PROJECT = 'Vault guide'
+
 /**
  * The Gorgias demo profile. It is not in BUILTIN_PROFILES because it must not
  * ship to every user (#126): it only appears once the "Gorgias reader" prompt
@@ -277,6 +280,12 @@ export function askEmptyStateCopy(
     }
   }
   if (profileId === 'grounded-helper') {
+    if (proj === VAULT_GUIDE_PROJECT) {
+      return {
+        title: 'Ask about the Vault guide',
+        body: 'Example: What is PARA? Answers come from the guide notes, with citations.',
+      }
+    }
     return {
       title: 'Ask anything grounded in your notes',
       body: 'Example: What did I write about habits?',

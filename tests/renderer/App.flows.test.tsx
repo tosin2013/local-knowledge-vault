@@ -26,7 +26,7 @@ function seed() {
 async function renderApp() {
   render(<App />)
   await waitFor(() =>
-    expect(screen.getByText(/Ask anything grounded in your notes/)).toBeInTheDocument(),
+    expect(screen.getByText(/Ask about the Vault guide/)).toBeInTheDocument(),
   )
 }
 
@@ -209,6 +209,7 @@ describe('App flows — Notes rail + note peek', () => {
 
 describe('App flows — Simple/Advanced', () => {
   it('toggles Advanced mode, revealing the Personalities button', async () => {
+    seed()
     await renderApp()
 
     // Simple mode: no Personalities button, but URL import is always visible.
@@ -222,6 +223,7 @@ describe('App flows — Simple/Advanced', () => {
   })
 
   it('toggling back to Simple hides advanced UI', async () => {
+    seed()
     await renderApp()
     const toggle = screen.getByRole('checkbox', { name: /Advanced/ })
 

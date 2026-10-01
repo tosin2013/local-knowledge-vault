@@ -10,6 +10,7 @@ import Database from 'better-sqlite3'
 import {
   initDb,
   closeDb,
+  getDb,
   listItems,
   createItem,
   countItems,
@@ -102,11 +103,11 @@ async function main(): Promise<void> {
   console.log('\nFilters')
   const projects = listItems({ para: 'projects' })
   assert(projects.length >= 1 && projects.every((i) => i.para === 'projects'), 'para filter works')
-  const byProject = listItems({ project: 'Getting started' })
-  assert(byProject.length >= 1, 'project filter matches the Getting started project')
+  const byProject = listItems({ project: 'Vault guide' })
+  assert(byProject.length >= 1, 'project filter matches the Vault guide project')
   // #127: the project filter must not substring-match across projects.
-  const leaked = listItems({ project: 'Getting' })
-  assert(leaked.length === 0, 'project filter does not substring-match ("Getting" leaks 0 notes)')
+  const leaked = listItems({ project: 'Vault' })
+  assert(leaked.length === 0, 'project filter does not substring-match ("Vault" leaks 0 notes)')
 
   // --- FTS ---
   console.log('\nFTS5 search')
@@ -638,31 +639,50 @@ async function main(): Promise<void> {
     closeDb()
   }
 
-  // --- Getting started samples + Remove samples (#139) ---
-  console.log('\nGetting started samples + Remove samples (#139)')
+  // --- Vault guide seed + version refresh + Remove guide (#163 / #139) ---
+  console.log('\nVault guide seed + refresh + Remove guide (#163)')
   {
-    const file = path.join(tmpDir, 'samples.sqlite')
+    const file = path.join(tmpDir, 'guide.sqlite')
     initDb(file)
-    const samples = listSampleNotes()
-    assert(samples.length >= 3, `fresh vault seeds sample notes (got ${samples.length})`)
+    const guide = listSampleNotes()
+    assert(guide.length >= 3, `fresh vault seeds guide notes (got ${guide.length})`)
     assert(
-      samples.every((s) => s.project === 'Getting started'),
-      'all sample notes live in the Getting started project'
+      guide.every((s) => s.project === 'Vault guide'),
+      'all guide notes live in the Vault guide project'
     )
     assert(
-      samples.some((s) => s.para === 'projects') && samples.some((s) => s.para === 'resources'),
-      'samples span PARA groups'
+      guide.some((s) => s.para === 'projects') &&
+        guide.some((s) => s.para === 'resources') &&
+        guide.some((s) => s.para === 'archives'),
+      'guide spans PARA groups'
     )
 
+    // Re-init at the same version must be a no-op (no duplicates).
+    const seededCount = countItems()
+    const seededIds = guide.map((s) => s.id)
+    closeDb()
+    initDb(file)
+    assert(countItems() === seededCount, 're-init does not duplicate the guide')
+    assert(listSampleNotes().length === guide.length, 'guide count stable across re-init')
+
+    // Simulate an older content version → refresh deletes + re-seeds.
+    getDb().prepare("UPDATE meta SET value = '0' WHERE key = 'vault_guide_version'").run()
+    closeDb()
+    initDb(file)
+    assert(countItems() === seededCount, 'version refresh replaces, not duplicates, the guide')
+    const refreshed = listSampleNotes()
+    assert(refreshed.length === guide.length, 'guide still present after refresh')
+    assert(refreshed.every((r) => !seededIds.includes(r.id)), 'refresh re-seeds with new ids')
+
     const removed = removeSampleNotes()
-    assert(removed === samples.length, `removeSampleNotes removes all samples (${removed})`)
-    assert(listSampleNotes().length === 0, 'no sample notes remain after removal')
+    assert(removed === refreshed.length, `removeSampleNotes removes all guide notes (${removed})`)
+    assert(listSampleNotes().length === 0, 'no guide notes remain after removal')
     assert(countItems() === 0, 'vault is empty after removing the only notes')
     closeDb()
 
-    // Restart: the removed samples must not come back.
+    // Restart: the removed guide must not come back.
     initDb(file)
-    assert(listSampleNotes().length === 0, 'samples do not come back after removal + restart')
+    assert(listSampleNotes().length === 0, 'guide does not come back after removal + restart')
     assert(countItems() === 0, 'no re-seed after removal + restart')
     closeDb()
   }

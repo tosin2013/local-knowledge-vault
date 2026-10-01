@@ -183,6 +183,18 @@ describe('useChat', () => {
     expect(result.current.selectedProfileId).toBe('grounded-helper')
   })
 
+  it('defaults the first-run Ask scope to the Vault guide project', async () => {
+    const lkv = window.lkv as any
+    lkv.profiles.list.mockResolvedValue([])
+    const prompts = [makePrompt('prm_1', 'Grounded default')]
+    const { result } = renderHook(() => useChat(makeDeps({ prompts })))
+    await act(async () => {
+      await result.current.refreshProfiles()
+    })
+    await waitFor(() => expect(result.current.project).toBe('Vault guide'))
+    expect(result.current.askEmpty.title).toBe('Ask about the Vault guide')
+  })
+
   it('exposes the scope hint and ask-empty copy', () => {
     const prompts = [makePrompt('prm_1', 'Grounded default')]
     const { result } = renderHook(() => useChat(makeDeps({ prompts })))

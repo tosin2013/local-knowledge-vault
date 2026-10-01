@@ -47,7 +47,7 @@ export function useNotes(deps: UseNotesDeps) {
   // Trash (soft-delete) + rail bulk-select.
   const [trashed, setTrashed] = useState<Item[]>([])
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
-  // True while the first-run "Getting started" sample notes exist (#139).
+  // True while the first-run "Vault guide" notes exist (#163).
   const [hasSamples, setHasSamples] = useState(false)
   // Total non-trashed notes (drives the genuinely-empty rail state, #189).
   const [count, setCount] = useState(0)
@@ -179,6 +179,11 @@ export function useNotes(deps: UseNotesDeps) {
     setDirty(true)
     setNotePeekOpen(true)
     setPeekEditing(true)
+  }
+
+  /** First-class "New project": open a new-note draft pre-filled with that project (#163). */
+  const onNewProject = (name: string) => {
+    openPrefilledDraft({ project: name.trim() })
   }
 
   const onImportFromUrl = async () => {
@@ -363,7 +368,7 @@ export function useNotes(deps: UseNotesDeps) {
     setTrashed(await window.lkv.items.listTrashed())
   }
 
-  /** Refresh whether the first-run "Getting started" samples still exist (#139). */
+  /** Refresh whether the first-run "Vault guide" notes still exist (#163). */
   const refreshSamples = async () => {
     if (!window.lkv?.items?.listSamples) {
       setHasSamples(false)
@@ -377,10 +382,10 @@ export function useNotes(deps: UseNotesDeps) {
     }
   }
 
-  /** Remove the "Getting started" sample notes in one action, after confirmation. */
+  /** Remove the "Vault guide" notes in one action, after confirmation. */
   const removeSamples = async () => {
     if (!window.lkv?.items?.removeSamples) return
-    if (!confirm('Remove the “Getting started” sample notes?')) return
+    if (!confirm('Remove the “Vault guide” notes?')) return
     setBusy(true)
     setError(null)
     try {
@@ -550,6 +555,7 @@ export function useNotes(deps: UseNotesDeps) {
     loadMoreHits,
     onNewNote,
     openPrefilledDraft,
+    onNewProject,
     onImportFromUrl,
     onImportMarkdown,
     onSave,

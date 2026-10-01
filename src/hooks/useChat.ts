@@ -17,6 +17,7 @@ import {
   resolveProfilePromptId,
   saveLastProfile,
   titleFromFirstQuestion,
+  VAULT_GUIDE_PROJECT,
   type ChatProfileId,
 } from '../domain'
 
@@ -118,7 +119,10 @@ export function useChat(deps: UseChatDeps) {
         const builtin = listBuiltinProfiles(prompts).find((p) => p.id === saved.profileId)
         if (builtin) {
           promptId = resolveProfilePromptId(builtin, prompts) || grounded?.id || ''
-          nextProject = builtin.project
+          // Keep a saved project when the builtin has none of its own (so the
+          // first-run "Vault guide" scope survives restarts), otherwise use the
+          // builtin's fixed project (e.g. Gorgias).
+          nextProject = builtin.project || (saved.project ?? '')
           profileId = builtin.id
         }
       } else if (saved.profileId !== 'custom') {
@@ -141,7 +145,9 @@ export function useChat(deps: UseChatDeps) {
 
     if (!promptId) {
       promptId = grounded?.id || prompts[0]?.id || ''
-      nextProject = ''
+      // First run has no saved profile: start scoped to the self-documenting
+      // guide so there is a concrete project to explore (#163).
+      nextProject = VAULT_GUIDE_PROJECT
       profileId = 'grounded-helper'
     }
 

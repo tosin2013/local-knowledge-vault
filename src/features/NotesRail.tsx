@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
   Box,
@@ -20,6 +21,7 @@ import {
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
@@ -48,6 +50,7 @@ export interface NotesRailProps {
   railSort: 'updated' | 'title' | 'created'
   showTranscripts: boolean
   onNewNote: () => void
+  onNewProject: (name: string) => void
   onImportUrl: (v: string) => void
   onImport: () => void
   onImportMarkdown: () => void
@@ -86,6 +89,7 @@ export function NotesRail(props: NotesRailProps) {
     railSort,
     showTranscripts,
     onNewNote,
+    onNewProject,
     onImportUrl,
     onImport,
     onImportMarkdown,
@@ -105,6 +109,17 @@ export function NotesRail(props: NotesRailProps) {
     onFiltersOpen,
     onSelect,
   } = props
+
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+
+  const submitNewProject = () => {
+    const name = newProjectName.trim()
+    if (!name) return
+    onNewProject(name)
+    setNewProjectName('')
+    setNewProjectOpen(false)
+  }
 
   const showExtraFilters = advanced || filtersOpen
 
@@ -128,6 +143,46 @@ export function NotesRail(props: NotesRailProps) {
         <Button
           fullWidth
           variant="outlined"
+          startIcon={<CreateNewFolderIcon />}
+          onClick={() => setNewProjectOpen((v) => !v)}
+          disabled={busy}
+          aria-expanded={newProjectOpen}
+        >
+          New project
+        </Button>
+
+        {newProjectOpen && (
+          <Stack direction="row" spacing={0.75}>
+            <TextField
+              size="small"
+              fullWidth
+              autoFocus
+              placeholder="Project name"
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  submitNewProject()
+                }
+                if (e.key === 'Escape') setNewProjectOpen(false)
+              }}
+              aria-label="New project name"
+            />
+            <Button
+              variant="contained"
+              size="small"
+              disabled={!newProjectName.trim()}
+              onClick={submitNewProject}
+            >
+              Create
+            </Button>
+          </Stack>
+        )}
+
+        <Button
+          fullWidth
+          variant="outlined"
           startIcon={<FolderOpenIcon />}
           onClick={onImportMarkdown}
           disabled={importMarkdownBusy || busy}
@@ -142,10 +197,10 @@ export function NotesRail(props: NotesRailProps) {
             data-testid="remove-samples"
           >
             <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
-              Sample notes in “Getting started” show how the vault works.
+              The “Vault guide” project teaches the app with real notes.
             </Typography>
             <Button size="small" color="error" variant="outlined" onClick={onRemoveSamples}>
-              Remove samples
+              Remove guide
             </Button>
           </Paper>
         )}

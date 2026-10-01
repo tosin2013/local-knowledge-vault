@@ -31,9 +31,9 @@ LKV_USER_DATA_DIR="$HOME/VaultDemo" /Applications/Vault.app/Contents/MacOS/Vault
 LKV_USER_DATA_DIR="$HOME/VaultDemo" npm run dev
 ```
 
-A fresh profile starts in **Auto (local first)** and seeds five short sample notes (GTD, Atomic
-Habits, and so on). Leave them; they make the notes rail look lived-in. Check that the header chip
-reads **`Local · Ollama · qwen3:8b`**.
+A fresh profile starts in **Auto (local first)** and seeds the self-documenting **Vault guide**
+project (nine notes that teach PARA, kinds, citations, projects and Media chat). Leave them; they
+make the notes rail look lived-in. Check that the header chip reads **`Local · Ollama · qwen3:8b`**.
 
 ### Seed a small public-domain sample
 

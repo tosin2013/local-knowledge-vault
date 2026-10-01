@@ -39,7 +39,7 @@ export function initDb(dbPath: string): Database.Database {
   // must never get sample notes re-injected on launch (#41).
   const alreadyExisting = tableExists(db, 'items')
   migrate(db)
-  seedSampleNotes(db, alreadyExisting)
+  seedGuideNotes(db, alreadyExisting)
   seedPromptsIfEmpty(db)
   ensureFriendlyGroundedHelper(db)
   return db
@@ -161,14 +161,22 @@ function migrateV1(database: Database.Database): void {
   ensureTrigramFts(database)
 }
 
-/** Project all first-run sample notes are seeded into (#139). */
-export const SAMPLE_NOTES_PROJECT = 'Getting started'
+/** Project the self-documenting first-run guide notes are seeded into (#163). */
+export const VAULT_GUIDE_PROJECT = 'Vault guide'
 
-/** Key in the `meta` table recording that sample notes were already seeded (#41). */
-const SAMPLE_NOTES_SEEDED_KEY = 'sample_notes_seeded'
+/** Key in the `meta` table recording that guide notes were already seeded (#41). */
+// Legacy name kept so existing v0.2 vaults are never re-seeded on upgrade.
+const GUIDE_NOTES_SEEDED_KEY = 'sample_notes_seeded'
 
-/** Key in the `meta` table recording the ids of the seeded sample notes (#139). */
-const SAMPLE_NOTE_IDS_KEY = 'sample_note_ids'
+/** Key in the `meta` table recording the ids of the seeded guide notes (#139). */
+// Legacy name kept so the "Remove guide" ids survive an upgrade.
+const GUIDE_NOTE_IDS_KEY = 'sample_note_ids'
+
+/** Key recording which version of the guide content was seeded (#163). */
+const GUIDE_VERSION_KEY = 'vault_guide_version'
+
+/** Bump when the guide notes change so existing installs refresh them (#163). */
+const GUIDE_VERSION = 1
 
 function tableExists(database: Database.Database, name: string): boolean {
   const row = database
@@ -863,96 +871,181 @@ function seedPromptsIfEmpty(database: Database.Database): void {
 }
 
 /**
- * Seed the first-launch sample notes exactly once, into a single "Getting
- * started" project, and record their ids so they can be removed together
- * (#139). Keyed off a persisted `meta` flag rather than whether `items` is
- * empty (#41): a user who deletes every sample keeps an empty vault on
- * relaunch, and a pre-existing vault is never re-seeded.
+ * Seed the self-documenting "Vault guide" notes (#163), which replace the
+ * older "Getting started" samples. Behaviour:
+ *
+ * - Fresh install: insert the guide, record its ids + content version.
+ * - Pre-existing vault that predates seeding: mark seeded, inject nothing.
+ * - Already seeded, notes still present, but an older content version: delete
+ *   and re-insert so the guide stays current across releases.
+ * - Already seeded and the user removed the guide: never re-seed.
  */
-function seedSampleNotes(database: Database.Database, alreadyExisting: boolean): void {
-  if (getMeta(database, SAMPLE_NOTES_SEEDED_KEY) === '1') return
-  // A vault that predates the seeded flag already had its chance to show (and
-  // maybe delete) the samples — mark it seeded without injecting anything.
-  if (alreadyExisting) {
-    setMeta(database, SAMPLE_NOTES_SEEDED_KEY, '1')
+function seedGuideNotes(database: Database.Database, alreadyExisting: boolean): void {
+  const seeded = getMeta(database, GUIDE_NOTES_SEEDED_KEY) === '1'
+  if (seeded) {
+    if (!guideNotesStillPresent(database)) return // user removed them — respect it
+    if (guideVersion(database) < GUIDE_VERSION) refreshGuide(database)
     return
   }
 
-  const seeds: CreateItemInput[] = [
-    {
-      title: '1 · Ask a question about these notes',
-      summary: 'Try Ask: answers come from your notes, with citations',
-      body: `Use the Ask box to question your own notes. Type a topic — like "citation" or "video" — and the answer comes only from what you have saved, citing the notes it used with a numbered marker you can click.
-
-Every answer either cites a note or tells you it couldn't find it.`,
-      para: 'resources',
-      kind: 'note',
-      status: 'active',
-      project: SAMPLE_NOTES_PROJECT,
-    },
-    {
-      title: '2 · Click a citation',
-      summary: 'Citations are clickable and open the note they came from',
-      body: `Answers cite their sources. A citation marker links back to a note; click it (or the chip below the answer) to open that note.
-
-Citations only ever point at notes that were actually retrieved, so you can trace any claim to its source.`,
-      para: 'resources',
-      kind: 'note',
-      status: 'active',
-      project: SAMPLE_NOTES_PROJECT,
-    },
-    {
-      title: '3 · Add your own note',
-      summary: 'Create a note with a project, group, type, and status',
-      body: `Click "New note" to write your own. Each note has a title, body, a group (Projects, Areas, Resources, Archive), a type, and an optional project.
-
-Projects group related notes together; everything is searchable instantly after you save.`,
-      para: 'projects',
-      kind: 'note',
-      status: 'active',
-      project: SAMPLE_NOTES_PROJECT,
-    },
-    {
-      title: '4 · Try Media chat with a video',
-      summary: 'Media chat turns a video transcript into searchable notes',
-      body: `Media chat ingests a YouTube video (or a local file with captions) and turns its transcript into notes you can ask about.
-
-It is available from the Plugins menu. Ask a question and it will cite the exact transcript passages it used.`,
-      para: 'areas',
-      kind: 'note',
-      status: 'active',
-      project: SAMPLE_NOTES_PROJECT,
-    },
-    {
-      title: '5 · When you\'re done, remove these samples',
-      summary: 'These sample notes can be removed together in one click',
-      body: `These five notes are sample content in the "Getting started" project, here to show how the vault works.
-
-When you are ready to replace them with your own notes, use "Remove samples" and they are deleted together — they will not come back.`,
-      para: 'archives',
-      kind: 'note',
-      status: 'active',
-      project: SAMPLE_NOTES_PROJECT,
-    },
-  ]
-
-  const prev = db
-  db = database
-  try {
-    const createdIds: string[] = []
-    for (const s of seeds) {
-      createdIds.push(createItem(s).id)
-    }
-    setMeta(database, SAMPLE_NOTE_IDS_KEY, JSON.stringify(createdIds))
-    setMeta(database, SAMPLE_NOTES_SEEDED_KEY, '1')
-  } finally {
-    db = prev ?? database
+  if (alreadyExisting) {
+    // Pre-#41 vault: it already had its chance to show (and maybe remove) the
+    // samples — mark seeded without injecting anything.
+    setMeta(database, GUIDE_NOTES_SEEDED_KEY, '1')
+    setMeta(database, GUIDE_VERSION_KEY, String(GUIDE_VERSION))
+    return
   }
+
+  insertGuide(database)
 }
 
-/** Read the ids of the seeded sample notes from the `meta` table. */
-function getSampleNoteIds(database: Database.Database): string[] {
-  const raw = getMeta(database, SAMPLE_NOTE_IDS_KEY)
+function guideVersion(database: Database.Database): number {
+  const raw = getMeta(database, GUIDE_VERSION_KEY)
+  const n = raw == null ? NaN : Number(raw)
+  return Number.isFinite(n) ? n : 0
+}
+
+function guideNotesStillPresent(database: Database.Database): boolean {
+  const ids = getGuideNoteIds(database)
+  if (ids.length === 0) return false
+  const get = database.prepare('SELECT 1 FROM items WHERE id = ?')
+  return ids.some((id) => !!get.get(id))
+}
+
+/** The guide, dogfooding PARA groups, kinds, status and projects (#163). */
+const GUIDE_SEEDS: CreateItemInput[] = [
+  {
+    title: 'Welcome to Vault',
+    summary: 'What Vault is, and how this self-documenting guide works',
+    body: `This note is part of the Vault guide, a project that teaches Vault using its own concepts. Every note here is a real note, so the examples are searchable and citable — try asking about "PARA" or "citations".
+
+When you are ready, remove the guide with the "Remove guide" button in the notes rail. It will not come back.`,
+    para: 'resources',
+    kind: 'note',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'PARA: Projects, Areas, Resources, Archives',
+    summary: 'The four note groups and when to use each',
+    body: `Vault organises notes into four PARA groups:
+
+- Projects — short, goal-driven efforts with an end date (plan a trip, ship a feature).
+- Areas — ongoing responsibilities you maintain over time (health, finances, a team).
+- Resources — reference material you reach for (articles, books, docs, snippets).
+- Archives — anything inactive you want to keep out of the way.
+
+Pick the group that matches how you use the note. Groups are filters you can combine with a project, type and status.`,
+    para: 'areas',
+    kind: 'docs',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'Kinds and status',
+    summary: 'What a note type and status mean',
+    body: `Every note has a type (kind) and a status.
+
+Kinds: note (default), article, book, docs, blog, reference, and transcript (media captions). Kinds are free-form labels to help you filter.
+
+Status: active (searchable and used in answers), archived (kept but out of the way), and ai-draft (a note saved from an answer, waiting for you to confirm it).`,
+    para: 'resources',
+    kind: 'docs',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'Citations: the [itm_…] badges',
+    summary: 'How answers cite the notes they used',
+    body: `Answers cite the notes they used with a marker like [itm_abc123]. In the chat these render as numbered links like [1] that open the source note, plus a chip you can click.
+
+Citations only point at notes that were actually retrieved, so you can trace any claim back to its source.`,
+    para: 'resources',
+    kind: 'note',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'Projects and project-scoped Ask',
+    summary: 'How projects group notes and scope your questions',
+    body: `A project groups related notes together. Set a note's project from its editor, or type a new name to create one.
+
+In Ask, choose a project (under Customize → Project) to ground answers in just those notes. Leave it on "All" to search everything.`,
+    para: 'projects',
+    kind: 'note',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'Profiles and personalities',
+    summary: 'Personalities change style, never the grounding rules',
+    body: `A personality changes how answers are written — for example concise bullets or a Socratic coach — but never the grounding rules. Answers still come only from your notes and still cite them.
+
+Save a personality and project together as a profile to reuse it in one click.`,
+    para: 'areas',
+    kind: 'note',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'Media chat',
+    summary: 'Turn a video or audio transcript into searchable notes',
+    body: `Media chat turns a video or audio transcript into searchable, citable notes. Paste a YouTube URL or open a local media file with its captions.
+
+It is available from the Plugins menu. You can then ask about the media and jump to the exact moment a citation came from.`,
+    para: 'areas',
+    kind: 'note',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'How grounding works',
+    summary: 'Why answers are cited and can say "I don\'t know"',
+    body: `Vault first searches your notes, then sends only the matching passages to the model with fixed rules: answer from those passages, cite them, and say so when they don't cover the question.
+
+If nothing matches, Vault answers "I couldn't find that in your notes" without calling a model. Short, focused notes that reuse your own words search best.`,
+    para: 'archives',
+    kind: 'docs',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+  {
+    title: 'Adding your own notes',
+    summary: 'The three ways to get content into Vault',
+    body: `Add content three ways:
+
+- New note — write one from scratch.
+- Import Markdown — bulk-import a folder of Markdown or Obsidian notes.
+- Add from URL — fetch a web page and save it as a note.
+
+Once your own notes are in, you can remove this guide with the "Remove guide" button.`,
+    para: 'projects',
+    kind: 'note',
+    status: 'active',
+    project: VAULT_GUIDE_PROJECT,
+  },
+]
+
+function insertGuide(database: Database.Database): void {
+  const ids = GUIDE_SEEDS.map((s) => createItem(s).id)
+  setMeta(database, GUIDE_NOTE_IDS_KEY, JSON.stringify(ids))
+  setMeta(database, GUIDE_NOTES_SEEDED_KEY, '1')
+  setMeta(database, GUIDE_VERSION_KEY, String(GUIDE_VERSION))
+}
+
+/** Delete the existing guide notes and re-seed the current content. */
+function refreshGuide(database: Database.Database): void {
+  const ids = getGuideNoteIds(database)
+  runInTransaction(() => {
+    const del = database.prepare('DELETE FROM items WHERE id = ?')
+    for (const id of ids) del.run(id)
+    insertGuide(database)
+  })
+}
+
+/** Read the ids of the seeded guide notes from the `meta` table. */
+function getGuideNoteIds(database: Database.Database): string[] {
+  const raw = getMeta(database, GUIDE_NOTE_IDS_KEY)
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw) as unknown
@@ -962,10 +1055,10 @@ function getSampleNoteIds(database: Database.Database): string[] {
   }
 }
 
-/** Sample notes that still exist (empty once the user removed them, or for pre-#139 vaults). */
+/** Guide notes that still exist (empty once the user removed them, or for pre-#139 vaults). */
 export function listSampleNotes(): Item[] {
   const database = getDb()
-  const ids = getSampleNoteIds(database)
+  const ids = getGuideNoteIds(database)
   if (ids.length === 0) return []
   const found: Item[] = []
   const get = database.prepare('SELECT * FROM items WHERE id = ?')
@@ -976,10 +1069,10 @@ export function listSampleNotes(): Item[] {
   return found
 }
 
-/** Delete the seeded sample notes in one transaction. Returns how many were removed. */
+/** Delete the seeded guide notes in one transaction. Returns how many were removed. */
 export function removeSampleNotes(): number {
   const database = getDb()
-  const ids = getSampleNoteIds(database)
+  const ids = getGuideNoteIds(database)
   if (ids.length === 0) return 0
   return runInTransaction(() => {
     const del = database.prepare('DELETE FROM items WHERE id = ?')
