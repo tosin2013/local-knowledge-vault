@@ -20,11 +20,12 @@ type MockSafeStorage = {
 }
 let mockSafeStorage: MockSafeStorage | null = null
 let throwOnElectron = false
+let mockAppVersion: string | null = null
 
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
     if (throwOnElectron) throw new Error('no electron here')
-    return { safeStorage: mockSafeStorage }
+    return { safeStorage: mockSafeStorage, app: mockAppVersion ? { getVersion: () => mockAppVersion } : undefined }
   }
   return origLoad.call(this, request, parent, isMain)
 }
@@ -141,7 +142,17 @@ async function main(): Promise<void> {
   console.log('bridge token encryption (bridge-server)')
   // A pre-existing plaintext token is read transparently and cached.
   fs.writeFileSync(path.join(dir, 'lkv-bridge-token'), 'legacy-bridge-token')
-  const { getBridgeToken, rotateBridgeToken } = require('../electron/bridge-server')
+  const { getBridgeToken, rotateBridgeToken, bridgeVersion } = require('../electron/bridge-server')
+
+  // Bridge version (#42): the app's version, or 'dev' when Electron's app isn't available.
+  mockAppVersion = '1.2.3'
+  assert(bridgeVersion() === '1.2.3', 'bridge reports app.getVersion()')
+  mockAppVersion = null
+  assert(bridgeVersion() === 'dev', "bridge reports 'dev' without an Electron app")
+  throwOnElectron = true
+  assert(bridgeVersion() === 'dev', "bridge reports 'dev' when electron cannot be loaded")
+  throwOnElectron = false
+
   assert(getBridgeToken() === 'legacy-bridge-token', 'legacy plaintext bridge token read')
 
   const token = rotateBridgeToken()

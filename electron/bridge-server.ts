@@ -19,7 +19,20 @@ import type { BridgeAskResult, Citation } from './types'
 
 export const BRIDGE_HOST = '127.0.0.1'
 export const BRIDGE_PORT = 8765
-export const BRIDGE_VERSION = '0.1.0'
+
+/**
+ * Version the bridge reports: the app's own version. Electron's `app` is not
+ * available under Electron-as-Node (tests), where this falls back to 'dev'.
+ */
+export function bridgeVersion(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const electron = require('electron') as { app?: { getVersion?: () => string } }
+    return electron?.app?.getVersion?.() || 'dev'
+  } catch {
+    return 'dev'
+  }
+}
 
 const BRIDGE_TOKEN_FILE = 'lkv-bridge-token'
 const MAX_BODY_BYTES = 64 * 1024
@@ -225,7 +238,7 @@ async function onRequest(req: http.IncomingMessage, res: http.ServerResponse, po
     json(res, 200, {
       ok: true,
       name: 'Vault Bridge',
-      version: BRIDGE_VERSION,
+      version: bridgeVersion(),
       host: BRIDGE_HOST,
       port,
     })
@@ -302,6 +315,6 @@ export function getBridgeServerStatus(): {
     running: !!server && server.listening,
     host: BRIDGE_HOST,
     port: BRIDGE_PORT,
-    version: BRIDGE_VERSION,
+    version: bridgeVersion(),
   }
 }

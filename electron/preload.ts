@@ -36,6 +36,8 @@ import type {
   McpServerSummary,
   McpToolSummary,
   MenuAction,
+  UpdateCheckResult,
+  UpdateSettings,
   CreatePromptInput,
   CreateSessionInput,
   ImportFromUrlResult,
@@ -224,6 +226,15 @@ const api = {
       return () => ipcRenderer.removeListener('media:ingestProgress', listener)
     },
     cancelIngest: (): Promise<boolean> => ipcRenderer.invoke('media:cancelIngest'),
+  },
+  updates: {
+    /** Launch check: honors the setting and skips dev builds and the snap. */
+    checkOnLaunch: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:checkOnLaunch'),
+    /** Manual "Check now": always asks GitHub. */
+    check: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
+    getSettings: (): Promise<UpdateSettings> => ipcRenderer.invoke('updates:getSettings'),
+    setSettings: (patch: Partial<UpdateSettings>): Promise<UpdateSettings> =>
+      ipcRenderer.invoke('updates:setSettings', patch),
   },
   bridge: {
     status: (): Promise<{ running: boolean; host: string; port: number; version: string }> =>

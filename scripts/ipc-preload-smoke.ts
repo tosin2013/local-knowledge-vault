@@ -25,6 +25,10 @@ const path = require('path')
 
 userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-ipc-'))
 
+// Single-instance lock state for the mocked app (#42).
+let holdsInstanceLock = true
+let quitCalls = 0
+
 const mockApp = {
   whenReady: async () => {},
   getPath: (name: string) => {
@@ -35,7 +39,10 @@ const mockApp = {
   },
   setPath: (_name: string, p: string) => { userDataDir = p },
   isPackaged: false,
-  quit: () => {},
+  isReady: () => true,
+  getVersion: () => '9.9.9',
+  requestSingleInstanceLock: () => holdsInstanceLock,
+  quit: () => { quitCalls++ },
   on: (event: string, listener: () => void) => {
     ;(appListeners[event] ||= []).push(listener)
   },
@@ -44,8 +51,19 @@ const mockApp = {
   },
 }
 
+// Records what a second launch does to the existing window (#42).
+const windowCalls: string[] = []
+let windowMinimized = false
+let windowsCreated = 0
+let closeWindow: (() => void) | null = null
+
 function MockBrowserWindow(opts?: Record<string, unknown>) {
+  windowsCreated++
   const instance = {
+    isMinimized: () => windowMinimized,
+    restore: () => { windowCalls.push('restore'); windowMinimized = false },
+    show: () => { windowCalls.push('show') },
+    focus: () => { windowCalls.push('focus') },
     webContents: {
       setWindowOpenHandler: (h: (d: { url: string }) => { action: 'deny' }) => {},
       on: (event: string, listener: (e: unknown, url: string) => void) => {},
@@ -53,7 +71,9 @@ function MockBrowserWindow(opts?: Record<string, unknown>) {
       loadFile: (file: string) => {},
       openDevTools: (opts?: unknown) => {},
     },
-    on: (event: string, listener: () => void) => {},
+    on: (event: string, listener: () => void) => {
+      if (event === 'closed') closeWindow = listener
+    },
     loadURL: (url: string) => {},
     loadFile: (file: string) => {},
     openDevTools: (opts?: unknown) => {},
@@ -198,6 +218,24 @@ async function main(): Promise<void> {
   // 2) Wait for app.whenReady().then(...) to run (registers IPC)
   await new Promise(r => setTimeout(r, 200))
 
+  // Single-instance lock (#42): a second launch focuses the existing window.
+  console.log('Single instance (main.ts)')
+  const secondInstance = appListeners['second-instance'] ?? []
+  assert(secondInstance.length === 1, 'registers a second-instance listener when it holds the lock')
+  windowMinimized = true
+  windowCalls.length = 0
+  secondInstance[0]?.()
+  assert(windowCalls.join(',') === 'restore,show,focus', `second launch restores and focuses the window (${windowCalls.join(',')})`)
+  windowCalls.length = 0
+  secondInstance[0]?.()
+  assert(windowCalls.join(',') === 'show,focus', 'second launch does not restore a window that is not minimized')
+  // macOS keeps the app alive with no window; a second launch then opens one.
+  const windowsBefore = windowsCreated
+  closeWindow?.()
+  windowCalls.length = 0
+  secondInstance[0]?.()
+  assert(windowsCreated === windowsBefore + 1 && windowCalls.length === 0, 'second launch opens a window when none is open')
+
   // 3) Test key IPC handlers are registered
   console.log('IPC handlers (main.ts)')
   const handlers = ipcHandlers
@@ -241,6 +279,8 @@ async function main(): Promise<void> {
     'media:applyPersona', 'media:createPersona', 'media:listVoicePacks',
     // bridge
     'bridge:status', 'bridge:getToken', 'bridge:rotateToken',
+    // updates (#42)
+    'updates:checkOnLaunch', 'updates:check', 'updates:getSettings', 'updates:setSettings',
     // mcp
     'mcp:listServers', 'mcp:addServer', 'mcp:ensureNotion', 'mcp:removeServer',
     'mcp:connect', 'mcp:disconnect', 'mcp:cancelAuth', 'mcp:listTools', 'mcp:callTool',
@@ -319,6 +359,17 @@ async function main(): Promise<void> {
 
   const bridgeStatus = await ipcRendererMock.invoke('bridge:status') as object
   assert(bridgeStatus && typeof bridgeStatus === 'object', 'bridge:status returns object')
+  assert((bridgeStatus as { version?: string }).version === '9.9.9', 'bridge:status reports app.getVersion() (#42)')
+
+  // Update notice (#42)
+  const launchCheck = await ipcRendererMock.invoke('updates:checkOnLaunch') as { ok: boolean; current: string; skipped?: string }
+  assert(launchCheck.ok && launchCheck.skipped === 'development' && launchCheck.current === '9.9.9', 'updates:checkOnLaunch skips an unpackaged build')
+  const updOff = await ipcRendererMock.invoke('updates:setSettings', { checkOnLaunch: false }) as { checkOnLaunch: boolean }
+  assert(updOff.checkOnLaunch === false, 'updates:setSettings turns the launch check off')
+  const updGet = await ipcRendererMock.invoke('updates:getSettings') as { checkOnLaunch: boolean }
+  assert(updGet.checkOnLaunch === false, 'updates:getSettings returns the saved setting')
+  const manual = await ipcRendererMock.invoke('updates:check') as { ok: boolean }
+  assert(manual.ok === false, 'updates:check reports a bad response instead of throwing')
 
   // 5) Test preload.ts API surface
   console.log('\nPreload surface (preload.ts)')
@@ -348,6 +399,19 @@ async function main(): Promise<void> {
   assert(typeof (api.search as Record<string, unknown>).query === 'function', 'search.query is function')
   assert(typeof (api.ask as Record<string, unknown>).grounded === 'function', 'ask.grounded is function')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
+
+  // Update notice through the preload API (#42)
+  const updatesApi = api.updates as {
+    checkOnLaunch: () => Promise<{ ok: boolean; skipped?: string }>
+    check: () => Promise<{ ok: boolean }>
+    getSettings: () => Promise<{ checkOnLaunch: boolean }>
+    setSettings: (p: { checkOnLaunch?: boolean }) => Promise<{ checkOnLaunch: boolean }>
+  }
+  assert((await updatesApi.setSettings({ checkOnLaunch: false })).checkOnLaunch === false, 'preload updates.setSettings reaches main')
+  assert((await updatesApi.getSettings()).checkOnLaunch === false, 'preload updates.getSettings reaches main')
+  assert((await updatesApi.checkOnLaunch()).skipped === 'disabled', 'preload updates.checkOnLaunch honors the turned-off setting')
+  assert((await updatesApi.check()).ok === false, 'preload updates.check reaches main')
+  await updatesApi.setSettings({ checkOnLaunch: true })
   assert(typeof (api.chat as Record<string, unknown>).send === 'function', 'chat.send is function')
   assert(typeof (api.media as Record<string, unknown>).listProjects === 'function', 'media.listProjects is function')
   assert(typeof (api.media as Record<string, unknown>).findExistingProject === 'function', 'media.findExistingProject is function')
@@ -436,6 +500,23 @@ async function main(): Promise<void> {
   assert(typeof mockApp.on === 'function', 'app.on exists')
   assert(appListeners['window-all-closed']?.length > 0, 'window-all-closed handler registered')
   assert(appListeners['before-quit']?.length > 0, 'before-quit handler registered')
+
+  // A second instance (no lock) quits without opening the DB, a window or the bridge (#42).
+  console.log('\nSecond instance (no lock)')
+  holdsInstanceLock = false
+  quitCalls = 0
+  const windowsBeforeSecond = windowsCreated
+  const secondInstanceListeners = (appListeners['second-instance'] ?? []).length
+  delete require.cache[require.resolve('../electron/main')]
+  require('../electron/main')
+  await new Promise((r) => setTimeout(r, 200))
+  assert(quitCalls === 1, `an instance without the lock quits (quit called ${quitCalls}×)`)
+  assert(windowsCreated === windowsBeforeSecond, 'an instance without the lock opens no window')
+  assert(
+    (appListeners['second-instance'] ?? []).length === secondInstanceListeners,
+    'an instance without the lock does not listen for second-instance'
+  )
+  holdsInstanceLock = true
 
   // Cleanup
   try {

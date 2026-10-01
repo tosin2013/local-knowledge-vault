@@ -3,6 +3,7 @@ import type { LlmStatus, ProviderConfig } from '../../electron/types'
 import { FirstRunLocalCard, SmallModelHint } from '../components/ai/FirstRunLocalCard'
 import { ProvidersPanel } from '../components/ai/ProvidersPanel'
 import { BridgeSettings } from '../components/ai/BridgeSettings'
+import { UpdateSettings } from '../components/updates/UpdateSettings'
 
 export interface AiSettingsDialogProps {
   open: boolean
@@ -73,6 +74,7 @@ export function AiSettingsDialog(props: AiSettingsDialogProps) {
           </Stack>
         )}
         <BridgeSettings />
+        <UpdateSettings />
       </DialogContent>
     </Dialog>
   )

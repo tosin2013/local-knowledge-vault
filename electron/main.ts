@@ -72,6 +72,7 @@ import {
   getBridgeToken,
   rotateBridgeToken,
 } from './bridge-server'
+import { checkForUpdate, checkForUpdateOnLaunch, getUpdateSettings, setUpdateSettings } from './update-check'
 import { resolveMediaFile, mediaMimeType } from './media-protocol'
 import { YOUTUBE_EMBED_FILTER, rewriteYoutubeEmbedHeaders } from './youtube-embed-headers'
 import {
@@ -139,6 +140,7 @@ import type {
   MenuAction,
   ProviderDraft,
   ProviderSelection,
+  UpdateSettings,
 } from './types'
 
 // Optional isolated profile (fresh-install demos, tests): LKV_USER_DATA_DIR=/tmp/vault-fresh
@@ -146,6 +148,16 @@ if (process.env.LKV_USER_DATA_DIR?.trim()) {
   const dir = process.env.LKV_USER_DATA_DIR.trim()
   fs.mkdirSync(dir, { recursive: true })
   app.setPath('userData', dir)
+}
+
+// Single instance (#42): a second launch would open the same database and fight
+// over the bridge port. The lock is per userData dir, so an isolated
+// LKV_USER_DATA_DIR profile can still run next to the real one.
+const hasInstanceLock = app.requestSingleInstanceLock()
+if (!hasInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => focusMainWindow())
 }
 
 
@@ -279,6 +291,17 @@ function resolveAppIcon(): string | undefined {
     if (fs.existsSync(p)) return p
   }
   return undefined
+}
+
+/** Bring the existing window forward when the app is launched a second time. */
+function focusMainWindow(): void {
+  if (!mainWindow) {
+    if (app.isReady()) createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 function createWindow(): void {
@@ -755,6 +778,23 @@ function registerIpc(): void {
 
   ipcMain.handle('media:listVoicePacks', () => listMediaVoicePacks())
 
+  // Update notice (#42): a version check against GitHub Releases; never downloads or installs.
+  const updateEnv = () => ({
+    currentVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+    isSnap: !!process.env.SNAP,
+    fetchImpl: net.fetch as typeof fetch,
+  })
+  ipcMain.handle('updates:checkOnLaunch', () => checkForUpdateOnLaunch(updateEnv()))
+  ipcMain.handle('updates:check', () => {
+    const { currentVersion, fetchImpl } = updateEnv()
+    return checkForUpdate({ currentVersion, fetchImpl })
+  })
+  ipcMain.handle('updates:getSettings', () => getUpdateSettings())
+  ipcMain.handle('updates:setSettings', (_e, patch: Partial<UpdateSettings>) =>
+    setUpdateSettings({ checkOnLaunch: patch?.checkOnLaunch !== false })
+  )
+
   ipcMain.handle('bridge:status', () => getBridgeServerStatus())
   ipcMain.handle('bridge:getToken', () => getBridgeToken())
   ipcMain.handle('bridge:rotateToken', () => rotateBridgeToken())
@@ -775,6 +815,8 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  // The second instance is already quitting; don't open the DB or the bridge.
+  if (!hasInstanceLock) return
   fixYoutubeEmbedHeaders()
   protocol.handle('lkvmedia', async (request) => {
     try {

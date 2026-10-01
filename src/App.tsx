@@ -19,6 +19,7 @@ import { AiSettingsDialog } from './features/AiSettingsDialog'
 import { ContentChrome } from './features/ContentChrome'
 import { ManageProjectsDialog } from './features/ManageProjectsDialog'
 import { TrashDialog } from './features/TrashDialog'
+import { UpdateNotice } from './components/updates/UpdateNotice'
 
 export default function App() {
   // Cross-cutting navigation / notification state.
@@ -472,6 +473,7 @@ export default function App() {
           onError={setError}
           onUseAdvanced={() => ui.setUiModePersist('advanced')}
         />
+        <UpdateNotice />
       </Box>
     </ThemeProvider>
   )

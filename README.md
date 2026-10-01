@@ -208,7 +208,10 @@ and plugins (`plugins/`). Set `LKV_USER_DATA_DIR` to use another folder.
 
 What leaves your machine:
 
-- **With a local model: nothing.** Health checks only ping local servers.
+- **With a local model: none of your notes or questions.** Health checks only ping local servers.
+- **Update check:** on launch, installed builds make one request to GitHub for the latest release
+  version and show a notice if a newer one exists. It sends nothing about you or your notes, and
+  nothing is downloaded. Turn it off in **Settings → Updates**.
 - **With a cloud provider you enabled:** your question, the matching note passages and recent chat
   turns go to that provider only. Cloud providers are not contacted until you ask something.
 - **Add from URL** fetches the page you give it. Vault asks the active model to auto-tag it, so if

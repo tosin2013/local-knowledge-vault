@@ -91,6 +91,11 @@ async function main() {
   const health = await request(port, { path: '/health' })
   assert(health.status === 200, `GET /health → 200 (got ${health.status})`)
   assert(!('access-control-allow-origin' in health.headers), 'no Access-Control-Allow-Origin header')
+  const healthVersion = (JSON.parse(health.body) as { version?: string }).version
+  assert(
+    typeof healthVersion === 'string' && healthVersion.length > 0 && healthVersion !== '0.1.0',
+    `/health reports the app version, not a hard-coded one (#42) (got ${healthVersion})`
+  )
 
   // DNS-rebinding guard: non-loopback Host rejected
   const rebind = await request(port, { path: '/health', headers: { Host: 'evil.example:8765' } })

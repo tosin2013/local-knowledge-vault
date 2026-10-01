@@ -366,6 +366,12 @@ export function createLkvMock(): LkvMock {
     citationPack: {
       export: vi.fn().mockResolvedValue(makeCitationPackResult()),
     },
+    updates: {
+      checkOnLaunch: vi.fn().mockResolvedValue({ ok: true, current: '0.3.0', updateAvailable: false, skipped: 'development' }),
+      check: vi.fn().mockResolvedValue({ ok: true, current: '0.3.0', latest: '0.3.0', updateAvailable: false }),
+      getSettings: vi.fn().mockResolvedValue({ checkOnLaunch: true }),
+      setSettings: vi.fn().mockImplementation(async (p: { checkOnLaunch?: boolean }) => ({ checkOnLaunch: p.checkOnLaunch !== false })),
+    },
     bridge: {
       status: vi.fn().mockResolvedValue({ running: true, host: '127.0.0.1', port: 8765, version: '1.0.0' }),
       getToken: vi.fn().mockResolvedValue('test-token'),
