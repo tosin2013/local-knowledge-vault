@@ -613,6 +613,27 @@ export interface BridgeAskResult {
   citations: Citation[]
 }
 
+/* ---- Update notice (#42) ---- */
+
+export interface UpdateSettings {
+  /** Ask GitHub for the latest release once per launch. */
+  checkOnLaunch: boolean
+}
+
+export type UpdateCheckResult =
+  | {
+      ok: true
+      current: string
+      updateAvailable: boolean
+      /** Latest released version; absent when the check was skipped. */
+      latest?: string
+      /** Release page for `latest`. */
+      url?: string
+      /** Why no request was made (launch check only). */
+      skipped?: 'disabled' | 'development' | 'snap'
+    }
+  | { ok: false; current: string; error: string }
+
 /* ---- MCP connections (in-app MCP client) ---- */
 
 export type McpServerStatus = 'disconnected' | 'connected' | 'needs_auth' | 'authorizing' | 'error'

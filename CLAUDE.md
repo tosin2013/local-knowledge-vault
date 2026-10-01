@@ -95,6 +95,9 @@ personas, URL auto-tag and the HTTP bridge.
 - `import-url.ts`: fetches a page, extracts text and auto-tags it into a note.
 - `import-markdown.ts`: bulk-imports a folder of `.md`/Obsidian notes (frontmatter + wiki-link aware).
 - `user-data.ts`: resolves userData, honoring the `LKV_USER_DATA_DIR` override.
+- `update-check.ts`: update notice. One GET to the GitHub releases API per launch (setting in
+  `lkv-update-settings.json`, skipped in dev builds and the snap). It never downloads or installs anything.
+- `main.ts` holds a single-instance lock; a second launch focuses the existing window.
 
 ## Gotchas
 

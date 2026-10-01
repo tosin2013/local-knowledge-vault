@@ -54,6 +54,18 @@ until the `SNAPCRAFT_STORE_CREDENTIALS` secret exists. One-time setup:
 The snap uses strict confinement: it can reach Ollama/LM Studio on localhost, but not programs
 installed outside the snap, so YouTube import (`yt-dlp`) does not work in the snap build.
 
+## How users learn about a release
+
+There is no auto-updater. The mac builds are ad-hoc signed, so an in-place update is not possible
+there, and Vault uses the same approach on every platform: on launch it asks the GitHub releases API
+for the latest release and, if that version is newer than the running one, shows a notice with a link
+to the release page. Users download and install the new version themselves.
+
+- The check is one unauthenticated GET to `api.github.com`. It sends no identifier and no note data.
+- Users can turn it off in Settings → Updates, where "Check now" runs it on demand.
+- It is skipped in development builds and in the snap, which the Snap Store updates.
+- Only releases tagged `vX.Y.Z` count. GitHub's "latest release" ignores drafts and pre-releases.
+
 ## Native module note (`better-sqlite3`)
 
 `better-sqlite3` is rebuilt for Electron’s ABI on each platform (`electron-builder install-app-deps` in CI and `postinstall` locally). Do not copy a Linux `.node` binary onto macOS/Windows — always package on the target OS (the matrix handles this).

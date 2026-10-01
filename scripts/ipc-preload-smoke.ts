@@ -264,6 +264,8 @@ async function main(): Promise<void> {
     'media:applyPersona', 'media:createPersona', 'media:listVoicePacks',
     // bridge
     'bridge:status', 'bridge:getToken', 'bridge:rotateToken',
+    // updates (#42)
+    'updates:checkOnLaunch', 'updates:check', 'updates:getSettings', 'updates:setSettings',
     // mcp
     'mcp:listServers', 'mcp:addServer', 'mcp:ensureNotion', 'mcp:removeServer',
     'mcp:connect', 'mcp:disconnect', 'mcp:cancelAuth', 'mcp:listTools', 'mcp:callTool',
@@ -342,6 +344,17 @@ async function main(): Promise<void> {
 
   const bridgeStatus = await ipcRendererMock.invoke('bridge:status') as object
   assert(bridgeStatus && typeof bridgeStatus === 'object', 'bridge:status returns object')
+  assert((bridgeStatus as { version?: string }).version === '9.9.9', 'bridge:status reports app.getVersion() (#42)')
+
+  // Update notice (#42)
+  const launchCheck = await ipcRendererMock.invoke('updates:checkOnLaunch') as { ok: boolean; current: string; skipped?: string }
+  assert(launchCheck.ok && launchCheck.skipped === 'development' && launchCheck.current === '9.9.9', 'updates:checkOnLaunch skips an unpackaged build')
+  const updOff = await ipcRendererMock.invoke('updates:setSettings', { checkOnLaunch: false }) as { checkOnLaunch: boolean }
+  assert(updOff.checkOnLaunch === false, 'updates:setSettings turns the launch check off')
+  const updGet = await ipcRendererMock.invoke('updates:getSettings') as { checkOnLaunch: boolean }
+  assert(updGet.checkOnLaunch === false, 'updates:getSettings returns the saved setting')
+  const manual = await ipcRendererMock.invoke('updates:check') as { ok: boolean }
+  assert(manual.ok === false, 'updates:check reports a bad response instead of throwing')
 
   // 5) Test preload.ts API surface
   console.log('\nPreload surface (preload.ts)')
