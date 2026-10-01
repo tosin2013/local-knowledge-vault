@@ -229,6 +229,7 @@ export default function App() {
             railSort={notes.railSort}
             showTranscripts={notes.showTranscripts}
             onNewNote={notes.onNewNote}
+            onNewProject={(name) => notes.onNewProject(name)}
             onImportUrl={notes.setImportUrl}
             onImport={() => void notes.onImportFromUrl()}
             onProject={(project) => notes.setFilters((f) => ({ ...f, project }))}

@@ -19,6 +19,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     railSort: 'updated',
     showTranscripts: false,
     onNewNote: vi.fn(),
+    onNewProject: vi.fn(),
     onImportUrl: vi.fn(),
     onImport: vi.fn(),
     onProject: vi.fn(),
@@ -46,6 +47,15 @@ describe('NotesRail', () => {
     render(<NotesRail {...props} />)
     fireEvent.click(screen.getByText('New note'))
     expect(props.onNewNote).toHaveBeenCalled()
+  })
+
+  it('creates a project from the New project field', () => {
+    const props = makeProps()
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }))
+    fireEvent.change(screen.getByPlaceholderText('Project name'), { target: { value: 'Work' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(props.onNewProject).toHaveBeenCalledWith('Work')
   })
 
   it('lists notes and selects them on click and double-click', () => {
@@ -89,16 +99,16 @@ describe('NotesRail', () => {
     expect(props.onOpenTrash).toHaveBeenCalled()
   })
 
-  it('shows the Remove samples action while samples exist', () => {
+  it('shows the Remove guide action while guide notes exist', () => {
     const props = makeProps({ hasSamples: true })
     render(<NotesRail {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove samples' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove guide' }))
     expect(props.onRemoveSamples).toHaveBeenCalled()
   })
 
-  it('hides the Remove samples action when there are no samples', () => {
+  it('hides the Remove guide action when there are no guide notes', () => {
     render(<NotesRail {...makeProps({ hasSamples: false })} />)
-    expect(screen.queryByRole('button', { name: 'Remove samples' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove guide' })).not.toBeInTheDocument()
   })
 
   it('changes project filter', () => {

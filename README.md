@@ -48,7 +48,7 @@ it again: `xattr -dr com.apple.quarantine /Applications/Vault.app`.
 3. Open Vault. The header chip should read **`Local · Ollama · qwen3:8b`**. If no model is
    running, Vault shows a setup card with the command above and a **Re-check** button.
 4. Add notes: **New note**, or turn on **Advanced** and paste a link into **Add from URL**.
-   First launch also seeds a few sample notes so you can try it straight away.
+   First launch also seeds a self-documenting **Vault guide** project so you can try it straight away.
 5. Open **Ask** and ask a question. Click a citation badge to open the source note.
 
 Prefer a cloud model? Click the AI chip → **Add provider**, pick a preset, paste your key, press
