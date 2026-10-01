@@ -8,6 +8,7 @@ import type {
   ImportFromUrlResult,
   Item,
   LlmStatus,
+  MarkdownImportResult,
   McpServerSummary,
   McpToolSummary,
   MediaIngestResult,
@@ -157,6 +158,16 @@ export function makeImportResult(overrides: Partial<ImportFromUrlResult> = {}): 
   return {
     item: makeItem('itm_imported', { title: 'Imported note', para: 'resources', kind: 'article' }),
     tagsSource: 'heuristic',
+    ...overrides,
+  }
+}
+
+export function makeMarkdownImportResult(overrides: Partial<MarkdownImportResult> = {}): MarkdownImportResult {
+  return {
+    imported: 2,
+    skipped: 0,
+    itemIds: ['itm_1', 'itm_2'],
+    errors: [],
     ...overrides,
   }
 }
@@ -320,6 +331,7 @@ export function createLkvMock(): LkvMock {
     },
     import: {
       fromUrl: vi.fn().mockResolvedValue(makeImportResult()),
+      fromMarkdown: vi.fn().mockResolvedValue(makeMarkdownImportResult()),
     },
     prompts: {
       list: vi.fn().mockResolvedValue([]),

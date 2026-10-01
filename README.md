@@ -113,6 +113,9 @@ explains why a broken pack was rejected.
   Archives), kinds, status and project filters.
 - **Add from URL.** Fetches a public web page, extracts the text and auto-tags it as a note
   (Advanced mode).
+- **Import Markdown / Obsidian notes.** Point Vault at a folder and import its `.md` files as
+  notes — title from frontmatter or the first heading, and PARA/project inferred from
+  frontmatter, tags, or the folder structure. Obsidian `[[wiki links]]` are normalized to text.
 - **MCP client.** **Plugins → MCP connections → Connect Notion** signs in to Notion's hosted MCP
   server (`https://mcp.notion.com/mcp`) with OAuth and lists its tools. You can also add other
   Streamable HTTP MCP servers. Using MCP tools inside Ask is not wired up yet.

@@ -42,6 +42,7 @@ import type {
   Item,
   ListItemsInput,
   LlmStatus,
+  MarkdownImportResult,
   PluginContributions,
   PluginInstallResult,
   PluginListResult,
@@ -157,6 +158,8 @@ const api = {
   import: {
     fromUrl: (url: string): Promise<ImportFromUrlResult> =>
       ipcRenderer.invoke('import:fromUrl', url),
+    fromMarkdown: (): Promise<MarkdownImportResult> =>
+      ipcRenderer.invoke('import:markdown'),
   },
   prompts: {
     list: (): Promise<Prompt[]> => ipcRenderer.invoke('prompts:list'),

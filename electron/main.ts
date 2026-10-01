@@ -46,6 +46,7 @@ import { sendChatTurn } from './chat'
 import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
+import { importMarkdownFolder } from './import-markdown'
 import {
   findCompanionCaptions,
   findExistingProjectBySource,
@@ -539,6 +540,21 @@ function registerIpc(): void {
   // Import from URL
   ipcMain.handle('import:fromUrl', (_e, url: string) => {
     return importFromUrl(url)
+  })
+
+  // Import Markdown / Obsidian notes from a folder (main picks the folder)
+  ipcMain.handle('import:markdown', async () => {
+    const opts: OpenDialogOptions = {
+      title: 'Import Markdown / Obsidian notes',
+      properties: ['openDirectory'],
+    }
+    const r = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, opts)
+      : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths[0]) {
+      return { canceled: true, imported: 0, skipped: 0, itemIds: [], errors: [] }
+    }
+    return importMarkdownFolder(r.filePaths[0])
   })
 
   // Prompts

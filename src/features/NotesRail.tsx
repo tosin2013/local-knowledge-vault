@@ -20,6 +20,7 @@ import {
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
@@ -39,6 +40,7 @@ export interface NotesRailProps {
   filtersOpen: boolean
   importUrl: string
   importBusy: boolean
+  importMarkdownBusy: boolean
   busy: boolean
   railQuery: string
   railSort: 'updated' | 'title' | 'created'
@@ -46,6 +48,7 @@ export interface NotesRailProps {
   onNewNote: () => void
   onImportUrl: (v: string) => void
   onImport: () => void
+  onImportMarkdown: () => void
   onProject: (project: string) => void
   onManageProjects: () => void
   onDeleteItem: (id: string) => void
@@ -74,6 +77,7 @@ export function NotesRail(props: NotesRailProps) {
     filtersOpen,
     importUrl,
     importBusy,
+    importMarkdownBusy,
     busy,
     railQuery,
     railSort,
@@ -81,6 +85,7 @@ export function NotesRail(props: NotesRailProps) {
     onNewNote,
     onImportUrl,
     onImport,
+    onImportMarkdown,
     onProject,
     onManageProjects,
     onDeleteItem,
@@ -115,6 +120,16 @@ export function NotesRail(props: NotesRailProps) {
           onClick={onNewNote}
         >
           New note
+        </Button>
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<FolderOpenIcon />}
+          onClick={onImportMarkdown}
+          disabled={importMarkdownBusy || busy}
+        >
+          {importMarkdownBusy ? 'Importing…' : 'Import Markdown'}
         </Button>
 
         {hasSamples && (
