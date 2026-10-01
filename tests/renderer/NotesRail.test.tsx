@@ -7,6 +7,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
   return {
     advanced: false,
     items: [],
+    isEmpty: false,
     selectedId: null,
     filters: { para: '', kind: '', status: '', project: '' },
     projectOptions: [],
@@ -70,9 +71,18 @@ describe('NotesRail', () => {
     expect(screen.getByRole('list', { name: 'Notes' })).toBeInTheDocument()
   })
 
-  it('shows the empty state when there are no notes', () => {
-    render(<NotesRail {...makeProps()} />)
+  it('shows the filtered empty state when there are no matching notes', () => {
+    render(<NotesRail {...makeProps({ isEmpty: false })} />)
     expect(screen.getByText('No notes match filters.')).toBeInTheDocument()
+    expect(screen.queryByText('Create your first note')).not.toBeInTheDocument()
+  })
+
+  it('shows a "Create your first note" empty state for a genuinely empty vault', () => {
+    const props = makeProps({ isEmpty: true })
+    render(<NotesRail {...props} />)
+    expect(screen.getByText('Your vault is empty.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Create your first note' }))
+    expect(props.onNewNote).toHaveBeenCalled()
   })
 
   it('shows a bulk trash button when notes are selected', () => {

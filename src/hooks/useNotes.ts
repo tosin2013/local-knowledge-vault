@@ -48,11 +48,16 @@ export function useNotes(deps: UseNotesDeps) {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
   // True while the first-run "Getting started" sample notes exist (#139).
   const [hasSamples, setHasSamples] = useState(false)
+  // Total non-trashed notes (drives the genuinely-empty rail state, #189).
+  const [count, setCount] = useState(0)
 
   const refreshList = useCallback(async () => {
     if (!window.lkv) return
     const list = await window.lkv.items.list({ filters })
     setItems(list)
+    if (window.lkv.items.count) {
+      setCount(await window.lkv.items.count())
+    }
   }, [filters])
 
   /** DB-backed project list (exact names + note counts) — the single source of truth. */
@@ -477,6 +482,8 @@ export function useNotes(deps: UseNotesDeps) {
   return {
     items,
     visibleItems,
+    /** True when the vault has zero non-trashed notes (#189 empty state). */
+    isEmpty: count === 0,
     showTranscripts,
     setShowTranscripts,
     railQuery,
