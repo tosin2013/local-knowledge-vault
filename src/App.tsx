@@ -217,6 +217,7 @@ export default function App() {
           <NotesRail
             advanced={ui.advanced}
             items={notes.visibleItems}
+            isEmpty={notes.isEmpty}
             selectedId={notes.selectedId}
             filters={notes.filters}
             projectOptions={notes.projectOptions}

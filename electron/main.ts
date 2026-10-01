@@ -11,6 +11,7 @@ import {
   createItem,
   createPrompt,
   createSession,
+  countItems,
   deleteChatProfile,
   deleteItem,
   deletePrompt,
@@ -425,6 +426,7 @@ function registerIpc(): void {
   ipcMain.handle('items:emptyTrash', () => emptyTrash())
   ipcMain.handle('items:listSamples', () => listSampleNotes())
   ipcMain.handle('items:removeSamples', () => removeSampleNotes())
+  ipcMain.handle('items:count', () => countItems())
 
   ipcMain.handle('search:query', (_e, input: SearchQueryInput) => {
     return searchQuery(input)

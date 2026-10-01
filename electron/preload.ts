@@ -82,6 +82,7 @@ const api = {
     emptyTrash: (): Promise<number> => ipcRenderer.invoke('items:emptyTrash'),
     listSamples: (): Promise<Item[]> => ipcRenderer.invoke('items:listSamples'),
     removeSamples: (): Promise<number> => ipcRenderer.invoke('items:removeSamples'),
+    count: (): Promise<number> => ipcRenderer.invoke('items:count'),
   },
   search: {
     query: (input: SearchQueryInput): Promise<SearchQueryResult> =>
