@@ -17,9 +17,14 @@ The **Use** setting (Advanced → AI providers, or click the AI chip in the head
   3. Any other **local** provider you added (a localhost/LAN OpenAI-compatible server).
   4. **Enabled cloud providers** that have a key, in list order. A disabled cloud provider is never called.
 
-  If one candidate fails mid-request, Vault falls through to the next.
+  If one candidate fails mid-request, Vault falls through to the next. When that ends at a cloud
+  provider, the answer carries a **Cloud fallback** badge in Ask and Media chat, so you can see that
+  your question and the matching note passages left this computer.
+- **Auto — local only (never cloud):** steps 1–3 only. Cloud providers are never called, even when
+  they are enabled. If no local model is running, Ask says so and shows search results only.
 - **A specific provider ("Groq only", …):** uses only that provider, with no fallback. That keeps
   an explicit cloud choice predictable, and it's what a migrated Groq setup uses (see below).
+  Answers from a cloud provider you picked carry a plain **Cloud** badge.
 
 If nothing local is running and no cloud provider is enabled, Ask shows the **first-run card**:
 

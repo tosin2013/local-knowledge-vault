@@ -1,4 +1,4 @@
-import type { ChatProfile, Citation, Item, ItemFilters, Para, Prompt } from '../electron/types'
+import type { AnswerProvider, ChatProfile, Citation, Item, ItemFilters, Para, Prompt } from '../electron/types'
 
 export type Mode = 'search' | 'chat' | 'prompts'
 export type UiMode = 'simple' | 'advanced'
@@ -153,6 +153,24 @@ export function parseCitations(json: string | null): Citation[] {
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
+  }
+}
+
+/** Which provider wrote an assistant message, or null for canned/legacy messages (#45). */
+export function parseAnswerProvider(json: string | null | undefined): AnswerProvider | null {
+  if (!json) return null
+  try {
+    const p = JSON.parse(json) as Partial<AnswerProvider> | null
+    if (!p || typeof p.label !== 'string' || typeof p.local !== 'boolean') return null
+    return {
+      id: String(p.id ?? ''),
+      label: p.label,
+      model: String(p.model ?? ''),
+      local: p.local,
+      fallback: p.fallback === true,
+    }
+  } catch {
+    return null
   }
 }
 

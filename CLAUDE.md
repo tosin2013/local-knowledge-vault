@@ -67,7 +67,9 @@ prefix terms, ranks with BM25 and applies PARA/kind/status/project filters. Ther
 personas, URL auto-tag and the HTTP bridge.
 - Auto mode tries, in order: Ollama, LM Studio, other enabled local URLs, then enabled cloud providers that have
   a key.
-- An explicit selection uses only that provider, with no silent fallback.
+- `auto-local` is Auto without the cloud step. An explicit selection uses only that provider, with no silent fallback.
+- `llmGenerate` reports `local` and `fallback`; chat stores them per assistant message (`provider_json`) so the UI
+  can badge cloud answers (#45).
 - Adapters live in `electron/providers/`: `openai-compatible.ts` covers most presets, `anthropic.ts` is separate,
   and `presets.ts` defines the preset table and the recommended local model.
 - `provider-store.ts` persists `lkv-providers.json` and keeps per-provider keys in owner-only files under

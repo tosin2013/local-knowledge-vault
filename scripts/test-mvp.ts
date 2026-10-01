@@ -401,6 +401,13 @@ async function main(): Promise<void> {
   const a4 = resolveFromProviders('auto', [ollamaDown, lmDown, groqOff])
   assert(a4.status.active === null && a4.status.needsSetup, 'auto never picks a disabled cloud; needsSetup card')
   assert(a1.candidates.map((c) => c.provider.id).join(',') === 'ollama,groq', 'auto fallback order local → cloud')
+  // Auto — local only (#45): cloud providers are never candidates.
+  const l1 = resolveFromProviders('auto-local', [ollamaUp, lmDown, groqOn])
+  assert(l1.candidates.map((c) => c.provider.id).join(',') === 'ollama', 'auto-local never lists a cloud candidate')
+  const l2 = resolveFromProviders('auto-local', [ollamaDown, lmDown, groqOn])
+  assert(l2.status.active === null && l2.candidates.length === 0, 'auto-local does not fall back to an enabled cloud')
+  assert(/local only/i.test(l2.status.message), `auto-local explains why nothing answered ("${l2.status.message}")`)
+  assert(l2.status.selected === 'auto-local', 'auto-local selection is reported in status')
   const e1 = resolveFromProviders('groq', [ollamaUp, lmUp, groqOn])
   assert(e1.status.active?.id === 'groq' && e1.candidates.length === 1, 'explicit groq uses Groq only')
   const e2 = resolveFromProviders('groq', [ollamaUp, lmUp, groqNoKey])
@@ -591,13 +598,13 @@ async function main(): Promise<void> {
   // --- Versioned migrations + sample-note seed flag (#41) ---
   console.log('\nVersioned migrations + sample-note seed flag (#41)')
   {
-    // Fresh vault: user_version becomes 1 and sample notes are seeded once.
+    // Fresh vault: user_version becomes the current schema version and sample notes are seeded once.
     const freshFile = path.join(tmpDir, 'fresh.sqlite')
     initDb(freshFile)
     const probe = new Database(freshFile, { readonly: true })
     const v = probe.pragma('user_version', { simple: true })
     probe.close()
-    assert(v === 1, `fresh vault sets user_version = 1 (got ${v})`)
+    assert(v === 2, `fresh vault sets user_version = 2 (got ${v})`)
     assert(countItems() >= 3, 'fresh vault seeds sample notes')
     closeDb()
 
@@ -636,6 +643,34 @@ async function main(): Promise<void> {
     }
     initDb(legacyFile)
     assert(countItems() === 1, 'pre-versioned vault keeps its note and is not re-seeded with samples')
+    closeDb()
+
+    // v1 → v2 (#45): an existing chat_messages table gains provider_json and keeps its rows.
+    const v1File = path.join(tmpDir, 'v1.sqlite')
+    initDb(v1File)
+    closeDb()
+    {
+      const v1 = new Database(v1File)
+      v1.exec(`
+        ALTER TABLE chat_messages DROP COLUMN provider_json;
+        INSERT INTO chat_sessions (id, title, mode, created_at, updated_at)
+          VALUES ('ses_old', 'Old chat', 'grounded', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+        INSERT INTO chat_messages (id, session_id, role, content, created_at)
+          VALUES ('msg_old', 'ses_old', 'assistant', 'old answer', '2026-01-01T00:00:00Z');
+      `)
+      v1.pragma('user_version = 1')
+      v1.close()
+    }
+    initDb(v1File)
+    const oldMsgs = listMessages('ses_old')
+    assert(oldMsgs.length === 1 && oldMsgs[0].content === 'old answer', 'v1 → v2 migration keeps existing chat messages')
+    assert(oldMsgs[0].provider_json === null, 'migrated messages have no provider recorded')
+    {
+      const probe2 = new Database(v1File, { readonly: true })
+      const v2 = probe2.pragma('user_version', { simple: true })
+      probe2.close()
+      assert(v2 === 2, `v1 vault is upgraded to user_version = 2 (got ${v2})`)
+    }
     closeDb()
   }
 

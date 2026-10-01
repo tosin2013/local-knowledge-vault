@@ -206,6 +206,8 @@ async function main(): Promise<void> {
     else process.env.LKV_GROQ_API_KEY = savedEnv
 
     throwsWith(() => ps.setSelection('no-such-provider' as never), /Unknown provider/, 'setSelection unknown throws')
+    assert(ps.setSelection('auto-local') === 'auto-local', 'setSelection auto-local ok (#45)')
+    assert(ps.getSelection() === 'auto-local', 'auto-local selection persists')
     assert(ps.setSelection('auto') === 'auto', 'setSelection auto ok')
 
     ps.setProviderEnabled('plugin:demo:openai', true)

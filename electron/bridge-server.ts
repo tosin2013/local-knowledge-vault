@@ -172,7 +172,7 @@ async function handleAsk(bodyRaw: string): Promise<BridgeAskResult> {
   })
 
   const citations: Citation[] = result.citations ?? []
-  return { answer: result.answer, citations }
+  return { answer: result.answer, citations, provider: result.provider }
 }
 
 function listProjectsSummary(): Array<{ project: string; noteCount: number; source?: string }> {

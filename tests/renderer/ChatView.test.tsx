@@ -222,4 +222,30 @@ describe('ChatView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save as note' }))
     expect(props.onSaveAsNote).toHaveBeenCalledWith('Habits compound over time.', [])
   })
+
+  it('flags an answer written by a cloud provider, and marks an Auto fallback (#45)', () => {
+    const cloudFallback = JSON.stringify({ id: 'groq', label: 'Groq', model: 'gpt-oss-20b', local: false, fallback: true })
+    const cloudChosen = JSON.stringify({ id: 'groq', label: 'Groq', model: 'gpt-oss-20b', local: false, fallback: false })
+    const props = makeProps({
+      messages: [
+        makeMessage({ id: 'm_1', content: 'From the cloud', citations_json: null, provider_json: cloudFallback }),
+        makeMessage({ id: 'm_2', content: 'Chosen cloud', citations_json: null, provider_json: cloudChosen }),
+      ],
+    })
+    render(<ChatView {...props} />)
+    expect(screen.getByText('Cloud fallback · Groq')).toBeInTheDocument()
+    expect(screen.getByText('Cloud · Groq')).toBeInTheDocument()
+  })
+
+  it('shows no provider badge for local or canned answers (#45)', () => {
+    const localProvider = JSON.stringify({ id: 'ollama', label: 'Ollama', model: 'qwen3:8b', local: true, fallback: false })
+    const props = makeProps({
+      messages: [
+        makeMessage({ id: 'm_1', content: 'Local answer', citations_json: null, provider_json: localProvider }),
+        makeMessage({ id: 'm_2', content: 'Canned reply', citations_json: null, provider_json: null }),
+      ],
+    })
+    render(<ChatView {...props} />)
+    expect(screen.queryByTestId('answer-provider-chip')).not.toBeInTheDocument()
+  })
 })

@@ -79,4 +79,17 @@ describe('ProvidersPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Re-check' }))
     expect(props.onRefresh).toHaveBeenCalled()
   })
+
+  it('explains the cloud fallback in Auto when a cloud provider is enabled (#45)', () => {
+    render(<ProvidersPanel {...makeProps()} />)
+    expect(screen.getByText(/marks that answer “Cloud fallback”/)).toBeInTheDocument()
+    expect(screen.queryByText(/Fixed to one provider/)).not.toBeInTheDocument()
+  })
+
+  it('shows the local-only selection and its note (#45)', () => {
+    render(<ProvidersPanel {...makeProps({ status: makeLlmStatus({ providers: [local, cloud], selected: 'auto-local' }) })} />)
+    expect(screen.getByText('Auto — local only (never cloud)')).toBeInTheDocument()
+    expect(screen.getByText(/cloud providers are never used/)).toBeInTheDocument()
+    expect(screen.queryByText(/Fixed to one provider/)).not.toBeInTheDocument()
+  })
 })

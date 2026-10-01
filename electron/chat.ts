@@ -1,7 +1,7 @@
 /**
  * Grounded multi-turn chat: persist sessions/messages, retrieve → LLM → cite.
  */
-import type { ChatMessage, ChatSendInput, ChatSendResult, Citation, SearchHit } from './types'
+import type { AnswerProvider, ChatMessage, ChatSendInput, ChatSendResult, Citation, SearchHit } from './types'
 import {
   appendMessage,
   getPrompt,
@@ -13,6 +13,7 @@ import { searchQuery } from './search'
 import { llmGenerate } from './llm'
 import {
   buildGroundedMessages,
+  answerProvider,
   citationsFromIds,
   offlineCopy,
   extractCitedIds,
@@ -186,7 +187,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     content: string,
     citations: Citation[],
     hitList: SearchHit[],
-    extra?: { offline?: boolean; error?: string }
+    extra?: { offline?: boolean; error?: string; provider?: AnswerProvider }
   ): ChatSendResult => {
     const assistant = appendMessage({
       session_id: session.id,
@@ -194,6 +195,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
       content,
       citations_json: citations.length ? JSON.stringify(citations) : null,
       hits_json: hitList.length ? JSON.stringify(hitList) : null,
+      provider_json: extra?.provider ? JSON.stringify(extra.provider) : null,
     })
     const messages = listMessages(session.id)
     const updated = getSession(session.id) ?? currentSession
@@ -264,5 +266,5 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
   const validIds = validateCitations(rawCited, allowed)
   const citations = citationsFromIds(validIds)
 
-  return finish(finalizeAnswer(gen.text, allowed), citations, hits)
+  return finish(finalizeAnswer(gen.text, allowed), citations, hits, { provider: answerProvider(gen) })
 }
