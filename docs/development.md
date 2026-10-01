@@ -26,6 +26,7 @@ local-knowledge-vault/
     provider-store.ts   # lkv-providers.json + per-provider key files
     plugin-loader.ts    # declarative plugin.json packs (no code execution)
     import-url.ts       # Add from URL (fetch → extract text → auto-tag → note)
+    import-markdown.ts  # Import Markdown/Obsidian notes from a folder
     media-*.ts          # Media chat ingest (captions → timed notes), personas
     mcp-client.ts       # in-app MCP client (Streamable HTTP + OAuth)
     bridge-server.ts    # loopback HTTP bridge on 127.0.0.1:8765
@@ -119,6 +120,7 @@ matches Electron's ABI.
 - `items.get(id)` / `items.update(id, patch)` / `items.delete(id)`
 - `search.query({ text, filters, limit? })`
 - `ask.grounded({ question, filters, limit? })`
+- `import.fromUrl(url)` / `import.fromMarkdown()` (folder picker → bulk `.md` import)
 - `ollama.health()`
 - `llm.status()`: active provider, provider list with health, first-run flag
 - `providers.list / setSelected / setEnabled / save / remove / test / fetchModels` (keys are write-only)

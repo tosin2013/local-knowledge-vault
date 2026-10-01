@@ -22,6 +22,7 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
@@ -34,6 +35,8 @@ import { isValidHttpUrl, KIND_OPTIONS, PARA_OPTIONS, paraLabel, STATUS_OPTIONS }
 export interface NotesRailProps {
   advanced: boolean
   items: Item[]
+  /** True when the vault is genuinely empty (no non-trashed notes) — #189. */
+  isEmpty: boolean
   selectedId: string | null
   filters: ItemFilters
   projectOptions: string[]
@@ -41,6 +44,7 @@ export interface NotesRailProps {
   filtersOpen: boolean
   importUrl: string
   importBusy: boolean
+  importMarkdownBusy: boolean
   busy: boolean
   railQuery: string
   railSort: 'updated' | 'title' | 'created'
@@ -49,6 +53,7 @@ export interface NotesRailProps {
   onNewProject: (name: string) => void
   onImportUrl: (v: string) => void
   onImport: () => void
+  onImportMarkdown: () => void
   onProject: (project: string) => void
   onManageProjects: () => void
   onDeleteItem: (id: string) => void
@@ -70,6 +75,7 @@ export function NotesRail(props: NotesRailProps) {
   const {
     advanced,
     items,
+    isEmpty,
     selectedId,
     filters,
     projectOptions,
@@ -77,6 +83,7 @@ export function NotesRail(props: NotesRailProps) {
     filtersOpen,
     importUrl,
     importBusy,
+    importMarkdownBusy,
     busy,
     railQuery,
     railSort,
@@ -85,6 +92,7 @@ export function NotesRail(props: NotesRailProps) {
     onNewProject,
     onImportUrl,
     onImport,
+    onImportMarkdown,
     onProject,
     onManageProjects,
     onDeleteItem,
@@ -171,6 +179,16 @@ export function NotesRail(props: NotesRailProps) {
             </Button>
           </Stack>
         )}
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<FolderOpenIcon />}
+          onClick={onImportMarkdown}
+          disabled={importMarkdownBusy || busy}
+        >
+          {importMarkdownBusy ? 'Importing…' : 'Import Markdown'}
+        </Button>
 
         {hasSamples && (
           <Paper
@@ -420,11 +438,29 @@ export function NotesRail(props: NotesRailProps) {
       </Stack>
 
       <Box className="note-list" sx={{ p: 1 }}>
-        {items.length === 0 && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', p: 2 }}>
-            No notes match filters.
-          </Typography>
-        )}
+        {items.length === 0 &&
+          (isEmpty ? (
+            <Stack spacing={1} alignItems="center" sx={{ textAlign: 'center', p: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Your vault is empty.
+              </Typography>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={onNewNote}
+              >
+                Create your first note
+              </Button>
+              <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+                Or import Markdown notes or add a URL above.
+              </Typography>
+            </Stack>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', p: 2 }}>
+              No notes match filters.
+            </Typography>
+          ))}
         <List dense disablePadding aria-label="Notes">
           {items.map((it) => (
             <ListItemButton

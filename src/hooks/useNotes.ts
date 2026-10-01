@@ -35,6 +35,7 @@ export function useNotes(deps: UseNotesDeps) {
   const [askResult, setAskResult] = useState<AskGroundedResult | null>(null)
   const [importUrl, setImportUrl] = useState('')
   const [importBusy, setImportBusy] = useState(false)
+  const [importMarkdownBusy, setImportMarkdownBusy] = useState(false)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Rail display: hide transcript (source) chunks by default (#120), filter-as-you-type, sort.
@@ -48,11 +49,16 @@ export function useNotes(deps: UseNotesDeps) {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
   // True while the first-run "Vault guide" notes exist (#163).
   const [hasSamples, setHasSamples] = useState(false)
+  // Total non-trashed notes (drives the genuinely-empty rail state, #189).
+  const [count, setCount] = useState(0)
 
   const refreshList = useCallback(async () => {
     if (!window.lkv) return
     const list = await window.lkv.items.list({ filters })
     setItems(list)
+    if (window.lkv.items.count) {
+      setCount(await window.lkv.items.count())
+    }
   }, [filters])
 
   /** DB-backed project list (exact names + note counts) — the single source of truth. */
@@ -210,6 +216,34 @@ export function useNotes(deps: UseNotesDeps) {
       }
     } finally {
       setImportBusy(false)
+    }
+  }
+
+  /** Import Markdown / Obsidian notes from a folder chosen in a native dialog. */
+  const onImportMarkdown = async () => {
+    if (!window.lkv?.import?.fromMarkdown) return
+    setImportMarkdownBusy(true)
+    setError(null)
+    setStatusMsg(null)
+    try {
+      const res = await window.lkv.import.fromMarkdown()
+      if (res.canceled) return
+      await refreshList()
+      void refreshProjects()
+      if (res.imported > 0) {
+        const skipped = res.skipped > 0 ? ` · ${res.skipped} skipped` : ''
+        setStatusMsg(`Imported ${res.imported} Markdown note${res.imported === 1 ? '' : 's'}${skipped}`)
+      } else {
+        setStatusMsg('No Markdown notes found to import.')
+      }
+      if (res.errors.length && advanced) {
+        setError(res.errors.join('\n'))
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(advanced ? msg : 'Could not import that folder.')
+    } finally {
+      setImportMarkdownBusy(false)
     }
   }
 
@@ -482,6 +516,8 @@ export function useNotes(deps: UseNotesDeps) {
   return {
     items,
     visibleItems,
+    /** True when the vault has zero non-trashed notes (#189 empty state). */
+    isEmpty: count === 0,
     showTranscripts,
     setShowTranscripts,
     railQuery,
@@ -507,6 +543,7 @@ export function useNotes(deps: UseNotesDeps) {
     importUrl,
     setImportUrl,
     importBusy,
+    importMarkdownBusy,
     projects,
     filtersOpen,
     setFiltersOpen,
@@ -520,6 +557,7 @@ export function useNotes(deps: UseNotesDeps) {
     openPrefilledDraft,
     onNewProject,
     onImportFromUrl,
+    onImportMarkdown,
     onSave,
     confirmDraft,
     onDelete,

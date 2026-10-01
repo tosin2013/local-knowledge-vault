@@ -7,6 +7,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
   return {
     advanced: false,
     items: [],
+    isEmpty: false,
     selectedId: null,
     filters: { para: '', kind: '', status: '', project: '' },
     projectOptions: [],
@@ -14,6 +15,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     filtersOpen: false,
     importUrl: '',
     importBusy: false,
+    importMarkdownBusy: false,
     busy: false,
     railQuery: '',
     railSort: 'updated',
@@ -22,6 +24,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     onNewProject: vi.fn(),
     onImportUrl: vi.fn(),
     onImport: vi.fn(),
+    onImportMarkdown: vi.fn(),
     onProject: vi.fn(),
     onManageProjects: vi.fn(),
     onDeleteItem: vi.fn(),
@@ -58,6 +61,13 @@ describe('NotesRail', () => {
     expect(props.onNewProject).toHaveBeenCalledWith('Work')
   })
 
+  it('fires onImportMarkdown from the Import Markdown button', () => {
+    const props = makeProps()
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Import Markdown' }))
+    expect(props.onImportMarkdown).toHaveBeenCalled()
+  })
+
   it('lists notes and selects them on click and double-click', () => {
     const props = makeProps({ items: [makeItem('itm_1', { title: 'First note', project: 'Work' })] })
     render(<NotesRail {...props} />)
@@ -80,9 +90,18 @@ describe('NotesRail', () => {
     expect(screen.getByRole('list', { name: 'Notes' })).toBeInTheDocument()
   })
 
-  it('shows the empty state when there are no notes', () => {
-    render(<NotesRail {...makeProps()} />)
+  it('shows the filtered empty state when there are no matching notes', () => {
+    render(<NotesRail {...makeProps({ isEmpty: false })} />)
     expect(screen.getByText('No notes match filters.')).toBeInTheDocument()
+    expect(screen.queryByText('Create your first note')).not.toBeInTheDocument()
+  })
+
+  it('shows a "Create your first note" empty state for a genuinely empty vault', () => {
+    const props = makeProps({ isEmpty: true })
+    render(<NotesRail {...props} />)
+    expect(screen.getByText('Your vault is empty.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Create your first note' }))
+    expect(props.onNewNote).toHaveBeenCalled()
   })
 
   it('shows a bulk trash button when notes are selected', () => {

@@ -42,6 +42,7 @@ import type {
   Item,
   ListItemsInput,
   LlmStatus,
+  MarkdownImportResult,
   PluginContributions,
   PluginInstallResult,
   PluginListResult,
@@ -81,6 +82,7 @@ const api = {
     emptyTrash: (): Promise<number> => ipcRenderer.invoke('items:emptyTrash'),
     listSamples: (): Promise<Item[]> => ipcRenderer.invoke('items:listSamples'),
     removeSamples: (): Promise<number> => ipcRenderer.invoke('items:removeSamples'),
+    count: (): Promise<number> => ipcRenderer.invoke('items:count'),
   },
   search: {
     query: (input: SearchQueryInput): Promise<SearchQueryResult> =>
@@ -157,6 +159,8 @@ const api = {
   import: {
     fromUrl: (url: string): Promise<ImportFromUrlResult> =>
       ipcRenderer.invoke('import:fromUrl', url),
+    fromMarkdown: (): Promise<MarkdownImportResult> =>
+      ipcRenderer.invoke('import:markdown'),
   },
   prompts: {
     list: (): Promise<Prompt[]> => ipcRenderer.invoke('prompts:list'),

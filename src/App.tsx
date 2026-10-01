@@ -217,6 +217,7 @@ export default function App() {
           <NotesRail
             advanced={ui.advanced}
             items={notes.visibleItems}
+            isEmpty={notes.isEmpty}
             selectedId={notes.selectedId}
             filters={notes.filters}
             projectOptions={notes.projectOptions}
@@ -224,6 +225,7 @@ export default function App() {
             filtersOpen={notes.filtersOpen}
             importUrl={notes.importUrl}
             importBusy={notes.importBusy}
+            importMarkdownBusy={notes.importMarkdownBusy}
             busy={busy}
             railQuery={notes.railQuery}
             railSort={notes.railSort}
@@ -232,6 +234,7 @@ export default function App() {
             onNewProject={(name) => notes.onNewProject(name)}
             onImportUrl={notes.setImportUrl}
             onImport={() => void notes.onImportFromUrl()}
+            onImportMarkdown={() => void notes.onImportMarkdown()}
             onProject={(project) => notes.setFilters((f) => ({ ...f, project }))}
             onManageProjects={() => setManageProjectsOpen(true)}
             onDeleteItem={(id) => void notes.deleteItemById(id)}
