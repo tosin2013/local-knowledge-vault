@@ -97,11 +97,21 @@ async function main(): Promise<void> {
       })) as typeof fetch,
   })
   assert(!hang.ok && /Timed out/.test(hang.error), 'a hung request times out')
+  const nonError = await checkForUpdate({
+    currentVersion: '0.3.0',
+    fetchImpl: (async () => {
+      throw 'socket closed' // eslint-disable-line no-throw-literal
+    }) as typeof fetch,
+  })
+  assert(!nonError.ok && nonError.error === 'socket closed', 'a non-Error rejection is reported as text')
+  const emptyBody = await checkForUpdate({ currentVersion: '0.3.0', fetchImpl: stubFetch(() => new Response('null', { status: 200 })).fetchImpl })
+  assert(!emptyBody.ok, 'a null JSON body is rejected')
 
   console.log('\nsettings')
   assert(getUpdateSettings().checkOnLaunch === true, 'launch check is on by default')
   assert(setUpdateSettings({ checkOnLaunch: false }).checkOnLaunch === false, 'setting can be turned off')
   assert(getUpdateSettings().checkOnLaunch === false, 'setting persists')
+  assert(setUpdateSettings({}).checkOnLaunch === false, 'an empty patch keeps the saved value')
   fs.writeFileSync(path.join(process.env.LKV_USER_DATA_DIR!, 'lkv-update-settings.json'), 'not json')
   assert(getUpdateSettings().checkOnLaunch === true, 'a corrupt settings file falls back to the default')
 
