@@ -121,8 +121,8 @@ shows it instead of the generic text. It is still the honest not-found answer, a
 | Work | Issue | Status |
 |---|---|---|
 | Persona moves, opening line, gap line, persona-voiced greetings | #202 | open, not admitted |
-| Spike: draft quality on a small local model (section 5 evidence) | to file | after this ADR is accepted |
-| Draft engine in the main process: sample, fill-in template, lenient parse, fallback | to file | after the spike |
-| "Create a character" action and the post-import suggestion; *Who is speaking?* in the editor | to file | after the engine |
+| Spike: draft quality on a small local model (section 5 evidence) | #208 | open, not admitted |
+| Draft engine in the main process: sample, fill-in template, lenient parse, fallback | #209 | open, not admitted; after #208 |
+| "Create a character" action and the post-import suggestion; *Who is speaking?* in the editor | #210 | open, not admitted; after #209 |
 | Sample character from a public-domain book | #204 | open, not admitted |
 | Import books and PDFs | #162 | open, not admitted |
