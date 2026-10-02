@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useChat, type UseChatDeps } from '../../src/hooks/useChat'
-import { makeMessage, makeProfile, makePrompt, makeSession } from './lkv'
+import { lkvMock, makeMessage, makeProfile, makePrompt, makeSendResult, makeSession } from './lkv'
+import type { ChatSendResult } from '../../electron/types'
 
 function makeDeps(overrides: Partial<UseChatDeps> = {}): UseChatDeps {
   return {
@@ -18,7 +19,7 @@ function makeDeps(overrides: Partial<UseChatDeps> = {}): UseChatDeps {
 
 describe('useChat', () => {
   it('refreshes sessions', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.chat.listSessions.mockResolvedValue([makeSession('s_1', 'My chat')])
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {
@@ -28,7 +29,7 @@ describe('useChat', () => {
   })
 
   it('refreshes profiles', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.profiles.list.mockResolvedValue([makeProfile('prf_1')])
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {
@@ -38,7 +39,7 @@ describe('useChat', () => {
   })
 
   it('starts a new chat', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.chat.createSession.mockResolvedValue(makeSession('s_9', 'New chat'))
     const deps = makeDeps()
     const { result } = renderHook(() => useChat(deps))
@@ -50,7 +51,7 @@ describe('useChat', () => {
   })
 
   it('selects a session and loads messages', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.chat.listMessages.mockResolvedValue([makeMessage()])
     const deps = makeDeps()
     const { result } = renderHook(() => useChat(deps))
@@ -61,7 +62,7 @@ describe('useChat', () => {
   })
 
   it('deletes a session', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {
       await result.current.onDeleteSession('s_1')
@@ -70,8 +71,8 @@ describe('useChat', () => {
   })
 
   it('sends a chat message', async () => {
-    const lkv = window.lkv as any
-    lkv.chat.send.mockResolvedValue({ messages: [makeMessage()], session: makeSession('s_1'), offline: false })
+    const lkv = lkvMock()
+    lkv.chat.send.mockResolvedValue(makeSendResult({ messages: [makeMessage()], session: makeSession('s_1'), offline: false }))
     const { result } = renderHook(() => useChat(makeDeps()))
     act(() => result.current.setChatInput('hello'))
     await act(async () => {
@@ -82,7 +83,7 @@ describe('useChat', () => {
   })
 
   it('exports a citation pack', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.chat.listSessions.mockResolvedValue([makeSession('s_1')])
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {
@@ -109,7 +110,7 @@ describe('useChat', () => {
   })
 
   it('saves a user profile', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.profiles.create.mockResolvedValue(makeProfile('prf_new', { name: 'Saved' }))
     const deps = makeDeps({ prompts: [makePrompt('prm_1', 'Grounded default')] })
     const { result } = renderHook(() => useChat(deps))
@@ -122,7 +123,7 @@ describe('useChat', () => {
   })
 
   it('renames a user profile', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.profiles.list.mockResolvedValue([makeProfile('prf_1', { name: 'Old', prompt_id: 'prm_1' })])
     lkv.profiles.update.mockResolvedValue(makeProfile('prf_1', { name: 'Renamed' }))
     const deps = makeDeps({ prompts: [makePrompt('prm_1', 'Grounded default')] })
@@ -139,7 +140,7 @@ describe('useChat', () => {
   })
 
   it('deletes a user profile', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.profiles.list.mockResolvedValue([makeProfile('prf_1', { prompt_id: 'prm_1' })])
     const deps = makeDeps({ prompts: [makePrompt('prm_1', 'Grounded default')] })
     const { result } = renderHook(() => useChat(deps))
@@ -172,7 +173,7 @@ describe('useChat', () => {
   })
 
   it('hydrates the last profile when prompts are available', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.profiles.list.mockResolvedValue([])
     const prompts = [makePrompt('prm_1', 'Grounded default')]
     const { result } = renderHook(() => useChat(makeDeps({ prompts })))
@@ -184,7 +185,7 @@ describe('useChat', () => {
   })
 
   it('defaults the first-run Ask scope to the Vault guide project', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.profiles.list.mockResolvedValue([])
     const prompts = [makePrompt('prm_1', 'Grounded default')]
     const { result } = renderHook(() => useChat(makeDeps({ prompts })))
@@ -202,8 +203,8 @@ describe('useChat', () => {
   })
 
   it('shows the user message optimistically before the reply arrives', async () => {
-    const lkv = window.lkv as any
-    let resolveSend!: (v: unknown) => void
+    const lkv = lkvMock()
+    let resolveSend!: (v: ChatSendResult) => void
     lkv.chat.send.mockImplementation(() => new Promise((r) => { resolveSend = r }))
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {
@@ -217,15 +218,15 @@ describe('useChat', () => {
     expect(result.current.messages.some((m) => m.role === 'user' && m.content === 'hello')).toBe(true)
     expect(result.current.sending).toBe(true)
     await act(async () => {
-      resolveSend({ messages: [makeMessage()], session: makeSession('s_1'), offline: false })
+      resolveSend(makeSendResult({ messages: [makeMessage()], session: makeSession('s_1'), offline: false }))
       await sendPromise
     })
     expect(result.current.messages).toEqual([makeMessage()])
   })
 
   it('does not overwrite another session when a reply arrives late', async () => {
-    const lkv = window.lkv as any
-    let resolveSend!: (v: unknown) => void
+    const lkv = lkvMock()
+    let resolveSend!: (v: ChatSendResult) => void
     lkv.chat.send.mockImplementation(() => new Promise((r) => { resolveSend = r }))
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {
@@ -241,7 +242,7 @@ describe('useChat', () => {
       await result.current.onSelectSession('s_2')
     })
     await act(async () => {
-      resolveSend({ messages: [makeMessage()], session: makeSession('s_1'), offline: false })
+      resolveSend(makeSendResult({ messages: [makeMessage()], session: makeSession('s_1'), offline: false }))
       await sendPromise
     })
     expect(result.current.messages).toEqual([
@@ -250,8 +251,8 @@ describe('useChat', () => {
   })
 
   it('ignores a second send while one is in flight', async () => {
-    const lkv = window.lkv as any
-    let resolveSend!: (v: unknown) => void
+    const lkv = lkvMock()
+    let resolveSend!: (v: ChatSendResult) => void
     lkv.chat.send.mockImplementation(() => new Promise((r) => { resolveSend = r }))
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {
@@ -268,13 +269,13 @@ describe('useChat', () => {
     })
     expect(lkv.chat.send).toHaveBeenCalledTimes(1)
     await act(async () => {
-      resolveSend({ messages: [makeMessage()], session: makeSession('s_1'), offline: false })
+      resolveSend(makeSendResult({ messages: [makeMessage()], session: makeSession('s_1'), offline: false }))
       await sendPromise
     })
   })
 
   it('reports a new-chat failure instead of failing silently', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.chat.createSession.mockRejectedValue(new Error('boom'))
     const deps = makeDeps()
     const { result } = renderHook(() => useChat(deps))
@@ -285,7 +286,7 @@ describe('useChat', () => {
   })
 
   it('reports a delete-session failure instead of failing silently', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.chat.deleteSession.mockRejectedValue(new Error('boom'))
     const deps = makeDeps()
     const { result } = renderHook(() => useChat(deps))
@@ -296,7 +297,7 @@ describe('useChat', () => {
   })
 
   it('restores the question when a send fails', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.chat.send.mockRejectedValue(new Error('boom'))
     const { result } = renderHook(() => useChat(makeDeps()))
     await act(async () => {

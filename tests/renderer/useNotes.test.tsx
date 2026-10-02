@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useNotes, type UseNotesDeps } from '../../src/hooks/useNotes'
-import { makeHit, makeImportResult, makeItem } from './lkv'
+import { lkvMock, makeHit, makeImportResult, makeItem } from './lkv'
 
 function makeDeps(overrides: Partial<UseNotesDeps> = {}): UseNotesDeps {
   return {
@@ -16,7 +16,7 @@ function makeDeps(overrides: Partial<UseNotesDeps> = {}): UseNotesDeps {
 
 describe('useNotes', () => {
   it('refreshes the list', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.list.mockResolvedValue([makeItem('itm_1')])
     const { result } = renderHook(() => useNotes(makeDeps()))
     await act(async () => {
@@ -26,7 +26,7 @@ describe('useNotes', () => {
   })
 
   it('runs a search', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.search.query.mockResolvedValue({ hits: [makeHit('itm_1')] })
     const deps = makeDeps()
     const { result } = renderHook(() => useNotes(deps))
@@ -46,7 +46,7 @@ describe('useNotes', () => {
   })
 
   it('saves a new note', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.create.mockResolvedValue(makeItem('itm_created', { title: 'Saved' }))
     const { result } = renderHook(() => useNotes(makeDeps()))
     act(() => result.current.onNewNote())
@@ -58,7 +58,7 @@ describe('useNotes', () => {
   })
 
   it('saves an existing note via update', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { title: 'Before' }))
     lkv.items.update.mockResolvedValue(makeItem('itm_1', { title: 'Updated' }))
     const { result } = renderHook(() => useNotes(makeDeps()))
@@ -76,7 +76,7 @@ describe('useNotes', () => {
   })
 
   it('deletes a note', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(makeItem('itm_1'))
     const { result } = renderHook(() => useNotes(makeDeps()))
     act(() => {
@@ -90,7 +90,7 @@ describe('useNotes', () => {
   })
 
   it('imports from a URL', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.import.fromUrl.mockResolvedValue(makeImportResult())
     const deps = makeDeps()
     const { result } = renderHook(() => useNotes(deps))
@@ -113,7 +113,7 @@ describe('useNotes', () => {
   })
 
   it('patches the draft and marks it dirty', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(makeItem('itm_1'))
     const { result } = renderHook(() => useNotes(makeDeps()))
     act(() => {
@@ -126,7 +126,7 @@ describe('useNotes', () => {
   })
 
   it('flags a note as missing when get returns null', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(null)
     const { result } = renderHook(() => useNotes(makeDeps()))
     act(() => {
@@ -137,7 +137,7 @@ describe('useNotes', () => {
   })
 
   it('loads projects from the projects API', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.projects.list.mockResolvedValue([
       { name: 'Work', count: 2 },
       { name: 'Home', count: 1 },
@@ -163,8 +163,8 @@ describe('useNotes', () => {
   })
 
   it('saves a new AI-draft answer still as ai-draft', async () => {
-    const lkv = window.lkv as any
-    lkv.items.create.mockImplementation((input: { status: string }) => Promise.resolve(makeItem('itm_new', input)))
+    const lkv = lkvMock()
+    lkv.items.create.mockImplementation((input) => Promise.resolve(makeItem('itm_new', { status: input.status })))
     const { result } = renderHook(() => useNotes(makeDeps()))
     act(() => result.current.openPrefilledDraft({ title: 'A', body: 'b', status: 'ai-draft' }))
     await act(async () => {
@@ -174,7 +174,7 @@ describe('useNotes', () => {
   })
 
   it('editing an existing AI draft saves it as active', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { status: 'ai-draft' }))
     lkv.items.update.mockResolvedValue(makeItem('itm_1', { status: 'active' }))
     const { result } = renderHook(() => useNotes(makeDeps()))
@@ -188,7 +188,7 @@ describe('useNotes', () => {
   })
 
   it('confirms an AI draft without editing', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { status: 'ai-draft' }))
     lkv.items.update.mockResolvedValue(makeItem('itm_1', { status: 'active' }))
     const { result } = renderHook(() => useNotes(makeDeps()))
@@ -201,7 +201,7 @@ describe('useNotes', () => {
   })
 
   it('hides transcript chunks by default and shows them on toggle', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.list.mockResolvedValue([
       makeItem('itm_1', { title: 'My note', kind: 'note' }),
       makeItem('itm_2', { title: 'Transcript', kind: 'transcript' }),
@@ -216,7 +216,7 @@ describe('useNotes', () => {
   })
 
   it('filters the rail list as you type', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.list.mockResolvedValue([
       makeItem('itm_1', { title: 'Alpha note' }),
       makeItem('itm_2', { title: 'Beta note' }),
@@ -230,7 +230,7 @@ describe('useNotes', () => {
   })
 
   it('bulk-trashes selected notes', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     const { result } = renderHook(() => useNotes(makeDeps()))
     act(() => {
       result.current.toggleBulkSelect('itm_1')
@@ -246,7 +246,7 @@ describe('useNotes', () => {
   })
 
   it('restores a trashed note and empties the trash', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.listTrashed.mockResolvedValue([makeItem('itm_1', { title: 'Trashed' })])
     const { result } = renderHook(() => useNotes(makeDeps()))
     await act(async () => {
@@ -264,7 +264,7 @@ describe('useNotes', () => {
   })
 
   it('reports a save failure instead of failing silently', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.create.mockRejectedValue(new Error('disk full'))
     const deps = makeDeps()
     const { result } = renderHook(() => useNotes(deps))
@@ -276,7 +276,7 @@ describe('useNotes', () => {
   })
 
   it('reports a delete failure instead of failing silently', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(makeItem('itm_1'))
     lkv.items.trash.mockRejectedValue(new Error('nope'))
     const deps = makeDeps()
@@ -290,7 +290,7 @@ describe('useNotes', () => {
   })
 
   it('detects the Vault guide notes', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.listSamples.mockResolvedValue([makeItem('itm_s1', { project: 'Vault guide' })])
     const { result } = renderHook(() => useNotes(makeDeps()))
     await act(async () => {
@@ -300,7 +300,7 @@ describe('useNotes', () => {
   })
 
   it('removes the guide after confirmation and clears the flag', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.items.removeSamples.mockResolvedValue(5)
     const { result } = renderHook(() => useNotes(makeDeps()))
     await act(async () => {

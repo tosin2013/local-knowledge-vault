@@ -15,7 +15,7 @@ describe('describeAdds', () => {
     const m = manifest({
       providers: [
         { id: 'a', label: 'Cloud A', kind: 'openai-compatible', baseUrl: 'https://a.example.com/api', defaultModel: 'x' },
-        { id: 'b', label: 'Local B', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', local: true },
+        { id: 'b', label: 'Local B', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', defaultModel: '', local: true },
       ],
       personas: [{ name: 'Study buddy', prompt: 'Be patient' }],
       promptPacks: [{ name: 'Revision', prompts: ['Quiz me'] }],
@@ -35,7 +35,7 @@ describe('cloudDomains', () => {
     const m = manifest({
       providers: [
         { id: 'a', label: 'Cloud A', kind: 'openai-compatible', baseUrl: 'https://api.example.com/v1', defaultModel: 'x' },
-        { id: 'b', label: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', local: true },
+        { id: 'b', label: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', defaultModel: '', local: true },
       ],
     })
     expect(cloudDomains(m)).toEqual([{ label: 'Cloud A', domain: 'api.example.com' }])

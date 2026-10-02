@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ManagePluginsView } from '../../src/plugins/manage/ManagePluginsView'
-import { makePluginInfo, makePluginListResult } from './lkv'
+import { lkvMock, makePluginInfo, makePluginListResult } from './lkv'
 
 function seedPlugins(overrides: Partial<ReturnType<typeof makePluginListResult>> = {}) {
-  const lkv = window.lkv as any
+  const lkv = lkvMock()
   const result = makePluginListResult(overrides)
   lkv.plugins.list.mockResolvedValue(result)
   return result
@@ -61,7 +61,7 @@ describe('ManagePluginsView', () => {
   })
 
   it('lists bundled add-ons and opens a preview before installing', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.listBundled.mockResolvedValue([makePreview()])
     render(<ManagePluginsView />)
     await screen.findByText('Demo add-on')
@@ -76,7 +76,7 @@ describe('ManagePluginsView', () => {
   })
 
   it('surfaces preview errors', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.preview.mockResolvedValue({ errors: ['bad manifest'] })
     render(<ManagePluginsView />)
     fireEvent.click(screen.getByText('Install add-on…'))
@@ -84,7 +84,7 @@ describe('ManagePluginsView', () => {
   })
 
   it('restores a removed add-on', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.listRemoved.mockResolvedValue([{ key: 'demo-123', id: 'demo', name: 'Demo', version: '1.0.0' }])
     render(<ManagePluginsView />)
     await screen.findByText('Removed')

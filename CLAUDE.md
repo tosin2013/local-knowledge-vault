@@ -14,7 +14,7 @@ docs in `docs/development.md`, providers in `docs/providers.md`, plugin format i
 ```bash
 npm install            # postinstall rebuilds better-sqlite3 for Electron's ABI
 npm run dev            # Electron + Vite HMR (renderer on :5173)
-npm run typecheck      # tsc for both projects: tsconfig.node.json (electron/, scripts/) and tsconfig.json (src/)
+npm run typecheck      # tsc for three projects: tsconfig.node.json (electron/, scripts/), tsconfig.json (src/), tsconfig.tests.json (tests/)
 npm run build          # typecheck + vite build → dist/ and dist-electron/
 npm run dist:mac       # installers via electron-builder (also dist:win, dist:linux); package on the target OS
 ```
@@ -48,7 +48,8 @@ at a throwaway profile.
   `src/vite-env.d.ts` imports that type, so the renderer is typed against the preload directly.
 - Shared request/response types live in `electron/types.ts`.
 - Adding an IPC call means touching three places: the handler in `main.ts`, the method in `preload.ts`, and any
-  types in `types.ts`.
+  types in `types.ts`. The renderer test mock (`tests/renderer/lkv.ts`) is typed from `LkvApi`, so `npm run typecheck`
+  fails until the mock has the new method too.
 - `src/` is the React 18 renderer, styled with MUI using a Material 3 theme (`src/theme/m3Theme.ts`). `src/App.tsx`
   is a large single component holding most of the UI (Ask home, notes rail, note peek, Simple/Advanced modes).
 

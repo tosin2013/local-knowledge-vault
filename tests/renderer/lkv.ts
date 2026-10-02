@@ -1,8 +1,10 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
+import type { LkvApi } from '../../electron/preload'
 import type {
   AskGroundedResult,
   ChatMessage,
   ChatProfile,
+  ChatSendResult,
   ChatSession,
   CitationPackExportResult,
   ImportFromUrlResult,
@@ -256,8 +258,23 @@ export function makePluginListResult(overrides: Partial<PluginListResult> = {}):
   }
 }
 
-export interface LkvMock {
-  [key: string]: unknown
+/** A chat.send result; `assistant` defaults to the last assistant message in the thread. */
+export function makeSendResult(
+  input: Pick<ChatSendResult, 'messages' | 'session'> & Partial<ChatSendResult>,
+): ChatSendResult {
+  const assistant = [...input.messages].reverse().find((m) => m.role === 'assistant') ?? makeMessage()
+  return { assistant, ...input }
+}
+
+/**
+ * `window.lkv` with every method replaced by a vitest mock of the same signature.
+ * It is derived from the preload's `LkvApi`, so a method that is renamed, removed
+ * or added there fails `npm run typecheck` until this mock matches (#95).
+ */
+export type LkvMock = {
+  [NS in keyof LkvApi]: {
+    [M in keyof LkvApi[NS]]: LkvApi[NS][M] extends (...args: infer A) => infer R ? Mock<(...args: A) => R> : never
+  }
 }
 
 /** A full window.lkv stub. Every method resolves to a benign default; override per-test. */
@@ -284,6 +301,9 @@ export function createLkvMock(): LkvMock {
     },
     ask: {
       grounded: vi.fn().mockResolvedValue(makeAskResult()),
+    },
+    ollama: {
+      health: vi.fn().mockResolvedValue({ ok: true, models: [] }),
     },
     llm: {
       status: vi.fn().mockResolvedValue(makeLlmStatus()),
@@ -410,8 +430,14 @@ export function createLkvMock(): LkvMock {
       disconnect: vi.fn().mockResolvedValue(makeMcpServer('mcp_1', { status: 'disconnected' })),
       cancelAuth: vi.fn().mockResolvedValue(null),
       listTools: vi.fn().mockResolvedValue([]),
+      callTool: vi.fn().mockResolvedValue({ content: [] }),
     },
   }
+}
+
+/** The mock currently installed on `window.lkv` (setup.ts installs a fresh one per test). */
+export function lkvMock(): LkvMock {
+  return window.lkv as unknown as LkvMock
 }
 
 /** Installs the given (or a fresh) lkv mock onto window and returns it. */

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BridgeSettings } from '../../src/components/ai/BridgeSettings'
+import { lkvMock } from './lkv'
 
 describe('BridgeSettings', () => {
   it('loads and displays the running status and token', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.bridge.status.mockResolvedValue({ running: true, host: '127.0.0.1', port: 8765, version: '1.0.0' })
     lkv.bridge.getToken.mockResolvedValue('tok_abc')
     render(<BridgeSettings />)
@@ -14,7 +15,7 @@ describe('BridgeSettings', () => {
   })
 
   it('shows the not-running state', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.bridge.status.mockResolvedValue({ running: false, host: '', port: 0, version: '1.0.0' })
     render(<BridgeSettings />)
 
@@ -22,7 +23,7 @@ describe('BridgeSettings', () => {
   })
 
   it('regenerates the token', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.bridge.status.mockResolvedValue({ running: true, host: '127.0.0.1', port: 8765, version: '1.0.0' })
     lkv.bridge.getToken.mockResolvedValue('tok_old')
     lkv.bridge.rotateToken.mockResolvedValue('tok_new')
@@ -35,7 +36,7 @@ describe('BridgeSettings', () => {
   })
 
   it('shows an error when the bridge is unreachable', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.bridge.status.mockRejectedValue(new Error('bridge down'))
     lkv.bridge.getToken.mockRejectedValue(new Error('bridge down'))
     render(<BridgeSettings />)

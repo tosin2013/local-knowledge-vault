@@ -89,7 +89,7 @@ Make sure you are on the branch with the change — `main` does not contain unme
 
 | Script | What it does |
 |---|---|
-| `npm run typecheck` | `tsc` for the Electron and renderer projects |
+| `npm run typecheck` | `tsc` for the Electron and renderer projects, and the renderer tests (`tsconfig.tests.json`) |
 | `npm run build` | typecheck + Vite build of renderer and main |
 | `npm run test:mvp` | DB seed, filters, FTS hits, citation-hallucination rejection, `ollama.health()` survives Ollama being down |
 | `npm run test:providers` | offline tests of the provider registry, adapters (mock servers), settings migration and plugin loader |

@@ -6,10 +6,11 @@ import {
   PluginPersonasSection,
   usePluginContributions,
 } from '../../src/plugins/contrib'
+import { lkvMock } from './lkv'
 
 describe('usePluginContributions', () => {
   it('loads contributions from window.lkv', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.contributions.mockResolvedValue({
       providers: [],
       personas: [],
@@ -21,7 +22,7 @@ describe('usePluginContributions', () => {
   })
 
   it('falls back to empty on error', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.contributions.mockRejectedValue(new Error('boom'))
     const { result } = renderHook(() => usePluginContributions())
     await waitFor(() => expect(result.current.personas).toEqual([]))
@@ -35,7 +36,7 @@ describe('PluginPersonasSection', () => {
   })
 
   it('renders a persona and installs it', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.contributions.mockResolvedValue({
       providers: [],
       personas: [{ name: 'Sage', prompt: 'Be wise', description: 'wise', pluginId: 'p1', pluginName: 'Pack' }],
@@ -53,7 +54,7 @@ describe('PluginPersonasSection', () => {
   })
 
   it('surfaces install errors', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.contributions.mockResolvedValue({
       providers: [],
       personas: [{ name: 'Sage', prompt: 'Be wise', pluginId: 'p1', pluginName: 'Pack' }],
@@ -76,7 +77,7 @@ describe('PluginMcpPresetsSection', () => {
   })
 
   it('renders presets and adds one', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.contributions.mockResolvedValue({
       providers: [],
       personas: [],
@@ -93,7 +94,7 @@ describe('PluginMcpPresetsSection', () => {
   })
 
   it('disables Add for already-added presets', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.contributions.mockResolvedValue({
       providers: [],
       personas: [],

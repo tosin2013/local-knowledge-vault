@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { UpdateNotice } from '../../src/components/updates/UpdateNotice'
 import { UpdateSettings } from '../../src/components/updates/UpdateSettings'
+import type { UpdateCheckResult } from '../../electron/types'
+import { lkvMock } from './lkv'
 
-const available = {
+const available: UpdateCheckResult = {
   ok: true,
   current: '0.3.0',
   latest: '0.4.0',
@@ -13,7 +15,7 @@ const available = {
 
 describe('UpdateNotice (#42)', () => {
   it('shows a notice with a download link when a newer version exists', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.updates.checkOnLaunch.mockResolvedValue(available)
     render(<UpdateNotice />)
 
@@ -22,12 +24,13 @@ describe('UpdateNotice (#42)', () => {
   })
 
   it('stays hidden when up to date, skipped, or the check fails', async () => {
-    const lkv = window.lkv as any
-    for (const r of [
+    const lkv = lkvMock()
+    const quiet: UpdateCheckResult[] = [
       { ok: true, current: '0.3.0', latest: '0.3.0', updateAvailable: false },
       { ok: true, current: '0.3.0', updateAvailable: false, skipped: 'disabled' },
       { ok: false, current: '0.3.0', error: 'offline' },
-    ]) {
+    ]
+    for (const r of quiet) {
       lkv.updates.checkOnLaunch.mockResolvedValue(r)
       const { unmount } = render(<UpdateNotice />)
       await waitFor(() => expect(lkv.updates.checkOnLaunch).toHaveBeenCalled())
@@ -41,7 +44,7 @@ describe('UpdateNotice (#42)', () => {
   })
 
   it('does not show a version the user already dismissed', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.updates.checkOnLaunch.mockResolvedValue(available)
     const first = render(<UpdateNotice />)
     await waitFor(() => expect(screen.getByTestId('update-notice')).toBeInTheDocument())
@@ -58,7 +61,7 @@ describe('UpdateNotice (#42)', () => {
 
 describe('UpdateSettings (#42)', () => {
   it('loads the setting and turns the launch check off', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     render(<UpdateSettings />)
     const toggle = await screen.findByRole('checkbox', { name: 'Check for updates when Vault starts' })
     await waitFor(() => expect(toggle).toBeChecked())
@@ -68,7 +71,7 @@ describe('UpdateSettings (#42)', () => {
   })
 
   it('reports up to date, an available update, and a failed check', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     render(<UpdateSettings />)
     const checkNow = screen.getByRole('button', { name: 'Check now' })
 
