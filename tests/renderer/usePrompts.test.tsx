@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { usePrompts, type UsePromptsDeps } from '../../src/hooks/usePrompts'
-import { makePrompt } from './lkv'
+import { lkvMock, makePrompt } from './lkv'
 
 function makeDeps(overrides: Partial<UsePromptsDeps> = {}): UsePromptsDeps {
   return {
@@ -15,7 +15,7 @@ function makeDeps(overrides: Partial<UsePromptsDeps> = {}): UsePromptsDeps {
 
 describe('usePrompts', () => {
   it('refreshes prompts', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.prompts.list.mockResolvedValue([makePrompt('prm_1', 'Grounded default')])
     const { result } = renderHook(() => usePrompts(makeDeps()))
     await act(async () => {
@@ -40,7 +40,7 @@ describe('usePrompts', () => {
   })
 
   it('creates a prompt on save', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.prompts.create.mockResolvedValue(makePrompt('prm_new', 'New', 'Body'))
     const { result } = renderHook(() => usePrompts(makeDeps()))
     act(() => result.current.setPromptDraft({ name: 'New', body: 'Body', description: '' }))
@@ -51,7 +51,7 @@ describe('usePrompts', () => {
   })
 
   it('updates an existing prompt on save', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.prompts.update.mockResolvedValue(makePrompt('prm_1', 'Updated', 'Body'))
     const { result } = renderHook(() => usePrompts(makeDeps()))
     act(() => result.current.onSelectPrompt(makePrompt('prm_1', 'Old', 'Body')))
@@ -63,7 +63,7 @@ describe('usePrompts', () => {
   })
 
   it('deletes a prompt and notifies', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     const deps = makeDeps()
     const { result } = renderHook(() => usePrompts(deps))
     act(() => result.current.onSelectPrompt(makePrompt('prm_1', 'Old', 'Body')))
@@ -75,7 +75,7 @@ describe('usePrompts', () => {
   })
 
   it('does not save a blank prompt', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     const { result } = renderHook(() => usePrompts(makeDeps()))
     await act(async () => {
       await result.current.onSavePrompt()

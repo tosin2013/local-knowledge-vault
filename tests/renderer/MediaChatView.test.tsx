@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MediaChatView } from '../../src/plugins/media-chat/MediaChatView'
-import { makeIngestResult, makeItem, makeMessage, makePrompt, makeSession, makeVoicePack } from './lkv'
+import { lkvMock, makeIngestResult, makeItem, makeMessage, makePrompt, makeSession, makeVoicePack } from './lkv'
 
 function seedMedia() {
-  const lkv = window.lkv as any
+  const lkv = lkvMock()
   lkv.prompts.list.mockResolvedValue([
     makePrompt('prm_media_reader', 'Media reader'),
     makePrompt('prm_desk', 'Desk cohost'),

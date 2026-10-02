@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { McpConnectionsView } from '../../src/plugins/mcp-connections/McpConnectionsView'
-import { makeMcpServer, makeMcpTool } from './lkv'
+import { lkvMock, makeMcpServer, makeMcpTool } from './lkv'
 
 describe('McpConnectionsView', () => {
   it('renders the Notion card and connect CTA', async () => {
@@ -11,7 +11,7 @@ describe('McpConnectionsView', () => {
   })
 
   it('connects Notion', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.mcp.ensureNotion.mockResolvedValue(makeMcpServer('notion', { preset: 'notion', name: 'Notion' }))
     lkv.mcp.connect.mockResolvedValue({
       server: makeMcpServer('notion', { preset: 'notion', status: 'connected', workspaceId: 'ws_123' }),
@@ -25,7 +25,7 @@ describe('McpConnectionsView', () => {
   })
 
   it('shows a failure message when connect rejects', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.mcp.connect.mockRejectedValue(new Error('timed out'))
     render(<McpConnectionsView />)
     fireEvent.click(await screen.findByText('Connect Notion'))
@@ -33,7 +33,7 @@ describe('McpConnectionsView', () => {
   })
 
   it('lists another server with Connect / Remove', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.mcp.listServers.mockResolvedValue([makeMcpServer('mcp_1', { name: 'Other', url: 'https://x/mcp' })])
     render(<McpConnectionsView />)
     await screen.findByText('Other')
@@ -42,7 +42,7 @@ describe('McpConnectionsView', () => {
   })
 
   it('removes a server', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.mcp.listServers.mockResolvedValue([makeMcpServer('mcp_1', { name: 'Other' })])
     render(<McpConnectionsView />)
     await screen.findByText('Other')
@@ -51,7 +51,7 @@ describe('McpConnectionsView', () => {
   })
 
   it('adds a server via the dialog', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     render(<McpConnectionsView />)
     fireEvent.click(await screen.findByText('Add MCP server'))
 
@@ -65,7 +65,7 @@ describe('McpConnectionsView', () => {
   })
 
   it('disconnects a connected server and refreshes its tools', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.mcp.listServers.mockResolvedValue([makeMcpServer('mcp_1', { name: 'Other', status: 'connected' })])
     lkv.mcp.listTools.mockResolvedValue([makeMcpTool('search')])
     render(<McpConnectionsView />)

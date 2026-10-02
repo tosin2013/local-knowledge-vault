@@ -93,7 +93,7 @@ describe('PromptsView', () => {
     render(<PromptsView {...props} />)
     fireEvent.click(screen.getByText('Concise bullets'))
     expect(props.onDraft).toHaveBeenCalled()
-    const updater = props.onDraft.mock.calls[0][0] as (d: PromptDraft) => PromptDraft
+    const updater = vi.mocked(props.onDraft).mock.calls[0][0] as (d: PromptDraft) => PromptDraft
     const filled = updater({ name: '', body: '', description: '' })
     expect(filled.name).toBe('Concise bullets')
     expect(filled.description).toBe('Short bullet-list answers')

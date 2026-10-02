@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
     "test:mvp": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/test-mvp.ts",
     "test:providers": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/providers-plugins-smoke.ts",
     "test:providers:live": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/providers-live-groq.ts",

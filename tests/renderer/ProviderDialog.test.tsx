@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ProviderDialog } from '../../src/components/ai/ProviderDialog'
-import { makePreset, makeProvider } from './lkv'
+import { lkvMock, makePreset, makeProvider } from './lkv'
 
 const presets = [
   makePreset('ollama', { id: 'ollama', kind: 'ollama', label: 'Ollama', local: true, requiresKey: false, baseUrl: 'http://localhost:11434' }),
@@ -76,7 +76,7 @@ describe('ProviderDialog', () => {
   })
 
   it('fetches models', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.providers.fetchModels.mockResolvedValue({ ok: true, models: ['m1', 'm2'] })
     render(<ProviderDialog {...makeProps({ initialPresetId: 'openrouter' })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Fetch models' }))
@@ -84,7 +84,7 @@ describe('ProviderDialog', () => {
   })
 
   it('tests the connection', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.providers.test.mockResolvedValue({ ok: true, latencyMs: 42, model: 'm1', sample: 'hi' })
     render(<ProviderDialog {...makeProps({ initialPresetId: 'openrouter' })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }))
@@ -92,7 +92,7 @@ describe('ProviderDialog', () => {
   })
 
   it('saves the provider', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.providers.save.mockResolvedValue(makeProvider('groq', { label: 'Groq' }))
     const props = makeProps({ initialPresetId: 'openrouter' })
     render(<ProviderDialog {...props} />)
@@ -102,7 +102,7 @@ describe('ProviderDialog', () => {
   })
 
   it('shows an error when saving fails', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.providers.save.mockRejectedValue(new Error('Save failed'))
     render(<ProviderDialog {...makeProps({ initialPresetId: 'openrouter' })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

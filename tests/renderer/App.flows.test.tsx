@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from '../../src/App'
-import { makeItem, makeMessage, makePrompt, makeSession } from './lkv'
+import { lkvMock, makeItem, makeSendResult, makeMessage, makePrompt, makeSession } from './lkv'
 
 /**
  * End-to-end renderer flows through <App /> with window.lkv mocked at the IPC
@@ -12,10 +12,7 @@ import { makeItem, makeMessage, makePrompt, makeSession } from './lkv'
 
 /** Seed the IPC mock with a grounded prompt and one note so the App hydrates. */
 function seed() {
-  const lkv = window.lkv as {
-    prompts: { list: { mockResolvedValue: (v: unknown) => unknown } }
-    items: { list: { mockResolvedValue: (v: unknown) => unknown }; get: { mockResolvedValue: (v: unknown) => unknown } }
-  } & Record<string, any>
+  const lkv = lkvMock()
   lkv.prompts.list.mockResolvedValue([makePrompt('prm_g', 'Grounded default')])
   lkv.items.list.mockResolvedValue([makeItem('itm_1', { title: 'First note', project: 'Work' })])
   lkv.items.get.mockResolvedValue(makeItem('itm_1', { title: 'First note', body: 'Body text' }))
@@ -33,7 +30,7 @@ async function renderApp() {
 describe('App flows — Ask', () => {
   it('sends a question and renders the answer with citations', async () => {
     const lkv = seed()
-    lkv.chat.send.mockResolvedValue({
+    lkv.chat.send.mockResolvedValue(makeSendResult({
       messages: [
         makeMessage({ id: 'msg_user', role: 'user', content: 'What is PARA?' }),
         makeMessage({
@@ -45,7 +42,7 @@ describe('App flows — Ask', () => {
       ],
       session: makeSession('s_1', 'What is PARA?'),
       offline: false,
-    })
+    }))
     await renderApp()
 
     fireEvent.change(screen.getByPlaceholderText(/Ask about your notes/), {
@@ -60,7 +57,7 @@ describe('App flows — Ask', () => {
 
   it('renders the "could not find that in your notes" reply', async () => {
     const lkv = seed()
-    lkv.chat.send.mockResolvedValue({
+    lkv.chat.send.mockResolvedValue(makeSendResult({
       messages: [
         makeMessage({
           role: 'assistant',
@@ -69,7 +66,7 @@ describe('App flows — Ask', () => {
       ],
       session: makeSession('s_1'),
       offline: false,
-    })
+    }))
     await renderApp()
 
     fireEvent.change(screen.getByPlaceholderText(/Ask about your notes/), {
@@ -97,11 +94,11 @@ describe('App flows — Ask', () => {
 
   it('marks the reply as offline when the model is unavailable', async () => {
     const lkv = seed()
-    lkv.chat.send.mockResolvedValue({
+    lkv.chat.send.mockResolvedValue(makeSendResult({
       messages: [makeMessage({ role: 'assistant', content: 'Saved as a status notice.' })],
       session: makeSession('s_1'),
       offline: true,
-    })
+    }))
     await renderApp()
 
     fireEvent.change(screen.getByPlaceholderText(/Ask about your notes/), {

@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #95: the renderer test mock (tests/renderer/lkv.ts) is typed from the preload's LkvApi and tests/ is typechecked by npm run typecheck. Verified by hand once: removing a method from the mock, renaming a method in preload, and adding a preload method the mock lacks each make npm run typecheck exit 1.",
+  "authority_id": "95",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q \"LkvApi\" tests/renderer/lkv.ts" },
+    { "check": "command_exit", "target": "grep -q \"tsconfig.tests.json\" package.json" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "tests_pass", "target": "npm run test:renderer" }
+  ]
+}

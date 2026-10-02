@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MediaPersonasView } from '../../src/plugins/media-personas/MediaPersonasView'
-import { makeMediaProject, makePrompt, makeVoicePack } from './lkv'
+import { lkvMock, makeMediaProject, makePrompt, makeVoicePack } from './lkv'
 
 function seed() {
-  const lkv = window.lkv as any
+  const lkv = lkvMock()
   lkv.media.listProjects.mockResolvedValue([makeMediaProject('My podcast')])
   lkv.prompts.list.mockResolvedValue([makePrompt('prm_media_reader', 'Media reader')])
   return lkv

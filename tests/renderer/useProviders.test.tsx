@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useProviders } from '../../src/hooks/useProviders'
-import { makeLlmStatus } from './lkv'
+import { lkvMock, makeLlmStatus, makePreset } from './lkv'
 
 describe('useProviders', () => {
   it('refreshes llm status on demand', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.llm.status.mockResolvedValue(makeLlmStatus({ message: 'online' }))
     const { result } = renderHook(() => useProviders())
     await act(async () => {
@@ -15,7 +15,7 @@ describe('useProviders', () => {
   })
 
   it('falls back to an offline status when llm.status rejects', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.llm.status.mockRejectedValue(new Error('boom'))
     const { result } = renderHook(() => useProviders())
     await act(async () => {
@@ -25,14 +25,14 @@ describe('useProviders', () => {
   })
 
   it('rechecks and loads provider presets', async () => {
-    const lkv = window.lkv as any
-    lkv.providers.list.mockResolvedValue({ providers: [], selected: 'auto', presets: [{ id: 'openai' }] })
+    const lkv = lkvMock()
+    lkv.providers.list.mockResolvedValue({ providers: [], selected: 'auto', presets: [makePreset('openai')] })
     const { result } = renderHook(() => useProviders())
     await act(async () => {
       await result.current.recheckLlm()
     })
     expect(lkv.providers.list).toHaveBeenCalled()
-    expect(result.current.providerPresets).toEqual([{ id: 'openai' }])
+    expect(result.current.providerPresets).toEqual([makePreset('openai')])
   })
 
   it('opens the add-provider dialog with an optional preset', () => {
@@ -44,7 +44,7 @@ describe('useProviders', () => {
   })
 
   it('refreshes plugin state and rechecks on the change event', async () => {
-    const lkv = window.lkv as any
+    const lkv = lkvMock()
     lkv.plugins.list.mockResolvedValue({ plugins: [], errors: [], pluginsDir: '', disabled: ['media-chat'] })
     const { result } = renderHook(() => useProviders())
     await waitFor(() => expect(result.current.disabledPlugins).toEqual(['media-chat']))
