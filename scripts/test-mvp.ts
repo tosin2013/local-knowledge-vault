@@ -604,7 +604,7 @@ async function main(): Promise<void> {
     const probe = new Database(freshFile, { readonly: true })
     const v = probe.pragma('user_version', { simple: true })
     probe.close()
-    assert(v === 2, `fresh vault sets user_version = 2 (got ${v})`)
+    assert(v === 3, `fresh vault sets user_version = 3 (got ${v})`)
     assert(countItems() >= 3, 'fresh vault seeds sample notes')
     closeDb()
 
@@ -669,7 +669,7 @@ async function main(): Promise<void> {
       const probe2 = new Database(v1File, { readonly: true })
       const v2 = probe2.pragma('user_version', { simple: true })
       probe2.close()
-      assert(v2 === 2, `v1 vault is upgraded to user_version = 2 (got ${v2})`)
+      assert(v2 === 3, `v1 vault is upgraded to user_version = 3 (got ${v2})`)
     }
     closeDb()
   }

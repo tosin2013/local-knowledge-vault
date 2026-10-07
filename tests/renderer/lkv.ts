@@ -21,6 +21,8 @@ import type {
   ProviderConfig,
   ProviderPresetInfo,
   Prompt,
+  ReviewQueueItem,
+  ReviewState,
   SearchHit,
 } from '../../electron/types'
 
@@ -51,6 +53,24 @@ export function makeHit(id: string, overrides: Partial<SearchHit> = {}): SearchH
     project: null,
     ...overrides,
   }
+}
+
+export function makeReviewItem(id: string, overrides: Partial<ReviewQueueItem> = {}): ReviewQueueItem {
+  return {
+    ...makeItem(id),
+    due_at: '2026-09-28T00:00:00.000Z',
+    interval_days: 0,
+    ease: 2.5,
+    reps: 0,
+    lapses: 0,
+    last_grade: null,
+    last_reviewed_at: null,
+    ...overrides,
+  }
+}
+
+export function makeReviewState(overrides: Partial<ReviewState> = {}): ReviewState {
+  return { intervalDays: 1, ease: 2.5, reps: 1, lapses: 0, ...overrides }
 }
 
 export function makeSession(id: string, title = 'New chat', overrides: Partial<ChatSession> = {}): ChatSession {
@@ -304,6 +324,15 @@ export function createLkvMock(): LkvMock {
     },
     testToNotes: {
       analyze: vi.fn().mockResolvedValue([]),
+    },
+    review: {
+      listDue: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+      rate: vi.fn().mockImplementation((input: { itemId: string; grade: string }) =>
+        Promise.resolve(makeReviewState({ reps: 1 })),
+      ),
+      enqueue: vi.fn().mockResolvedValue(makeReviewState({ intervalDays: 0, reps: 0 })),
+      remove: vi.fn().mockResolvedValue(true),
     },
     ollama: {
       health: vi.fn().mockResolvedValue({ ok: true, models: [] }),

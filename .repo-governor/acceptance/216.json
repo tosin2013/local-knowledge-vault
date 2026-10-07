@@ -1,0 +1,15 @@
+{
+  "$comment": "Completion bar for #216: a spaced-review scheduler over the user's notes. A versioned review_schedule table stores per-note due date, interval, ease and history; a pure SM-2-style scheduler expands intervals on Good/Easy and resets on Again, with an optional exam-date anchor (Cepeda et al. 2008); a Review panel lists due notes, reveals the cited note as feedback, and records a grade. FSRS stays out of scope. Verified failing first: no review module/panel/handler, no test:review.",
+  "authority_id": "216",
+  "criteria": [
+    { "check": "file_exists", "target": "electron/review.ts" },
+    { "check": "command_exit", "target": "grep -q 'review:listDue' electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q 'review:listDue' electron/preload.ts" },
+    { "check": "command_exit", "target": "grep -q \"from './review'\" src/plugins/registry.ts" },
+    { "check": "file_exists", "target": "src/plugins/review/index.ts" },
+    { "check": "tests_pass", "target": "npm run test:review" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

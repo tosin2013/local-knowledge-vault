@@ -788,3 +788,48 @@ export interface TestToNotesSuggestion {
   offline?: boolean
   error?: string
 }
+
+/* ---- Spaced review scheduling (#216) ---- */
+
+/** How well the learner recalled an item. SM-2-style four-button scale. */
+export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy'
+
+/** The mutable scheduling state for one note. */
+export interface ReviewState {
+  intervalDays: number
+  ease: number
+  reps: number
+  lapses: number
+}
+
+/** A note that is due for review, with its schedule fields. */
+export interface ReviewQueueItem extends Item {
+  due_at: string
+  interval_days: number
+  ease: number
+  reps: number
+  lapses: number
+  last_grade: ReviewGrade | null
+  last_reviewed_at: string | null
+}
+
+/** One stored review_schedule row, without the note body. */
+export interface ReviewScheduleRow extends ReviewState {
+  itemId: string
+  dueAt: string
+  lastGrade: ReviewGrade | null
+  lastReviewedAt: string | null
+}
+
+export interface ReviewRateInput {
+  itemId: string
+  grade: ReviewGrade
+  /** Optional exam date; anchors the first Good interval (Cepeda-style). */
+  targetDate?: string
+}
+
+export interface ReviewEnqueueInput {
+  itemId: string
+  /** Optional exam date; anchors the first Good interval (Cepeda-style). */
+  targetDate?: string
+}
