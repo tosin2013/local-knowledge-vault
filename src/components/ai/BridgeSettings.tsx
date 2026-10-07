@@ -7,6 +7,8 @@ interface BridgeStatus {
   host: string
   port: number
   version: string
+  /** Why it is not listening, e.g. the port is taken by another Vault profile (#240). */
+  error?: string
 }
 
 /**
@@ -56,6 +58,11 @@ export function BridgeSettings() {
       <Typography variant="caption" color="text.secondary">
         Local HTTP API for Obsidian / scripts. {statusText}
       </Typography>
+      {status?.error && !status.running && (
+        <Alert severity="warning" sx={{ mt: 1 }} data-testid="bridge-status-error">
+          {status.error}
+        </Alert>
+      )}
       {error && (
         <Alert severity="error" sx={{ mt: 1 }}>
           {error}

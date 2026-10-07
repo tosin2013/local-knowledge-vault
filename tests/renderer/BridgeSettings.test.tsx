@@ -22,6 +22,20 @@ describe('BridgeSettings', () => {
     await waitFor(() => expect(screen.getByText(/Not running/)).toBeInTheDocument())
   })
 
+  it('says why the bridge is not listening when the port is taken (#240)', async () => {
+    const lkv = lkvMock()
+    lkv.bridge.status.mockResolvedValue({
+      running: false,
+      host: '127.0.0.1',
+      port: 8765,
+      version: '1.0.0',
+      error: 'Port 8765 is already in use (another Vault profile or app?).',
+    })
+    render(<BridgeSettings />)
+    await waitFor(() => expect(screen.getByText(/Not running/)).toBeInTheDocument())
+    expect(screen.getByTestId('bridge-status-error')).toHaveTextContent('Port 8765 is already in use')
+  })
+
   it('regenerates the token', async () => {
     const lkv = lkvMock()
     lkv.bridge.status.mockResolvedValue({ running: true, host: '127.0.0.1', port: 8765, version: '1.0.0' })
