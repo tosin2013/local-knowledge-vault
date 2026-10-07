@@ -4,6 +4,7 @@ import { mediaPersonasPlugin } from './media-personas'
 import { mcpConnectionsPlugin } from './mcp-connections'
 import { testToNotesPlugin } from './test-to-notes'
 import { reviewPlugin } from './review'
+import { studyPlugin } from './study'
 import { managePluginsPlugin } from './manage'
 
 /**
@@ -13,7 +14,7 @@ import { managePluginsPlugin } from './manage'
  * in Manage plugins). Third-party plugins are declarative plugin.json packs — see
  * docs/plugins-authoring.md; they never run code.
  */
-export const plugins: VaultPlugin[] = [mediaChatPlugin, mediaPersonasPlugin, mcpConnectionsPlugin, testToNotesPlugin, reviewPlugin]
+export const plugins: VaultPlugin[] = [mediaChatPlugin, mediaPersonasPlugin, mcpConnectionsPlugin, testToNotesPlugin, reviewPlugin, studyPlugin]
 
 /** System panels: always available, not listed as toggleable plugins. */
 const systemPlugins: VaultPlugin[] = [managePluginsPlugin]

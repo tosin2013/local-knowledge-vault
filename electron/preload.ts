@@ -73,6 +73,9 @@ import type {
   ReviewState,
   SearchQueryInput,
   SearchQueryResult,
+  StudyAttempt,
+  StudyAttemptInput,
+  StudyCalibration,
   TestToNotesAnalyzeInput,
   TestToNotesSuggestion,
   UpdateChatProfilePatch,
@@ -120,6 +123,14 @@ const api = {
     enqueue: (input: ReviewEnqueueInput): Promise<ReviewState> =>
       ipcRenderer.invoke('review:enqueue', input),
     remove: (itemId: string): Promise<boolean> => ipcRenderer.invoke('review:remove', itemId),
+  },
+  study: {
+    record: (input: StudyAttemptInput): Promise<StudyAttempt> =>
+      ipcRenderer.invoke('study:record', input),
+    listRecent: (limit?: number): Promise<StudyAttempt[]> =>
+      ipcRenderer.invoke('study:listRecent', limit),
+    calibration: (): Promise<StudyCalibration> =>
+      ipcRenderer.invoke('study:calibration'),
   },
   ollama: {
     health: (): Promise<OllamaHealth> => ipcRenderer.invoke('ollama:health'),

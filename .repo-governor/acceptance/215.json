@@ -1,0 +1,15 @@
+{
+  "$comment": "Completion bar for #215: a recall-before-reveal Study mode. The learner answers first and rates confidence 0-100; only then is the grounded, cited answer revealed as feedback, with an optional one-line self-explanation and a self-grade. Attempts persist in a study_attempts table (migration) and feed a calibration summary (mean confidence vs accuracy: bias and Brier). Every Vault-specific effect stays a hypothesis; the pilot in #218 measures it. Verified failing first: no study module/panel/handler, no test:study.",
+  "authority_id": "215",
+  "criteria": [
+    { "check": "file_exists", "target": "electron/study.ts" },
+    { "check": "command_exit", "target": "grep -q 'study:record' electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q 'study:record' electron/preload.ts" },
+    { "check": "command_exit", "target": "grep -q \"from './study'\" src/plugins/registry.ts" },
+    { "check": "file_exists", "target": "src/plugins/study/index.ts" },
+    { "check": "tests_pass", "target": "npm run test:study" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

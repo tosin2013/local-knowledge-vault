@@ -48,6 +48,7 @@ import { parsePersonalityPack, personalityFileName, serializePersonalityPack } f
 import { sendChatTurn } from './chat'
 import { analyzeTestResults } from './test-to-notes'
 import { listDueReviews, countDueReviews, rateReview, enqueueReview, removeReview } from './review'
+import { listRecentAttempts, recordStudyAttempt, studyCalibration } from './study'
 import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
@@ -131,6 +132,7 @@ import type {
   ItemFilters,
   ListItemsInput,
   SearchQueryInput,
+  StudyAttemptInput,
   TestToNotesAnalyzeInput,
   ReviewEnqueueInput,
   ReviewRateInput,
@@ -486,6 +488,11 @@ function registerIpc(): void {
     enqueueReview(input.itemId, { targetDate: input.targetDate })
   )
   ipcMain.handle('review:remove', (_e, itemId: string) => removeReview(itemId))
+
+  // Study mode (#215): recall-before-reveal attempts + calibration.
+  ipcMain.handle('study:record', (_e, input: StudyAttemptInput) => recordStudyAttempt(input))
+  ipcMain.handle('study:listRecent', (_e, limit?: number) => listRecentAttempts(limit))
+  ipcMain.handle('study:calibration', () => studyCalibration())
 
   ipcMain.handle('ollama:health', () => {
     return ollamaHealth()

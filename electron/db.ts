@@ -59,7 +59,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -71,6 +71,9 @@ function migrate(database: Database.Database): void {
   }
   if (version < 3) {
     migrateV3(database)
+  }
+  if (version < 4) {
+    migrateV4(database)
   }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
@@ -96,6 +99,28 @@ function migrateV3(database: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_review_due ON review_schedule(due_at);
+  `)
+}
+
+/**
+ * v4 (#215): Study mode recall-before-reveal attempts. One row per attempt:
+ * what the learner recalled, how confident they were, the grounded answer and
+ * citations shown as feedback, and their self-grade.
+ */
+function migrateV4(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS study_attempts (
+      id TEXT PRIMARY KEY,
+      question TEXT NOT NULL,
+      attempt TEXT NOT NULL DEFAULT '',
+      confidence INTEGER NOT NULL DEFAULT 0,
+      self_grade TEXT NOT NULL CHECK(self_grade IN ('missed','partial','got')),
+      self_explanation TEXT,
+      cited_ids TEXT NOT NULL DEFAULT '',
+      answer TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_study_attempts_created ON study_attempts(created_at);
   `)
 }
 
@@ -282,11 +307,11 @@ function ensureTrigramFts(database: Database.Database): void {
   `)
 }
 
-function newId(prefix: string): string {
+export function newId(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 16)}`
 }
 
-function nowIso(): string {
+export function nowIso(): string {
   return new Date().toISOString()
 }
 

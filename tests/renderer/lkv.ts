@@ -24,6 +24,9 @@ import type {
   ReviewQueueItem,
   ReviewState,
   SearchHit,
+  StudyAttempt,
+  StudyAttemptInput,
+  StudyCalibration,
 } from '../../electron/types'
 
 export function makeItem(id: string, overrides: Partial<Item> = {}): Item {
@@ -173,6 +176,32 @@ export function makeAskResult(overrides: Partial<AskGroundedResult> = {}): AskGr
     answer: 'An answer',
     citations: [{ id: 'itm_1', title: 'Note title' }],
     hits: [makeHit('itm_1')],
+    ...overrides,
+  }
+}
+
+export function makeStudyAttempt(overrides: Partial<StudyAttempt> = {}): StudyAttempt {
+  return {
+    id: 'att_1',
+    question: 'What is PARA?',
+    attempt: 'Projects, Areas, Resources, Archives',
+    confidence: 70,
+    self_grade: 'got',
+    self_explanation: 'Four groups for notes',
+    cited_ids: 'itm_1',
+    answer: 'PARA is Projects, Areas, Resources, Archives [itm_1]',
+    created_at: '2026-09-28T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+export function makeStudyCalibration(overrides: Partial<StudyCalibration> = {}): StudyCalibration {
+  return {
+    count: 0,
+    meanConfidence: 0,
+    meanScore: 0,
+    bias: 0,
+    brier: 0,
     ...overrides,
   }
 }
@@ -333,6 +362,23 @@ export function createLkvMock(): LkvMock {
       ),
       enqueue: vi.fn().mockResolvedValue(makeReviewState({ intervalDays: 0, reps: 0 })),
       remove: vi.fn().mockResolvedValue(true),
+    },
+    study: {
+      record: vi.fn().mockImplementation((input: StudyAttemptInput) =>
+        Promise.resolve(
+          makeStudyAttempt({
+            question: input.question,
+            attempt: input.attempt ?? '',
+            confidence: input.confidence ?? 0,
+            self_grade: input.selfGrade,
+            self_explanation: input.selfExplanation ?? null,
+            cited_ids: (input.citedIds ?? []).join(','),
+            answer: input.answer ?? null,
+          }),
+        ),
+      ),
+      listRecent: vi.fn().mockResolvedValue([]),
+      calibration: vi.fn().mockResolvedValue(makeStudyCalibration()),
     },
     ollama: {
       health: vi.fn().mockResolvedValue({ ok: true, models: [] }),
