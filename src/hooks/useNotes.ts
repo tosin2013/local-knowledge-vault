@@ -356,13 +356,19 @@ export function useNotes(deps: UseNotesDeps) {
     void refreshProjects()
   }
 
-  /** Promote an unconfirmed AI draft to a regular note (without editing). */
-  const confirmDraft = async () => {
+  /** Promote an unconfirmed AI draft to a regular note; requires an edit or a one-line summary (#217). */
+  const confirmDraft = async (ownWords?: string) => {
     if (!window.lkv || !draft || draft.status !== 'ai-draft' || draft.id === NEW_DRAFT_ID) return
+    const note = (ownWords ?? '').trim()
+    // A one-click confirm is not enough: the user must edit the draft or restate
+    // it in their own words (generation effect).
+    if (!note && !dirty) return
     setBusy(true)
     setError(null)
     try {
-      const updated = await window.lkv.items.update(draft.id, { status: 'active' })
+      const patch: { status: string; body?: string } = { status: 'active' }
+      if (note) patch.body = `In my own words: ${note}\n\n${draft.body}`
+      const updated = await window.lkv.items.update(draft.id, patch)
       setDraft(updated)
       setDirty(false)
       await refreshList()

@@ -187,17 +187,35 @@ describe('useNotes', () => {
     expect(lkv.items.update).toHaveBeenCalledWith('itm_1', expect.objectContaining({ status: 'active' }))
   })
 
-  it('confirms an AI draft without editing', async () => {
+  it('does not confirm a clean AI draft without an own-words summary', async () => {
     const lkv = lkvMock()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { status: 'ai-draft' }))
-    lkv.items.update.mockResolvedValue(makeItem('itm_1', { status: 'active' }))
     const { result } = renderHook(() => useNotes(makeDeps()))
     act(() => result.current.selectItem('itm_1'))
     await waitFor(() => expect(result.current.draft?.id).toBe('itm_1'))
     await act(async () => {
       await result.current.confirmDraft()
     })
-    expect(lkv.items.update).toHaveBeenCalledWith('itm_1', { status: 'active' })
+    expect(lkv.items.update).not.toHaveBeenCalled()
+  })
+
+  it('confirms an AI draft with an own-words summary written into the body', async () => {
+    const lkv = lkvMock()
+    lkv.items.get.mockResolvedValue(makeItem('itm_1', { status: 'ai-draft', body: 'AI text' }))
+    lkv.items.update.mockResolvedValue(makeItem('itm_1', { status: 'active' }))
+    const { result } = renderHook(() => useNotes(makeDeps()))
+    act(() => result.current.selectItem('itm_1'))
+    await waitFor(() => expect(result.current.draft?.id).toBe('itm_1'))
+    await act(async () => {
+      await result.current.confirmDraft('my own summary')
+    })
+    expect(lkv.items.update).toHaveBeenCalledWith(
+      'itm_1',
+      expect.objectContaining({
+        status: 'active',
+        body: expect.stringContaining('In my own words: my own summary'),
+      }),
+    )
   })
 
   it('hides transcript chunks by default and shows them on toggle', async () => {

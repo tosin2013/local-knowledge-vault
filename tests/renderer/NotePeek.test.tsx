@@ -66,15 +66,21 @@ describe('NotePeek', () => {
     expect(screen.getByLabelText('Project')).toBeInTheDocument()
   })
 
-  it('shows an AI-draft badge and confirms it', () => {
+  it('requires an own-words summary before confirming an AI draft', () => {
     const props = makeProps({
       peekEditing: true,
       draft: makeItem('itm_1', { title: 'Saved answer', status: 'ai-draft' }),
     })
     render(<NotePeek {...props} />)
     expect(screen.getByText('AI draft')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Confirm draft'))
-    expect(props.onConfirmDraft).toHaveBeenCalled()
+    const confirm = screen.getByText('Confirm draft')
+    expect(confirm).toBeDisabled()
+    fireEvent.change(screen.getByPlaceholderText('One line, your words'), {
+      target: { value: 'It means X' },
+    })
+    expect(confirm).not.toBeDisabled()
+    fireEvent.click(confirm)
+    expect(props.onConfirmDraft).toHaveBeenCalledWith('It means X')
   })
 
   it('shows Delete in view mode', () => {

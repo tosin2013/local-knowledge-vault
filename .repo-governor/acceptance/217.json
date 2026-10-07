@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #217: an ai-draft note is promoted to active only by editing it or by supplying a one-line summary in the user's own words. A bare one-click confirm is rejected, and a supplied summary is written into the body with the prefix 'In my own words:'. Verified failing first: there was no own-words control and confirmDraft flipped status without input.",
+  "authority_id": "217",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q 'In your own words' src/features/NotePeek.tsx" },
+    { "check": "command_exit", "target": "grep -q 'In my own words' src/hooks/useNotes.ts" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

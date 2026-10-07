@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   Autocomplete,
   Box,
@@ -33,7 +34,8 @@ export interface NotePeekProps {
   onPatch: <K extends keyof Item>(key: K, value: Item[K]) => void
   onSave: () => void
   onDelete: () => void
-  onConfirmDraft: () => void
+  /** Promote an ai-draft to a normal note; `ownWords` is the user's one-line summary. */
+  onConfirmDraft: (ownWords: string) => void
   onCopyId: (id: string) => void
 }
 
@@ -56,6 +58,12 @@ export function NotePeek(props: NotePeekProps) {
     onConfirmDraft,
     onCopyId,
   } = props
+
+  const [ownWords, setOwnWords] = useState('')
+  // Reset the one-line summary whenever a different draft is opened.
+  useEffect(() => {
+    setOwnWords('')
+  }, [draft?.id])
 
   return (
     <Drawer
@@ -204,6 +212,44 @@ export function NotePeek(props: NotePeekProps) {
               InputProps={{ readOnly: !peekEditing }}
               sx={{ flex: 1, '& .MuiInputBase-root': { alignItems: 'flex-start' } }}
             />
+            {peekEditing &&
+              !isNewDraft &&
+              draft.id !== NEW_DRAFT_ID &&
+              draft.status === AI_DRAFT_STATUS && (
+                <Box
+                  sx={{
+                    p: 1.25,
+                    borderRadius: 2,
+                    bgcolor: 'action.hover',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    This is an AI draft. Confirm it by editing the note, or say it in your own words.
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <TextField
+                      size="small"
+                      label="In your own words"
+                      value={ownWords}
+                      onChange={(e) => setOwnWords(e.target.value)}
+                      placeholder="One line, your words"
+                      sx={{ flex: 1, minWidth: 180 }}
+                      inputProps={{ 'aria-label': 'In your own words' }}
+                    />
+                    <Button
+                      color="warning"
+                      variant="outlined"
+                      disabled={busy || !ownWords.trim()}
+                      onClick={() => onConfirmDraft(ownWords.trim())}
+                    >
+                      Confirm draft
+                    </Button>
+                  </Stack>
+                </Box>
+              )}
             <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center" flexWrap="wrap">
               <Typography variant="body2" color="text.secondary" sx={{ mr: 'auto' }}>
                 {advanced && !isNewDraft && draft.id !== NEW_DRAFT_ID && (
@@ -229,11 +275,6 @@ export function NotePeek(props: NotePeekProps) {
               </Typography>
               {peekEditing && (
                 <>
-                  {!isNewDraft && draft.id !== NEW_DRAFT_ID && draft.status === AI_DRAFT_STATUS && (
-                    <Button color="warning" variant="outlined" disabled={busy} onClick={onConfirmDraft}>
-                      Confirm draft
-                    </Button>
-                  )}
                   {!isNewDraft && draft.id !== NEW_DRAFT_ID && (
                     <Button color="error" variant="outlined" onClick={onDelete}>
                       Delete
