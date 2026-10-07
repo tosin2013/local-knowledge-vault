@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AskGroundedInput,
   AskGroundedResult,
+  BookImportResult,
   ChatMessage,
   ChatProfile,
   ChatSendInput,
@@ -168,6 +169,7 @@ const api = {
       ipcRenderer.invoke('import:fromUrl', url),
     fromMarkdown: (): Promise<MarkdownImportResult> =>
       ipcRenderer.invoke('import:markdown'),
+    fromBook: (): Promise<BookImportResult> => ipcRenderer.invoke('import:book'),
   },
   prompts: {
     list: (): Promise<Prompt[]> => ipcRenderer.invoke('prompts:list'),

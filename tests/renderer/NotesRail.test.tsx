@@ -16,6 +16,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     importUrl: '',
     importBusy: false,
     importMarkdownBusy: false,
+    importBookBusy: false,
     busy: false,
     railQuery: '',
     railSort: 'updated',
@@ -25,6 +26,7 @@ function makeProps(overrides: Partial<NotesRailProps> = {}): NotesRailProps {
     onImportUrl: vi.fn(),
     onImport: vi.fn(),
     onImportMarkdown: vi.fn(),
+    onImportBook: vi.fn(),
     onProject: vi.fn(),
     onManageProjects: vi.fn(),
     onDeleteItem: vi.fn(),
@@ -66,6 +68,13 @@ describe('NotesRail', () => {
     render(<NotesRail {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Import Markdown' }))
     expect(props.onImportMarkdown).toHaveBeenCalled()
+  })
+
+  it('fires onImportBook from the Import book / PDF button', () => {
+    const props = makeProps()
+    render(<NotesRail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Import book / PDF' }))
+    expect(props.onImportBook).toHaveBeenCalled()
   })
 
   it('lists notes and selects them on click and double-click', () => {

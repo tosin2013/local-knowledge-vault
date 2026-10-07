@@ -521,6 +521,19 @@ export interface MarkdownImportResult {
   errors: string[]
 }
 
+/* ---- Import local books / PDFs (#162) ---- */
+
+export interface BookImportResult {
+  canceled?: boolean
+  format?: 'epub' | 'pdf'
+  project?: string
+  imported: number
+  skipped: number
+  emptyPages?: number
+  itemIds: string[]
+  errors: string[]
+}
+
 
 /* ---- Chat profiles (user-saved Personality + Project) ---- */
 

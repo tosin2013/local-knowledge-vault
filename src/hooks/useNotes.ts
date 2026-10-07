@@ -36,6 +36,7 @@ export function useNotes(deps: UseNotesDeps) {
   const [importUrl, setImportUrl] = useState('')
   const [importBusy, setImportBusy] = useState(false)
   const [importMarkdownBusy, setImportMarkdownBusy] = useState(false)
+  const [importBookBusy, setImportBookBusy] = useState(false)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Rail display: hide transcript (source) chunks by default (#120), filter-as-you-type, sort.
@@ -244,6 +245,43 @@ export function useNotes(deps: UseNotesDeps) {
       setError(advanced ? msg : 'Could not import that folder.')
     } finally {
       setImportMarkdownBusy(false)
+    }
+  }
+
+  /** Import a local EPUB / text-layer PDF as book notes (native file picker). */
+  const onImportBook = async () => {
+    if (!window.lkv?.import?.fromBook) return
+    setImportBookBusy(true)
+    setError(null)
+    setStatusMsg(null)
+    try {
+      const res = await window.lkv.import.fromBook()
+      if (res.canceled) return
+      await refreshList()
+      void refreshProjects()
+      const project = res.project ? `"${res.project}"` : 'the book'
+      if (res.imported > 0) {
+        const skipped = res.skipped > 0 ? ` · ${res.skipped} skipped` : ''
+        setStatusMsg(
+          `Imported ${res.imported} note${res.imported === 1 ? '' : 's'} from ${project}${skipped}`,
+        )
+      } else {
+        setStatusMsg(`No readable text found in ${project}.`)
+      }
+      if (res.emptyPages && res.emptyPages > 0 && advanced) {
+        setError(
+          `${res.emptyPages} page${res.emptyPages === 1 ? '' : 's'} had no text layer ` +
+            `(likely scanned). OCR isn't supported yet, so those pages were skipped.`,
+        )
+      }
+      if (res.errors.length && advanced) {
+        setError(res.errors.join('\n'))
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(advanced ? msg : 'Could not import that book or PDF.')
+    } finally {
+      setImportBookBusy(false)
     }
   }
 
@@ -544,6 +582,7 @@ export function useNotes(deps: UseNotesDeps) {
     setImportUrl,
     importBusy,
     importMarkdownBusy,
+    importBookBusy,
     projects,
     filtersOpen,
     setFiltersOpen,
@@ -558,6 +597,7 @@ export function useNotes(deps: UseNotesDeps) {
     onNewProject,
     onImportFromUrl,
     onImportMarkdown,
+    onImportBook,
     onSave,
     confirmDraft,
     onDelete,

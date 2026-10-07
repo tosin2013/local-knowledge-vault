@@ -227,6 +227,7 @@ export default function App() {
             importUrl={notes.importUrl}
             importBusy={notes.importBusy}
             importMarkdownBusy={notes.importMarkdownBusy}
+            importBookBusy={notes.importBookBusy}
             busy={busy}
             railQuery={notes.railQuery}
             railSort={notes.railSort}
@@ -236,6 +237,7 @@ export default function App() {
             onImportUrl={notes.setImportUrl}
             onImport={() => void notes.onImportFromUrl()}
             onImportMarkdown={() => void notes.onImportMarkdown()}
+            onImportBook={() => void notes.onImportBook()}
             onProject={(project) => notes.setFilters((f) => ({ ...f, project }))}
             onManageProjects={() => setManageProjectsOpen(true)}
             onDeleteItem={(id) => void notes.deleteItemById(id)}

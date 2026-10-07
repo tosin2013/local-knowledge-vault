@@ -50,6 +50,7 @@ import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
 import { importMarkdownFolder } from './import-markdown'
+import { importBookFromPath } from './book-import'
 import {
   findCompanionCaptions,
   findExistingProjectBySource,
@@ -584,6 +585,25 @@ function registerIpc(): void {
       return { canceled: true, imported: 0, skipped: 0, itemIds: [], errors: [] }
     }
     return importMarkdownFolder(r.filePaths[0])
+  })
+
+  // Import a local EPUB / text-layer PDF as book notes (main picks the file)
+  ipcMain.handle('import:book', async () => {
+    const opts: OpenDialogOptions = {
+      title: 'Import book / PDF',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Books', extensions: ['epub', 'pdf'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    }
+    const r = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, opts)
+      : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths[0]) {
+      return { canceled: true, imported: 0, skipped: 0, itemIds: [], errors: [] }
+    }
+    return importBookFromPath(r.filePaths[0])
   })
 
   // Prompts
