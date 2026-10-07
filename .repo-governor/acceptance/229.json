@@ -1,0 +1,13 @@
+{
+  "$comment": "Completion bar for #229: the community on-ramp exists. Verified failing first: CODE_OF_CONDUCT.md and the .github templates did not exist, and README.md had no 'Ways to help' section (grep exited 1). Docs/config only.",
+  "authority_id": "229",
+  "criteria": [
+    { "check": "file_exists", "target": "CODE_OF_CONDUCT.md" },
+    { "check": "file_exists", "target": ".github/ISSUE_TEMPLATE/bug_report.md" },
+    { "check": "file_exists", "target": ".github/ISSUE_TEMPLATE/feature_request.md" },
+    { "check": "file_exists", "target": ".github/ISSUE_TEMPLATE/config.yml" },
+    { "check": "file_exists", "target": ".github/PULL_REQUEST_TEMPLATE.md" },
+    { "check": "command_exit", "target": "grep -q 'Ways to help' README.md" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
