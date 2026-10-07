@@ -47,7 +47,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rolldownOptions: {
-              external: ['better-sqlite3', 'electron'],
+              external: ['better-sqlite3', 'electron', 'jszip', 'pdfjs-dist', 'pdfjs-dist/legacy/build/pdf.mjs'],
             },
           },
         },

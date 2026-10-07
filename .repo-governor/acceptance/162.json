@@ -1,0 +1,15 @@
+{
+  "$comment": "Completion bar for #162: bring local books/papers in as chunked notes so answers are checkable. EPUB is parsed from its XHTML (per-chapter notes); text-layer PDFs yield per-page notes with page provenance; both create kind:'book' notes under a book project. OCR for scanned PDFs is explicitly out of scope. Verified failing before the change (no book-import.ts, no import:book, no deps, no test:books).",
+  "authority_id": "162",
+  "criteria": [
+    { "check": "file_exists", "target": "electron/book-import.ts" },
+    { "check": "command_exit", "target": "grep -q 'import:book' electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q 'import:book' electron/preload.ts" },
+    { "check": "command_exit", "target": "grep -q 'jszip' package.json" },
+    { "check": "command_exit", "target": "grep -q 'pdfjs-dist' package.json" },
+    { "check": "tests_pass", "target": "npm run test:books" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

@@ -354,6 +354,7 @@ export function createLkvMock(): LkvMock {
     import: {
       fromUrl: vi.fn().mockResolvedValue(makeImportResult()),
       fromMarkdown: vi.fn().mockResolvedValue(makeMarkdownImportResult()),
+      fromBook: vi.fn().mockResolvedValue({ imported: 0, skipped: 0, itemIds: [], errors: [] }),
     },
     prompts: {
       list: vi.fn().mockResolvedValue([]),

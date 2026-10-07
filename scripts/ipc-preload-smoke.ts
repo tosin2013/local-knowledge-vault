@@ -274,7 +274,7 @@ async function main(): Promise<void> {
     'chat:listSessions', 'chat:createSession', 'chat:getSession', 'chat:deleteSession',
     'chat:updateSessionTitle', 'chat:listMessages', 'chat:send',
     // import
-    'import:fromUrl',
+    'import:fromUrl', 'import:book',
     // prompts
     'prompts:list', 'prompts:get', 'prompts:create', 'prompts:update', 'prompts:delete',
     'prompts:export', 'prompts:import', 'prompts:preview',
