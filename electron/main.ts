@@ -1,7 +1,7 @@
 /**
  * Electron main process — app lifecycle + IPC handlers.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, session, shell, type OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { pathToFileURL } from 'url'
@@ -40,9 +40,11 @@ import {
   updateItem,
   updatePrompt,
   updateSessionTitle,
+  uniquePromptName,
 } from './db'
 import { searchQuery } from './search'
 import { askGrounded } from './generate'
+import { parsePersonalityPack, personalityFileName, serializePersonalityPack } from './personality-pack'
 import { sendChatTurn } from './chat'
 import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
@@ -138,6 +140,8 @@ import type {
   McpAddServerInput,
   McpCallToolInput,
   MenuAction,
+  PersonalityExportInput,
+  PersonalityPreviewInput,
   ProviderDraft,
   ProviderSelection,
   UpdateSettings,
@@ -590,6 +594,93 @@ function registerIpc(): void {
     updatePrompt(id, patch)
   )
   ipcMain.handle('prompts:delete', (_e, id: string) => deletePrompt(id))
+
+  // Export / import a personality as a portable JSON pack (#164).
+  ipcMain.handle('prompts:export', async (_e, input: PersonalityExportInput) => {
+    const prompt = input?.id ? getPrompt(input.id) : null
+    if (!prompt) return { error: 'That personality no longer exists.' }
+    const target = input.target === 'clipboard' ? 'clipboard' : 'file'
+    const json = serializePersonalityPack(prompt)
+    if (target === 'clipboard') {
+      clipboard.writeText(json)
+      return { target, name: prompt.name }
+    }
+    // The output location is chosen by the main process (native save dialog),
+    // never a renderer-supplied path.
+    const downloads = app.getPath('downloads')
+    const saveOpts = {
+      title: 'Export personality',
+      defaultPath: path.join(downloads, personalityFileName(prompt.name)),
+      filters: [
+        { name: 'Personality JSON', extensions: ['json'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    }
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, saveOpts)
+      : await dialog.showSaveDialog(saveOpts)
+    if (result.canceled || !result.filePath) return { canceled: true, target }
+    let filePath = result.filePath
+    if (!filePath.toLowerCase().endsWith('.json')) filePath = `${filePath}.json`
+    fs.writeFileSync(filePath, json, 'utf8')
+    return { target, path: filePath, name: prompt.name }
+  })
+
+  ipcMain.handle('prompts:import', async () => {
+    const opts: OpenDialogOptions = {
+      title: 'Import personality',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Personality JSON', extensions: ['json'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    }
+    const picked = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, opts)
+      : await dialog.showOpenDialog(opts)
+    if (picked.canceled || !picked.filePaths[0]) return { canceled: true }
+    let text: string
+    try {
+      text = fs.readFileSync(picked.filePaths[0], 'utf8')
+    } catch {
+      return { error: 'Could not read that file.' }
+    }
+    const parsed = parsePersonalityPack(text)
+    if (!parsed.ok) return { error: parsed.error }
+    // Import never overwrites: a clashing name gets a " (2)" suffix.
+    const prompt = createPrompt({
+      name: uniquePromptName(parsed.pack.name),
+      body: parsed.pack.body,
+      description: parsed.pack.description,
+    })
+    return { prompt }
+  })
+
+  // Preview a draft personality against the user's own notes (#164).
+  ipcMain.handle('prompts:preview', async (_e, input: PersonalityPreviewInput) => {
+    const question = (input?.question ?? '').trim()
+    if (!question) return { answer: '', citations: [], error: 'Enter a question to test.' }
+    const body = (input?.body ?? '').trim()
+    const primary = await askGrounded({
+      question,
+      filters: input?.filters,
+      systemExtra: body || undefined,
+    })
+    const base = {
+      answer: primary.answer,
+      citations: primary.citations,
+      offline: primary.offline,
+      error: primary.error,
+    }
+    if (!input?.compare) return base
+    const plain = await askGrounded({ question, filters: input?.filters })
+    return {
+      ...base,
+      defaultAnswer: plain.answer,
+      defaultCitations: plain.citations,
+      defaultOffline: plain.offline,
+    }
+  })
 
   // Chat profiles (user-saved Personality + Project)
   ipcMain.handle('profiles:list', () => listChatProfiles())

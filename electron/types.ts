@@ -192,6 +192,56 @@ export interface UpdatePromptPatch {
   description?: string | null
 }
 
+/** A portable, versioned personality export (#164). Validated on import. */
+export interface PersonalityPack {
+  kind: 'vault.personality'
+  version: number
+  name: string
+  description: string | null
+  body: string
+  exportedAt: string
+}
+
+export interface PersonalityExportInput {
+  id: string
+  /** 'file' writes a `.json` via a save dialog; 'clipboard' copies the JSON text. */
+  target?: 'file' | 'clipboard'
+}
+
+export interface PersonalityExportResult {
+  canceled?: boolean
+  target?: 'file' | 'clipboard'
+  /** Absolute path of the written file (target: 'file' only). */
+  path?: string
+  name?: string
+  error?: string
+}
+
+export interface PersonalityImportResult {
+  canceled?: boolean
+  prompt?: Prompt
+  error?: string
+}
+
+export interface PersonalityPreviewInput {
+  question: string
+  /** Draft instructions. Empty means "no personality" (plain grounded answer). */
+  body?: string
+  filters?: ItemFilters
+  /** Also run the answer without the personality and return it for comparison. */
+  compare?: boolean
+}
+
+export interface PersonalityPreviewResult {
+  answer: string
+  citations: Citation[]
+  offline?: boolean
+  error?: string
+  defaultAnswer?: string
+  defaultCitations?: Citation[]
+  defaultOffline?: boolean
+}
+
 
 /* ---- LLM providers (renderer-safe; API keys NEVER cross IPC — only hasKey) ---- */
 

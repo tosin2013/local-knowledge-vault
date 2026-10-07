@@ -1,0 +1,17 @@
+{
+  "$comment": "Completion bar for #164: (1) four new starter templates (Executive summary, Storyteller, Debate partner, Study guide) exist in the shared source; (2) a personality exports/imports as a versioned JSON pack with validation; (3) a draft personality can be previewed against the user's notes through a prompts:preview IPC, with an optional compare-to-default; (4) the renderer exposes export/import/copy/preview. Each check was run before the change and failed (greps exit 1, test:personalities missing).",
+  "authority_id": "164",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q 'Executive summary' src/personalityHelp.ts" },
+    { "check": "command_exit", "target": "grep -q 'Study guide' src/personalityHelp.ts" },
+    { "check": "command_exit", "target": "grep -q 'parsePersonalityPack' electron/personality-pack.ts" },
+    { "check": "command_exit", "target": "grep -q 'prompts:export' electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q 'prompts:import' electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q 'prompts:preview' electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q 'Preview' src/features/PromptsView.tsx" },
+    { "check": "tests_pass", "target": "npm run test:personalities" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

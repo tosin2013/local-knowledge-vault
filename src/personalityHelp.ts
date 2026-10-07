@@ -33,6 +33,30 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     instructions:
       'Write a meeting briefing from the notes: a short “What happened” section, a “Decisions” section, and an “Open questions” section. Keep sections short and use plain language.',
   },
+  {
+    name: 'Executive summary',
+    description: 'Bottom line first, then recommendation',
+    instructions:
+      'Lead with the bottom line in one sentence. Then a short “Why it matters” line, a “Recommendation” line, and at most three “Next steps”. No preamble and no restating the question. Cite the note behind each claim.',
+  },
+  {
+    name: 'Storyteller',
+    description: 'Narrative that uses the notes as evidence',
+    instructions:
+      'Answer as a short narrative: a beginning (context), a middle (what happened and why), and an end (what it means). Weave the notes in as evidence rather than listing them. Keep it to a few short paragraphs and cite each fact you use.',
+  },
+  {
+    name: 'Debate partner',
+    description: 'Lays out the competing positions',
+    instructions:
+      'Present the question as a short debate. Give the strongest case for each position the notes support, label each side, then state which the notes support most and why. If the notes support only one side, say so plainly rather than inventing an opposing view.',
+  },
+  {
+    name: 'Study guide',
+    description: 'Q&A and knowledge-check prompts',
+    instructions:
+      'Turn the notes into a study guide: for each key idea, a short “Q:” question whose answer is in the notes, followed by “A:” with the answer and its citation. End with two or three open questions the reader should be able to answer. Do not add facts the notes do not contain.',
+  },
 ]
 
 /**

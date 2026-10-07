@@ -403,6 +403,9 @@ export default function App() {
                 }}
                 onDeletePrompt={() => void prompts.onDeletePrompt()}
                 onSavePrompt={() => void prompts.onSavePrompt()}
+                onExportPrompt={(target) => void prompts.onExportPrompt(target)}
+                onImportPrompt={() => void prompts.onImportPrompt()}
+                shareNotice={prompts.shareNotice}
               />
             )}
 
