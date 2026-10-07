@@ -426,7 +426,7 @@ export default function App() {
               onPatch={notes.patchDraft}
               onSave={() => void notes.onSave()}
               onDelete={() => void notes.onDelete()}
-              onConfirmDraft={() => void notes.confirmDraft()}
+              onConfirmDraft={(ownWords) => void notes.confirmDraft(ownWords)}
               onCopyId={(id) => void notes.copyItemId(id)}
             />
           </Box>
