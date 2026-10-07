@@ -260,6 +260,8 @@ async function main(): Promise<void> {
     'testToNotes:analyze',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
+    // study (#215)
+    'study:record', 'study:listRecent', 'study:calibration',
     // ollama
     'ollama:health',
     // llm
@@ -322,6 +324,14 @@ async function main(): Promise<void> {
 
   const dueCount = await ipcRendererMock.invoke('review:count') as number
   assert(typeof dueCount === 'number', 'review:count returns a number')
+
+  const studyRecent = await ipcRendererMock.invoke('study:listRecent') as unknown[]
+  assert(Array.isArray(studyRecent), 'study:listRecent returns an array')
+  const studyCal = await ipcRendererMock.invoke('study:calibration') as { count: number }
+  assert(
+    studyCal && typeof studyCal.count === 'number',
+    'study:calibration returns a summary',
+  )
 
   const ollamaHealth = await ipcRendererMock.invoke('ollama:health') as object
   assert(ollamaHealth && typeof ollamaHealth === 'object', 'ollama:health returns object')
@@ -402,6 +412,7 @@ async function main(): Promise<void> {
   assert(api.ask !== undefined, 'preload exposes ask API')
   assert(api.testToNotes !== undefined, 'preload exposes testToNotes API')
   assert(api.review !== undefined, 'preload exposes review API')
+  assert(api.study !== undefined, 'preload exposes study API')
   assert(api.ollama !== undefined, 'preload exposes ollama API')
   assert(api.llm !== undefined, 'preload exposes llm API')
   assert(api.providers !== undefined, 'preload exposes providers API')
@@ -435,6 +446,12 @@ async function main(): Promise<void> {
   assert(typeof reviewApi.listDue === 'function', 'review.listDue is function')
   assert(Array.isArray(await reviewApi.listDue()), 'preload review.listDue reaches main')
   assert(typeof (await reviewApi.count()) === 'number', 'preload review.count reaches main')
+
+  assert(typeof (api.study as Record<string, unknown>).listRecent === 'function', 'study.listRecent is function')
+  const studyViaPreload = await (
+    api.study as { listRecent: (limit?: number) => Promise<unknown[]> }
+  ).listRecent(5)
+  assert(Array.isArray(studyViaPreload), 'preload study.listRecent reaches main')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
 
   // Update notice through the preload API (#42)

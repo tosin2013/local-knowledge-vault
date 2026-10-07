@@ -833,3 +833,51 @@ export interface ReviewEnqueueInput {
   /** Optional exam date; anchors the first Good interval (Cepeda-style). */
   targetDate?: string
 }
+
+/* ---- Study mode: recall before reveal (#215) ---- */
+
+/** The learner's own verdict after the answer is revealed. */
+export type StudySelfGrade = 'missed' | 'partial' | 'got'
+
+/** What the panel sends when the learner saves an attempt. */
+export interface StudyAttemptInput {
+  question: string
+  /** What the learner recalled before the answer was revealed. */
+  attempt?: string
+  /** Self-reported confidence, 0–100 (clamped). */
+  confidence?: number
+  selfGrade: StudySelfGrade
+  /** Optional one-line "explain it in your own words". */
+  selfExplanation?: string | null
+  /** Ids of the cited notes shown as feedback. */
+  citedIds?: string[]
+  /** The grounded answer text (or fallback copy when offline). */
+  answer?: string | null
+}
+
+/** One persisted recall attempt plus the feedback it was graded against. */
+export interface StudyAttempt {
+  id: string
+  question: string
+  attempt: string
+  confidence: number
+  self_grade: StudySelfGrade
+  self_explanation: string | null
+  /** Comma-joined cited note ids. */
+  cited_ids: string
+  answer: string | null
+  created_at: string
+}
+
+/**
+ * Calibration over a set of attempts: how well confidence tracked accuracy.
+ * `bias` = mean confidence − mean accuracy; `brier` is the mean squared error
+ * of the confidence (0..1) against the grade score (0..1).
+ */
+export interface StudyCalibration {
+  count: number
+  meanConfidence: number
+  meanScore: number
+  bias: number
+  brier: number
+}
