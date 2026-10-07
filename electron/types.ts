@@ -761,3 +761,30 @@ export interface McpCallToolResult {
   content: unknown
   isError?: boolean
 }
+
+/* ---- Test to notes (#166) ---- */
+
+/** One parsed practice-test item: the question, what the learner answered, and if it was right. */
+export interface TestToNotesItem {
+  question: string
+  answer: string
+  correct: boolean
+}
+
+export interface TestToNotesAnalyzeInput {
+  items: TestToNotesItem[]
+  filters?: ItemFilters
+  limit?: number
+}
+
+/** A grounded corrective note for one wrong answer, ready for the user to review and save. */
+export interface TestToNotesSuggestion {
+  question: string
+  yourAnswer: string
+  title: string
+  body: string
+  citations: Citation[]
+  /** True when no model could be reached (body is friendly fallback copy). */
+  offline?: boolean
+  error?: string
+}

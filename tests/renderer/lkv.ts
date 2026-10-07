@@ -302,6 +302,9 @@ export function createLkvMock(): LkvMock {
     ask: {
       grounded: vi.fn().mockResolvedValue(makeAskResult()),
     },
+    testToNotes: {
+      analyze: vi.fn().mockResolvedValue([]),
+    },
     ollama: {
       health: vi.fn().mockResolvedValue({ ok: true, models: [] }),
     },

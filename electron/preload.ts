@@ -69,6 +69,8 @@ import type {
   Prompt,
   SearchQueryInput,
   SearchQueryResult,
+  TestToNotesAnalyzeInput,
+  TestToNotesSuggestion,
   UpdateChatProfilePatch,
   UpdateItemPatch,
   UpdatePromptPatch,
@@ -99,6 +101,10 @@ const api = {
   ask: {
     grounded: (input: AskGroundedInput): Promise<AskGroundedResult> =>
       ipcRenderer.invoke('ask:grounded', input),
+  },
+  testToNotes: {
+    analyze: (input: TestToNotesAnalyzeInput): Promise<TestToNotesSuggestion[]> =>
+      ipcRenderer.invoke('testToNotes:analyze', input),
   },
   ollama: {
     health: (): Promise<OllamaHealth> => ipcRenderer.invoke('ollama:health'),
