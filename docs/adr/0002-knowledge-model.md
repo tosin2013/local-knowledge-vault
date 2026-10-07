@@ -56,7 +56,8 @@ Derived from the model: users come to a video with a **task**, not a character.
 - Secondary: **voice** (today's persona chips) becomes a *Style* option that only changes how the
   answer sounds, never what it does.
 - A fully generated per-video persona is rejected: unpredictable, an extra model call, opaque to the
-  user.
+  user. (ADR 0003, proposed, amends this sentence: a character the user asks for, reviews and saves is
+  allowed; an automatic per-video persona is still rejected.)
 
 ### Settling the open questions for #137 and #138
 
