@@ -615,6 +615,57 @@ async function main(): Promise<void> {
     fs.rmSync(prmDir, { recursive: true, force: true })
   }
 
+  // Dialog-backed book import (#162): drive the real EPUB → notes path.
+  console.log('\nDialog-backed book import')
+  {
+    const JSZip = require('jszip')
+    const importApi = api.import as {
+      fromBook: () => Promise<{
+        canceled?: boolean
+        imported?: number
+        project?: string
+        errors?: string[]
+      }>
+    }
+    const bookDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-book-'))
+    const zip = new JSZip()
+    zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' })
+    zip.file(
+      'META-INF/container.xml',
+      '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+    )
+    zip.file(
+      'OEBPS/content.opf',
+      '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>IPC Book</dc:title><dc:identifier id="id">urn:uuid:ipc</dc:identifier></metadata><manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>',
+    )
+    zip.file(
+      'OEBPS/ch1.xhtml',
+      '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Only Chapter</title></head><body><p>Coverage chapter text.</p></body></html>',
+    )
+    const epubPath = path.join(bookDir, 'ipc-book.epub')
+    fs.writeFileSync(epubPath, await zip.generateAsync({ type: 'nodebuffer' }))
+
+    dialogState.open = { canceled: false, filePaths: [epubPath] }
+    const booked = await importApi.fromBook()
+    assert(
+      booked?.imported === 1 && booked.project === 'IPC Book',
+      'import:book ingests a dialog-picked EPUB',
+    )
+
+    dialogState.open = { canceled: true, filePaths: [] }
+    assert((await importApi.fromBook())?.canceled === true, 'import:book honors a canceled dialog')
+
+    const notABook = path.join(bookDir, 'notes.txt')
+    fs.writeFileSync(notABook, 'plain text')
+    dialogState.open = { canceled: false, filePaths: [notABook] }
+    assert(
+      ((await importApi.fromBook())?.errors?.length ?? 0) > 0,
+      'import:book rejects an unsupported file',
+    )
+
+    fs.rmSync(bookDir, { recursive: true, force: true })
+  }
+
   // 6) Test main.ts lifecycle hooks
   console.log('\nMain.ts lifecycle hooks')
   assert(typeof mockApp.on === 'function', 'app.on exists')
