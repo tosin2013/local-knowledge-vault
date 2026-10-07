@@ -15,16 +15,17 @@ const CSV_COLUMNS = new Set(['question', 'answer', 'your answer', 'correct'])
 
 /**
  * Correctness marker scan for plain text (anywhere in a line).
- * Symbols first so “✓ (wrong)” still reads as correct; the words are plain
- * English and returned only when no symbol matches. Returns null when the
- * text carries no marker.
+ * Symbols first so “✓ (wrong)” still reads as correct. Word markers count only
+ * when they stand at the end of a line (optionally in parens/brackets/dashes),
+ * so a question like “Which statement is correct?” is never read as a correct
+ * answer. Returns null when the text carries no marker.
  */
 export function isCorrectMarker(text: string): boolean | null {
   const s = text ?? ''
   if (/[✓✔]|\[x\]/i.test(s)) return true
   if (/[✗✘]|\[\s?\]/.test(s)) return false
-  if (/\b(correct|right)\b/i.test(s)) return true
-  if (/\b(incorrect|wrong)\b/i.test(s)) return false
+  if (/(?:^|[\s\-–—(\[])(?:correct|right)\s*[)\]]?\s*$/i.test(s)) return true
+  if (/(?:^|[\s\-–—(\[])(?:incorrect|wrong)\s*[)\]]?\s*$/i.test(s)) return false
   return null
 }
 

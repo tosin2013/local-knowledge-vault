@@ -87,6 +87,13 @@ async function main(): Promise<void> {
   assert(isCorrectMarker('correct') === true, 'the word correct is a marker')
   assert(isCorrectMarker('incorrect') === false, 'the word incorrect is a marker')
   assert(isCorrectMarker('what is 2 + 2') === null, 'no marker returns null')
+  assert(
+    isCorrectMarker('Which of these statements is correct?') === null,
+    'a question ending in “correct?” is not a marker',
+  )
+  assert(isCorrectMarker('Which answer is right?') === null, 'a question ending in “right?” is not a marker')
+  assert(isCorrectMarker('Paris (wrong)') === false, 'a trailing (wrong) word marker is recognised')
+  assert(isCorrectMarker('Capital (correct)') === true, 'a trailing (correct) word marker is recognised')
 
   // --- parseTestResults: plain text with markers + answer prefixes ---
   console.log('\nparseTestResults — plain text')
@@ -112,6 +119,16 @@ async function main(): Promise<void> {
     plainItems[2].correct === false && plainItems[2].answer === '50°C',
     'unmarked item defaults to incorrect and keeps “A:” answer',
   )
+
+  // Regression: the word “correct”/“right” inside the question must not be read
+  // as a correctness marker (it would exclude the item from “Suggest fixes”).
+  const tricky = parseTestResults('1. Which of these statements is correct?\nYour answer: B')
+  assert(
+    tricky.length === 1 && tricky[0].correct === false,
+    'a question containing “correct” is not treated as a correct answer',
+  )
+  const paren = parseTestResults('1. Capital of France? (correct)\nYour answer: Paris')
+  assert(paren[0].correct === true, 'a trailing (correct) marker on the question line still counts')
 
   // --- parseTestResults: number prefixes split blocks without blank lines ---
   const compact = '1. First question? ✓\nYour answer: A\n2. Second question? ✗\nYour answer: B'
