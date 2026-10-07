@@ -14,6 +14,8 @@ import {
   personalityFileName,
   serializePersonalityPack,
   PERSONALITY_BODY_MAX,
+  PERSONALITY_DESCRIPTION_MAX,
+  PERSONALITY_NAME_MAX,
   PERSONALITY_PACK_KIND,
   PERSONALITY_PACK_VERSION,
 } from '../electron/personality-pack'
@@ -113,6 +115,46 @@ function main(): void {
     ).ok === true,
     'minimal valid pack accepted'
   )
+  assert(
+    typeof buildPersonalityPack({ name: 'X', description: null, body: 'Y' }).exportedAt === 'string',
+    'buildPersonalityPack defaults exportedAt to now'
+  )
+  assert(parsePersonalityPack('null').ok === false, 'null rejected')
+  assert(parsePersonalityPack('3').ok === false, 'a bare number rejected')
+  assert(
+    parsePersonalityPack(
+      JSON.stringify({ kind: PERSONALITY_PACK_KIND, name: 'x', body: 'y' })
+    ).ok === false,
+    'missing version rejected'
+  )
+  assert(
+    parsePersonalityPack(
+      JSON.stringify({
+        kind: PERSONALITY_PACK_KIND,
+        version: 1,
+        name: 'x'.repeat(PERSONALITY_NAME_MAX + 1),
+        body: 'y',
+      })
+    ).ok === false,
+    'oversized name rejected'
+  )
+  const longDesc = parsePersonalityPack(
+    JSON.stringify({
+      kind: PERSONALITY_PACK_KIND,
+      version: 1,
+      name: 'x',
+      body: 'y',
+      description: 'd'.repeat(PERSONALITY_DESCRIPTION_MAX + 50),
+    })
+  )
+  assert(
+    longDesc.ok === true && longDesc.pack.description?.length === PERSONALITY_DESCRIPTION_MAX,
+    'long description is clamped'
+  )
+  const blankDesc = parsePersonalityPack(
+    JSON.stringify({ kind: PERSONALITY_PACK_KIND, version: 1, name: 'x', body: 'y', description: '   ' })
+  )
+  assert(blankDesc.ok === true && blankDesc.pack.description === null, 'blank description becomes null')
 
   // --- unique import names (db, import never overwrites) ---
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-164-'))
@@ -122,6 +164,7 @@ function main(): void {
   assert(uniquePromptName('Nothing here yet') === 'Nothing here yet', 'fresh import name kept')
   const created = createPrompt({ name: uniquePromptName('Study guide'), body: 'Q&A.' })
   assert(created.name === 'Study guide (2)', 'created prompt carries the unique name')
+  assert(uniquePromptName('Study guide') === 'Study guide (3)', 'the suffix keeps counting (3)')
   assert(
     listPrompts().filter((p) => p.name === 'Study guide' || p.name === 'Study guide (2)').length === 2,
     'import adds a second prompt rather than overwriting'

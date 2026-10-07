@@ -158,6 +158,13 @@ const mockShell = {
   openPath: async (p: string) => '',
 }
 
+const clipboardCalls: string[] = []
+const mockClipboard = {
+  writeText: (text: string) => {
+    clipboardCalls.push(text)
+  },
+}
+
 const mockMenu = {
   buildFromTemplate: (template: unknown[]) => ({ template }),
   setApplicationMenu: () => {},
@@ -184,6 +191,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
       protocol: mockProtocol,
       net: mockNet,
       shell: mockShell,
+      clipboard: mockClipboard,
       Menu: mockMenu,
     }
   }
@@ -269,6 +277,7 @@ async function main(): Promise<void> {
     'import:fromUrl',
     // prompts
     'prompts:list', 'prompts:get', 'prompts:create', 'prompts:update', 'prompts:delete',
+    'prompts:export', 'prompts:import', 'prompts:preview',
     // profiles
     'profiles:list', 'profiles:get', 'profiles:create', 'profiles:update', 'profiles:delete',
     // citationPack
@@ -493,6 +502,117 @@ async function main(): Promise<void> {
 
     fs.rmSync(pickedDir, { recursive: true, force: true })
     fs.rmSync(outDir, { recursive: true, force: true })
+  }
+
+  // Dialog-backed personality export / import / preview (#164)
+  console.log('\nDialog-backed personality export / import / preview')
+  {
+    const { createPrompt, listPrompts } = require('../electron/db')
+    const promptsApi = api.prompts as {
+      export: (input: { id: string; target?: 'file' | 'clipboard' }) => Promise<{
+        canceled?: boolean
+        path?: string
+        target?: string
+        error?: string
+      }>
+      import: () => Promise<{ canceled?: boolean; prompt?: { name?: string }; error?: string }>
+      preview: (input: { question: string; body?: string; compare?: boolean }) => Promise<{
+        answer?: string
+        defaultAnswer?: string
+        error?: string
+      }>
+    }
+
+    const prmDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-prm-'))
+    const created = createPrompt({
+      name: 'Coverage personality',
+      body: 'Be very concise.',
+      description: 'Terse',
+    }) as { id: string }
+
+    // export → file (the main process picks the save path)
+    const outJson = path.join(prmDir, 'coverage-personality.json')
+    dialogState.save = { canceled: false, filePath: outJson }
+    const expFile = await promptsApi.export({ id: created.id, target: 'file' })
+    assert(expFile?.path === outJson && !expFile.canceled, 'prompts:export writes to the save-dialog path')
+    const written = JSON.parse(fs.readFileSync(outJson, 'utf8')) as { kind?: string; name?: string }
+    assert(
+      written.kind === 'vault.personality' && written.name === 'Coverage personality',
+      'exported JSON is a vault.personality pack',
+    )
+
+    // export → clipboard
+    clipboardCalls.length = 0
+    const expClip = await promptsApi.export({ id: created.id, target: 'clipboard' })
+    assert(
+      expClip?.target === 'clipboard' && clipboardCalls[0]?.includes('Coverage personality'),
+      'prompts:export copies JSON to the clipboard',
+    )
+
+    // export → a save path without an extension gets .json appended
+    const noExt = path.join(prmDir, 'no-extension')
+    dialogState.save = { canceled: false, filePath: noExt }
+    const expNoExt = await promptsApi.export({ id: created.id, target: 'file' })
+    assert(
+      expNoExt?.path === `${noExt}.json` && fs.existsSync(`${noExt}.json`),
+      'prompts:export appends .json when the save path lacks it',
+    )
+
+    // export → canceled + missing personality
+    dialogState.save = { canceled: true, filePath: undefined }
+    assert(
+      (await promptsApi.export({ id: created.id, target: 'file' }))?.canceled === true,
+      'prompts:export honors a canceled save dialog',
+    )
+    assert(
+      typeof (await promptsApi.export({ id: 'prm_missing' }))?.error === 'string',
+      'prompts:export reports a missing personality',
+    )
+
+    // import → valid file (round-trips the export; never overwrites)
+    dialogState.open = { canceled: false, filePaths: [outJson] }
+    const impOk = await promptsApi.import()
+    assert(
+      impOk?.prompt?.name === 'Coverage personality (2)',
+      'prompts:import creates a uniquely-named personality',
+    )
+    assert(
+      listPrompts().some((p: { name: string }) => p.name === 'Coverage personality (2)'),
+      'imported personality is in the DB',
+    )
+
+    // import → canceled / invalid / unreadable
+    dialogState.open = { canceled: true, filePaths: [] }
+    assert((await promptsApi.import())?.canceled === true, 'prompts:import honors a canceled open dialog')
+    const badJson = path.join(prmDir, 'bad.json')
+    fs.writeFileSync(badJson, '{"kind":"other"}')
+    dialogState.open = { canceled: false, filePaths: [badJson] }
+    assert(typeof (await promptsApi.import())?.error === 'string', 'prompts:import rejects a non-personality file')
+    dialogState.open = { canceled: false, filePaths: [path.join(prmDir, 'nope.json')] }
+    assert(
+      (await promptsApi.import())?.error === 'Could not read that file.',
+      'prompts:import reports an unreadable file',
+    )
+
+    // preview → empty question, then a grounded comparison (no hits → fast refusal path)
+    assert(
+      typeof (await promptsApi.preview({ question: '   ', body: 'x' }))?.error === 'string',
+      'prompts:preview needs a question',
+    )
+    const prev = await promptsApi.preview({
+      question: 'zzzqqq nothing here',
+      body: 'Be very concise.',
+      compare: true,
+    })
+    assert(typeof prev?.answer === 'string', 'prompts:preview returns an answer')
+    assert(
+      typeof prev?.defaultAnswer === 'string',
+      'prompts:preview compare returns the default answer too',
+    )
+    const prevPlain = await promptsApi.preview({ question: 'zzzqqq nothing here', body: '' })
+    assert(typeof prevPlain?.answer === 'string', 'prompts:preview works with no personality body')
+
+    fs.rmSync(prmDir, { recursive: true, force: true })
   }
 
   // 6) Test main.ts lifecycle hooks
