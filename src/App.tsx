@@ -456,6 +456,7 @@ export default function App() {
           presets={providers.providerPresets}
           editing={providers.editingProvider}
           initialPresetId={providers.providerInitialPreset}
+          keyStorage={providers.llmStatus?.keyStorage}
           onClose={() => providers.setProviderDialogOpen(false)}
           onSaved={(cfg) => {
             providers.setProviderDialogOpen(false)

@@ -15,6 +15,7 @@ import { getPrompt, listItems } from './db'
 import { listMediaProjects } from './media-ingest'
 import { resolveUserDataDir } from './user-data'
 import { encryptSecret, decryptSecret } from './secret-store'
+import { SECRET_BRIDGE_TOKEN_FILE } from './secret-files'
 import type { BridgeAskResult, Citation } from './types'
 
 export const BRIDGE_HOST = '127.0.0.1'
@@ -34,7 +35,7 @@ export function bridgeVersion(): string {
   }
 }
 
-const BRIDGE_TOKEN_FILE = 'lkv-bridge-token'
+const BRIDGE_TOKEN_FILE = SECRET_BRIDGE_TOKEN_FILE
 const MAX_BODY_BYTES = 64 * 1024
 
 let server: http.Server | null = null

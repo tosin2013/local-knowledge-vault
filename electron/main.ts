@@ -78,6 +78,8 @@ import {
   getBridgeToken,
   rotateBridgeToken,
 } from './bridge-server'
+import { encryptLegacySecretFiles } from './secret-files'
+import { secretEncryptionAvailable } from './secret-store'
 import { checkForUpdate, checkForUpdateOnLaunch, getUpdateSettings, setUpdateSettings } from './update-check'
 import { resolveMediaFile, mediaMimeType } from './media-protocol'
 import { YOUTUBE_EMBED_FILTER, rewriteYoutubeEmbedHeaders } from './youtube-embed-headers'
@@ -122,6 +124,7 @@ import {
   setPluginEnabled,
 } from './plugin-loader'
 import type {
+  LlmStatus,
   AskGroundedInput,
   ChatSendInput,
   CitationPackExportInput,
@@ -501,7 +504,8 @@ function registerIpc(): void {
   // LLM provider registry (keys never cross IPC — renderer only sees hasKey)
   ipcMain.handle('llm:status', async () => {
     const resolved = await resolveProvider()
-    return resolved.status
+    const keyStorage: LlmStatus['keyStorage'] = secretEncryptionAvailable() ? 'encrypted' : 'plaintext'
+    return { ...resolved.status, keyStorage }
   })
   ipcMain.handle('providers:list', () => ({
     providers: listProviderConfigs(),
@@ -1008,6 +1012,12 @@ app.whenReady().then(async () => {
     reloadPlugins()
   } catch (err) {
     console.error('[Vault plugins] load failed:', err)
+  }
+  try {
+    // Before the bridge or any provider reads them: encrypt secrets still stored as plaintext (#237).
+    encryptLegacySecretFiles()
+  } catch (err) {
+    console.error('[Vault secrets] encryption check failed:', err instanceof Error ? err.message : String(err))
   }
   try {
     loadProvidersFile() // creates lkv-providers.json (migrating lkv-llm.json) on first run

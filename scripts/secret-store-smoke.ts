@@ -17,6 +17,7 @@ type MockSafeStorage = {
   isEncryptionAvailable: () => boolean
   encryptString: (s: string) => Buffer
   decryptString: (b: Buffer) => string
+  getSelectedStorageBackend?: () => string
 }
 let mockSafeStorage: MockSafeStorage | null = null
 let throwOnElectron = false
@@ -164,6 +165,90 @@ async function main(): Promise<void> {
   const rotated = rotateBridgeToken()
   assert(rotated !== token, 'rotate produces a new token')
   assert(getBridgeToken() === rotated, 'cache updated after rotate')
+
+  // --- 5) Linux without a keyring ('basic_text') is not real encryption (#237) ---
+  console.log('basic_text backend')
+  mockSafeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (s: string) => Buffer.from(`enc(${s})`),
+    decryptString: (b: Buffer) => b.toString().replace(/^enc\(|\)$/g, ''),
+    getSelectedStorageBackend: () => 'basic_text',
+  } as MockSafeStorage
+  assert(ss.secretEncryptionAvailable() === false, "basic_text backend is reported as not encrypted")
+  assert(ss.encryptSecret('sk-z') === 'sk-z', 'basic_text backend does not pretend to encrypt')
+  mockSafeStorage = { ...mockSafeStorage, getSelectedStorageBackend: () => 'gnome_libsecret' } as MockSafeStorage
+  assert(ss.secretEncryptionAvailable() === true, 'a real keyring backend counts as encrypted')
+
+  // --- 6) Startup encryption of plaintext secret files (#237) ---
+  console.log('startup encryption of plaintext secret files')
+  const migDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-secret-mig-'))
+  setUserDataDirOverride(migDir)
+  const files = require('../electron/secret-files') as {
+    secretFilePaths: () => string[]
+    encryptLegacySecretFiles: () => { available: boolean; encrypted: string[]; failed: string[] }
+    SECRET_KEYS_DIR: string
+    SECRET_BRIDGE_TOKEN_FILE: string
+  }
+  const { KEYS_DIR } = require('../electron/provider-store')
+  assert(files.SECRET_KEYS_DIR === KEYS_DIR, 'secret-files knows the provider keys folder')
+  const plainValues: Record<string, string> = {
+    'lkv-groq-key': 'gsk_FAKE_groq_value',
+    'lkv-xai-key': 'xai-FAKE-value',
+    'lkv-bridge-token': 'FAKE-bridge-token',
+    'mcp-tokens.json': '{"notion":{"access_token":"FAKE"}}',
+  }
+  for (const [name, value] of Object.entries(plainValues)) fs.writeFileSync(path.join(migDir, name), value + '\n')
+  fs.mkdirSync(path.join(migDir, KEYS_DIR))
+  fs.writeFileSync(path.join(migDir, KEYS_DIR, 'openrouter.key'), 'sk-or-FAKE')
+  const alreadyEnc = ss.encryptSecret('sk-already')
+  fs.writeFileSync(path.join(migDir, KEYS_DIR, 'anthropic.key'), alreadyEnc)
+  fs.writeFileSync(path.join(migDir, KEYS_DIR, 'notes.txt'), 'not a key')
+  const listed = files.secretFilePaths().map((p) => path.relative(migDir, p))
+  assert(listed.includes('lkv-groq-key') && listed.includes('lkv-xai-key') && listed.includes('lkv-bridge-token') && listed.includes('mcp-tokens.json'), 'lists legacy keys, bridge token and MCP tokens')
+  assert(listed.includes(path.join(KEYS_DIR, 'openrouter.key')) && !listed.includes(path.join(KEYS_DIR, 'notes.txt')), 'lists provider .key files only')
+
+  // Unavailable → nothing touched.
+  mockSafeStorage = null
+  const none = files.encryptLegacySecretFiles()
+  assert(none.available === false && none.encrypted.length === 0, 'no encryption available: nothing changes')
+  assert(fs.readFileSync(path.join(migDir, 'lkv-groq-key'), 'utf8').startsWith('gsk_FAKE'), 'plaintext left as-is without encryption')
+
+  mockSafeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (s: string) => Buffer.from(`enc(${s})`),
+    decryptString: (b: Buffer) => b.toString().replace(/^enc\(|\)$/g, ''),
+  }
+  const mig = files.encryptLegacySecretFiles()
+  assert(mig.available === true && mig.failed.length === 0, 'migration runs without failures')
+  assert(mig.encrypted.length === 5, `encrypts the 5 plaintext files (got ${mig.encrypted.length})`)
+  assert(!mig.encrypted.includes('anthropic.key'), 'already-encrypted file is skipped')
+  assert(mig.encrypted.every((n) => !Object.values(plainValues).some((v) => n.includes(v))), 'result lists file names only, never values')
+  for (const [name, value] of Object.entries(plainValues)) {
+    const disk = fs.readFileSync(path.join(migDir, name), 'utf8')
+    assert(disk.startsWith(ss.ENCRYPTED_PREFIX) && !disk.includes(value), `${name} is encrypted on disk`)
+    assert(ss.decryptSecret(disk) === value, `${name} decrypts to the original value`)
+  }
+  assert(readKeyFileAt(path.join(migDir, 'lkv-groq-key')) === 'gsk_FAKE_groq_value', 'migrated legacy key still reads through llm-settings')
+  assert(fs.readFileSync(path.join(migDir, KEYS_DIR, 'anthropic.key'), 'utf8') === alreadyEnc, 'already-encrypted file untouched')
+  assert(fs.readFileSync(path.join(migDir, KEYS_DIR, 'notes.txt'), 'utf8') === 'not a key', 'non-key file untouched')
+  if (process.platform !== 'win32') {
+    assert((fs.statSync(path.join(migDir, 'lkv-bridge-token')).mode & 0o777) === 0o600, 'migrated file is owner-only (0600)')
+  }
+  assert(!fs.readdirSync(migDir).some((f) => f.includes('.tmp-')), 'no temp files left behind')
+  const again = files.encryptLegacySecretFiles()
+  assert(again.encrypted.length === 0 && again.failed.length === 0, 'second run is a no-op')
+
+  // A round-trip mismatch leaves the original untouched.
+  fs.writeFileSync(path.join(migDir, KEYS_DIR, 'broken.key'), 'sk-broken-FAKE')
+  mockSafeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (s: string) => Buffer.from(`enc(${s})`),
+    decryptString: () => 'something else',
+  }
+  const bad = files.encryptLegacySecretFiles()
+  assert(bad.failed.includes('broken.key'), 'a failed check is reported by file name')
+  assert(fs.readFileSync(path.join(migDir, KEYS_DIR, 'broken.key'), 'utf8') === 'sk-broken-FAKE', 'original kept when the decrypt check fails')
+  fs.rmSync(migDir, { recursive: true, force: true })
 
   setUserDataDirOverride(null)
   fs.rmSync(dir, { recursive: true, force: true })

@@ -27,6 +27,7 @@ import type {
   OAuthTokens,
 } from '@modelcontextprotocol/sdk/shared/auth.js'
 import { encryptSecret, decryptSecret } from './secret-store'
+import { SECRET_MCP_TOKENS_FILE } from './secret-files'
 import type {
   McpAddServerInput,
   McpCallToolResult,
@@ -43,7 +44,7 @@ const CALLBACK_PATH = '/oauth/callback'
 /** Fixed loopback port so dynamic client registration redirects stay stable across sessions. */
 const CALLBACK_PORT = 17342
 const SERVERS_FILE = 'mcp-servers.json'
-const TOKENS_FILE = 'mcp-tokens.json'
+const TOKENS_FILE = SECRET_MCP_TOKENS_FILE
 const NOTION_MCP_URL = 'https://mcp.notion.com/mcp'
 const NOTION_PRESET_ID = 'notion'
 
