@@ -188,7 +188,7 @@ export function StudyView({ onClose }: VaultPluginRenderProps) {
         <Card variant="outlined" data-testid="study-calibration">
           <CardContent sx={{ py: 1.5 }}>
             <Typography variant="subtitle2" fontWeight={600}>
-              {`${calibration.count} attempts · mean confidence ${pct(calibration.meanConfidence)} vs mean accuracy ${pct(calibration.meanScore)} · bias ${signedPts(calibration.bias)}`}
+              {`${calibration.count} attempts · mean confidence ${pct(calibration.meanConfidence)} vs mean self-graded accuracy ${pct(calibration.meanScore)} · bias ${signedPts(calibration.bias)} · Brier ${pct(calibration.brier)}`}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               A bias above 0 means overconfidence (you felt more sure than you were); below 0 means
@@ -257,6 +257,7 @@ export function StudyView({ onClose }: VaultPluginRenderProps) {
                 min={0}
                 max={100}
                 size="small"
+                disabled={dontKnow}
                 aria-label="Confidence"
               />
             </Box>
@@ -265,7 +266,12 @@ export function StudyView({ onClose }: VaultPluginRenderProps) {
                 size="small"
                 variant={dontKnow ? 'contained' : 'outlined'}
                 disabled={dontKnow}
-                onClick={() => setDontKnow(true)}
+                onClick={() => {
+                  setDontKnow(true)
+                  // A failed retrieval is a near-zero-confidence attempt; recording
+                  // the slider's default here would inflate mean confidence (#215).
+                  setConfidence(0)
+                }}
               >
                 I don&apos;t know
               </Button>

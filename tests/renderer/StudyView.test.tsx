@@ -133,8 +133,27 @@ describe('StudyView', () => {
     const strip = await screen.findByTestId('study-calibration')
     expect(strip).toHaveTextContent('3 attempts')
     expect(strip).toHaveTextContent('mean confidence 80%')
-    expect(strip).toHaveTextContent('mean accuracy 50%')
+    expect(strip).toHaveTextContent('mean self-graded accuracy 50%')
     expect(strip).toHaveTextContent('bias +30 pts')
+    expect(strip).toHaveTextContent('Brier 20%')
     expect(strip).toHaveTextContent(/overconfidence/i)
+  })
+
+  it('records a near-zero confidence for "I don\'t know"', async () => {
+    const lkv = lkvMock()
+    lkv.ask.grounded.mockResolvedValue(ASK)
+    render(<StudyView />)
+    askQuestion()
+
+    fireEvent.click(await screen.findByRole('button', { name: /I don.t know/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Missed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save attempt' }))
+
+    await waitFor(() =>
+      expect(lkv.study.record).toHaveBeenCalledWith(
+        expect.objectContaining({ attempt: "I don't know", confidence: 0 }),
+      ),
+    )
   })
 })
