@@ -218,7 +218,7 @@ async function main(): Promise<void> {
       { role: 'assistant', content: 'Hello from vault.' },
     ],
   })
-  assert(promptWithExtra.includes('Additional guidance'), 'systemExtra merged into prompt')
+  assert(promptWithExtra.includes('<<<STYLE GUIDANCE>>>'), 'systemExtra fenced into the prompt (#236)')
   assert(promptWithExtra.includes('Answer in bullet points'), 'systemExtra body present')
   assert(promptWithExtra.includes('Conversation so far'), 'history block included')
   assert(promptWithExtra.includes('Hello from vault'), 'prior assistant turn in history')

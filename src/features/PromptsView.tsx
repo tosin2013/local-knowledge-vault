@@ -234,7 +234,7 @@ export function PromptsView(props: PromptsViewProps) {
                     onDraft((d) => ({ ...d, body: e.target.value }))
                     onDirty(true)
                   }}
-                  placeholder="Additional guidance merged with grounded citation rules…"
+                  placeholder="Tone and format guidance. The grounding and citation rules always apply…"
                   InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }}
                 />
                 <Typography variant="caption" color="text.secondary">
