@@ -47,6 +47,7 @@ import { askGrounded } from './generate'
 import { parsePersonalityPack, personalityFileName, serializePersonalityPack } from './personality-pack'
 import { sendChatTurn } from './chat'
 import { analyzeTestResults } from './test-to-notes'
+import { listDueReviews, countDueReviews, rateReview, enqueueReview, removeReview } from './review'
 import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
@@ -131,6 +132,8 @@ import type {
   ListItemsInput,
   SearchQueryInput,
   TestToNotesAnalyzeInput,
+  ReviewEnqueueInput,
+  ReviewRateInput,
   UpdateChatProfilePatch,
   UpdateItemPatch,
   UpdatePromptPatch,
@@ -470,6 +473,19 @@ function registerIpc(): void {
   ipcMain.handle('testToNotes:analyze', (_e, input: TestToNotesAnalyzeInput) =>
     analyzeTestResults(input?.items ?? [], { filters: input?.filters, limit: input?.limit })
   )
+
+  // Spaced review (#216): draw due notes from the user's own vault.
+  ipcMain.handle('review:listDue', (_e, input?: { before?: string; limit?: number }) =>
+    listDueReviews(input?.before, input?.limit)
+  )
+  ipcMain.handle('review:count', (_e, input?: { before?: string }) => countDueReviews(input?.before))
+  ipcMain.handle('review:rate', (_e, input: ReviewRateInput) =>
+    rateReview(input.itemId, input.grade, { targetDate: input.targetDate })
+  )
+  ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) =>
+    enqueueReview(input.itemId, { targetDate: input.targetDate })
+  )
+  ipcMain.handle('review:remove', (_e, itemId: string) => removeReview(itemId))
 
   ipcMain.handle('ollama:health', () => {
     return ollamaHealth()

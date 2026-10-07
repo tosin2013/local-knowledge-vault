@@ -59,7 +59,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -69,7 +69,34 @@ function migrate(database: Database.Database): void {
   if (version < 2) {
     migrateV2(database)
   }
+  if (version < 3) {
+    migrateV3(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v3 (#216): per-note spaced-review scheduling. One row per enqueued note;
+ * a missing row simply means "not in review". `due_at` is an ISO timestamp so
+ * lexical comparison is chronological.
+ */
+function migrateV3(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS review_schedule (
+      item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+      due_at TEXT NOT NULL,
+      interval_days REAL NOT NULL DEFAULT 0,
+      ease REAL NOT NULL DEFAULT 2.5,
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      last_grade TEXT,
+      last_reviewed_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_review_due ON review_schedule(due_at);
+  `)
 }
 
 /** v2 (#45): record which provider wrote each assistant message. */

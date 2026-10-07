@@ -67,6 +67,10 @@ import type {
   PersonalityPreviewInput,
   PersonalityPreviewResult,
   Prompt,
+  ReviewEnqueueInput,
+  ReviewQueueItem,
+  ReviewRateInput,
+  ReviewState,
   SearchQueryInput,
   SearchQueryResult,
   TestToNotesAnalyzeInput,
@@ -105,6 +109,17 @@ const api = {
   testToNotes: {
     analyze: (input: TestToNotesAnalyzeInput): Promise<TestToNotesSuggestion[]> =>
       ipcRenderer.invoke('testToNotes:analyze', input),
+  },
+  review: {
+    listDue: (input?: { before?: string; limit?: number }): Promise<ReviewQueueItem[]> =>
+      ipcRenderer.invoke('review:listDue', input),
+    count: (input?: { before?: string }): Promise<number> =>
+      ipcRenderer.invoke('review:count', input),
+    rate: (input: ReviewRateInput): Promise<ReviewState> =>
+      ipcRenderer.invoke('review:rate', input),
+    enqueue: (input: ReviewEnqueueInput): Promise<ReviewState> =>
+      ipcRenderer.invoke('review:enqueue', input),
+    remove: (itemId: string): Promise<boolean> => ipcRenderer.invoke('review:remove', itemId),
   },
   ollama: {
     health: (): Promise<OllamaHealth> => ipcRenderer.invoke('ollama:health'),

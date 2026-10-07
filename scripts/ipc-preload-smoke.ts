@@ -258,6 +258,8 @@ async function main(): Promise<void> {
     'ask:grounded',
     // test to notes (#166)
     'testToNotes:analyze',
+    // review (#216)
+    'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
     // ollama
     'ollama:health',
     // llm
@@ -314,6 +316,12 @@ async function main(): Promise<void> {
 
   const testToNotes = await ipcRendererMock.invoke('testToNotes:analyze', { items: [] }) as unknown[]
   assert(Array.isArray(testToNotes), 'testToNotes:analyze returns an array')
+
+  const dueReviews = await ipcRendererMock.invoke('review:listDue') as unknown[]
+  assert(Array.isArray(dueReviews), 'review:listDue returns an array')
+
+  const dueCount = await ipcRendererMock.invoke('review:count') as number
+  assert(typeof dueCount === 'number', 'review:count returns a number')
 
   const ollamaHealth = await ipcRendererMock.invoke('ollama:health') as object
   assert(ollamaHealth && typeof ollamaHealth === 'object', 'ollama:health returns object')
@@ -393,6 +401,7 @@ async function main(): Promise<void> {
   assert(api.search !== undefined, 'preload exposes search API')
   assert(api.ask !== undefined, 'preload exposes ask API')
   assert(api.testToNotes !== undefined, 'preload exposes testToNotes API')
+  assert(api.review !== undefined, 'preload exposes review API')
   assert(api.ollama !== undefined, 'preload exposes ollama API')
   assert(api.llm !== undefined, 'preload exposes llm API')
   assert(api.providers !== undefined, 'preload exposes providers API')
@@ -418,6 +427,14 @@ async function main(): Promise<void> {
     api.testToNotes as { analyze: (i: { items: unknown[] }) => Promise<unknown[]> }
   ).analyze({ items: [] })
   assert(Array.isArray(analyzeViaPreload), 'preload testToNotes.analyze reaches main')
+
+  const reviewApi = api.review as {
+    listDue: (i?: unknown) => Promise<unknown[]>
+    count: () => Promise<number>
+  }
+  assert(typeof reviewApi.listDue === 'function', 'review.listDue is function')
+  assert(Array.isArray(await reviewApi.listDue()), 'preload review.listDue reaches main')
+  assert(typeof (await reviewApi.count()) === 'number', 'preload review.count reaches main')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
 
   // Update notice through the preload API (#42)
