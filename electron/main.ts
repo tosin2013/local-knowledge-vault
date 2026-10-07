@@ -46,6 +46,7 @@ import { searchQuery } from './search'
 import { askGrounded } from './generate'
 import { parsePersonalityPack, personalityFileName, serializePersonalityPack } from './personality-pack'
 import { sendChatTurn } from './chat'
+import { analyzeTestResults } from './test-to-notes'
 import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
@@ -129,6 +130,7 @@ import type {
   ItemFilters,
   ListItemsInput,
   SearchQueryInput,
+  TestToNotesAnalyzeInput,
   UpdateChatProfilePatch,
   UpdateItemPatch,
   UpdatePromptPatch,
@@ -463,6 +465,11 @@ function registerIpc(): void {
   ipcMain.handle('ask:grounded', (_e, input: AskGroundedInput) => {
     return askGrounded(input)
   })
+
+  // Test to notes (#166): grounded corrective notes for wrong practice answers.
+  ipcMain.handle('testToNotes:analyze', (_e, input: TestToNotesAnalyzeInput) =>
+    analyzeTestResults(input?.items ?? [], { filters: input?.filters, limit: input?.limit })
+  )
 
   ipcMain.handle('ollama:health', () => {
     return ollamaHealth()

@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { getPlugin, listPlugins, plugins } from '../../src/plugins/registry'
 
 describe('plugin registry', () => {
-  it('lists the three built-in toggleable panels', () => {
+  it('lists the four built-in toggleable panels', () => {
     const ids = listPlugins().map((p) => p.id).sort()
-    expect(ids).toEqual(['mcp-connections', 'media-chat', 'media-personas'])
+    expect(ids).toEqual(['mcp-connections', 'media-chat', 'media-personas', 'test-to-notes'])
   })
 
   it('exposes the raw plugins array', () => {
-    expect(plugins.length).toBe(3)
+    expect(plugins.length).toBe(4)
     expect(plugins.every((p) => p.name && p.description && p.render)).toBe(true)
   })
 

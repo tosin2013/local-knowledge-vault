@@ -1,0 +1,15 @@
+{
+  "$comment": "Completion bar for #166: paste practice-test results (plain text or CSV), split them into correct/incorrect, and for each wrong item retrieve the user's notes and draft a grounded corrective note the user can review and save as an ai-draft. Correct items can be turned into a reinforcement flash-card. Adaptive test generation, OCR and analytics stay out of scope (the issue's own v1 exclusions). Verified failing first: no test-to-notes module/panel/handler, no test:test-to-notes.",
+  "authority_id": "166",
+  "criteria": [
+    { "check": "file_exists", "target": "electron/test-to-notes.ts" },
+    { "check": "command_exit", "target": "grep -q 'testToNotes:analyze' electron/main.ts" },
+    { "check": "command_exit", "target": "grep -q 'testToNotes' electron/preload.ts" },
+    { "check": "command_exit", "target": "grep -q 'test-to-notes' src/plugins/registry.ts" },
+    { "check": "file_exists", "target": "src/plugins/test-to-notes/index.ts" },
+    { "check": "tests_pass", "target": "npm run test:test-to-notes" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}
