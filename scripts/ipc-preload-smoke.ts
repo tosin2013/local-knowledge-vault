@@ -414,6 +414,10 @@ async function main(): Promise<void> {
   assert(typeof (api.search as Record<string, unknown>).query === 'function', 'search.query is function')
   assert(typeof (api.ask as Record<string, unknown>).grounded === 'function', 'ask.grounded is function')
   assert(typeof (api.testToNotes as Record<string, unknown>).analyze === 'function', 'testToNotes.analyze is function')
+  const analyzeViaPreload = await (
+    api.testToNotes as { analyze: (i: { items: unknown[] }) => Promise<unknown[]> }
+  ).analyze({ items: [] })
+  assert(Array.isArray(analyzeViaPreload), 'preload testToNotes.analyze reaches main')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
 
   // Update notice through the preload API (#42)
