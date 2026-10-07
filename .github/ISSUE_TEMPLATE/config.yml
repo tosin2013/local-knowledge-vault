@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security report
+    url: https://github.com/tosin2013/local-knowledge-vault/security/advisories/new
+    about: Report a vulnerability privately — please don't open a public issue. See SECURITY.md.
+  - name: Question or idea
+    url: https://github.com/tosin2013/local-knowledge-vault/blob/main/CONTRIBUTING.md
+    about: Read the contributing guide, including what makes an issue ready to work on.

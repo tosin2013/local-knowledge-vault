@@ -261,6 +261,23 @@ More (layout, IPC API, environment variables, all test scripts):
 - **A starter sample vault** for a better first run.
 - **Code plugins** later, behind a permission model. Plugins stay declarative for now.
 
+## Ways to help
+
+New here? The smallest, most self-contained places to start:
+
+- **[Good first issues](https://github.com/tosin2013/local-knowledge-vault/labels/good%20first%20issue)** —
+  bounded docs and tooling tasks, each with a clear "done" bar. The study tooling (de-identified log
+  export, pre-registration templates) lives here.
+- **[Help wanted](https://github.com/tosin2013/local-knowledge-vault/labels/help%20wanted)** — larger,
+  still well-scoped.
+- **Help measure whether this works.** Vault now has recall-first Study mode, spaced review and a
+  calibration strip, but no learning data yet. The [learning & retention
+  study](docs/local-knowledge-vault-study-effects-on-learning.md) is the pre-registered plan (#218).
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming and the checks CI runs.
+
+Vault is maintained by one person, so a small, focused pull request that follows `CONTRIBUTING.md` is
+the fastest way to get a change merged.
+
 ## Contributing
 
 Issues and pull requests are welcome. Please include your OS, the model or provider you used, and
