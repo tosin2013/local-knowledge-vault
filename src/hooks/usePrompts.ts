@@ -19,6 +19,7 @@ export function usePrompts(deps: UsePromptsDeps) {
   const [promptDraft, setPromptDraft] = useState<PromptDraft>({ name: '', body: '', description: '' })
   const [promptDirty, setPromptDirty] = useState(false)
   const [promptBodyOpen, setPromptBodyOpen] = useState(false)
+  const [shareNotice, setShareNotice] = useState('')
 
   const refreshPrompts = useCallback(async () => {
     if (!window.lkv) return
@@ -88,6 +89,45 @@ export function usePrompts(deps: UsePromptsDeps) {
     await refreshPrompts()
   }
 
+  const flashNotice = (text: string) => {
+    setShareNotice(text)
+    window.setTimeout(() => setShareNotice(''), 4000)
+  }
+
+  /** Export the selected personality as a versioned JSON pack (#164). */
+  const onExportPrompt = async (target: 'file' | 'clipboard') => {
+    if (!window.lkv || !editingPrompt) return
+    const res = await window.lkv.prompts.export({ id: editingPrompt.id, target })
+    if (res.error) {
+      flashNotice(res.error)
+      return
+    }
+    if (res.canceled) return
+    flashNotice(target === 'clipboard' ? 'Copied JSON' : 'Exported personality')
+  }
+
+  /** Import a personality from a JSON file and select it (#164). */
+  const onImportPrompt = async () => {
+    if (!window.lkv) return
+    const res = await window.lkv.prompts.import()
+    if (res.error) {
+      flashNotice(res.error)
+      return
+    }
+    if (res.canceled || !res.prompt) return
+    setEditingPrompt(res.prompt)
+    setPromptDraft({
+      name: res.prompt.name,
+      body: res.prompt.body,
+      description: res.prompt.description ?? '',
+    })
+    setPromptDirty(false)
+    setPromptBodyOpen(true)
+    setMode('prompts')
+    await refreshPrompts()
+    flashNotice(`Imported “${res.prompt.name}”`)
+  }
+
   return {
     prompts,
     setPrompts,
@@ -104,5 +144,8 @@ export function usePrompts(deps: UsePromptsDeps) {
     onSelectPrompt,
     onSavePrompt,
     onDeletePrompt,
+    onExportPrompt,
+    onImportPrompt,
+    shareNotice,
   }
 }

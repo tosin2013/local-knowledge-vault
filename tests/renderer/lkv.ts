@@ -365,6 +365,14 @@ export function createLkvMock(): LkvMock {
         Promise.resolve(makePrompt(id, patch.name ?? 'n', patch.body ?? 'b')),
       ),
       delete: vi.fn().mockResolvedValue(true),
+      export: vi.fn().mockResolvedValue({ target: 'clipboard', name: 'Grounded default' }),
+      import: vi.fn().mockResolvedValue({
+        prompt: makePrompt('prm_imported', 'Imported personality', 'Be grounded'),
+      }),
+      preview: vi.fn().mockResolvedValue({
+        answer: 'Preview answer [itm_1]',
+        citations: [{ id: 'itm_1', title: 'Note title' }],
+      }),
     },
     profiles: {
       list: vi.fn().mockResolvedValue([]),

@@ -696,6 +696,17 @@ export function deletePrompt(id: string): boolean {
   return result.changes > 0
 }
 
+/** Unique prompt name: if taken, append " (2)", " (3)", … (used by import, #164). */
+export function uniquePromptName(desired: string): string {
+  const base = desired.trim() || 'Imported personality'
+  const rows = getDb().prepare('SELECT name FROM prompts').all() as Array<{ name: string }>
+  const taken = new Set(rows.map((r) => r.name.toLowerCase()))
+  if (!taken.has(base.toLowerCase())) return base
+  let n = 2
+  while (taken.has(`${base} (${n})`.toLowerCase())) n += 1
+  return `${base} (${n})`
+}
+
 /* ---- Chat profiles ---- */
 
 function rowToChatProfile(row: Record<string, unknown>): ChatProfile {

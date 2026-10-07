@@ -20,6 +20,9 @@ function makeProps(overrides: Partial<PromptsViewProps> = {}): PromptsViewProps 
     onUseInAsk: vi.fn(),
     onDeletePrompt: vi.fn(),
     onSavePrompt: vi.fn(),
+    onExportPrompt: vi.fn(),
+    onImportPrompt: vi.fn(),
+    shareNotice: '',
     ...overrides,
   }
 }
@@ -86,6 +89,10 @@ describe('PromptsView', () => {
     expect(screen.getByText('Concise bullets')).toBeInTheDocument()
     expect(screen.getByText('Explain like a teacher')).toBeInTheDocument()
     expect(screen.getByText('Meeting prep')).toBeInTheDocument()
+    expect(screen.getByText('Executive summary')).toBeInTheDocument()
+    expect(screen.getByText('Storyteller')).toBeInTheDocument()
+    expect(screen.getByText('Debate partner')).toBeInTheDocument()
+    expect(screen.getByText('Study guide')).toBeInTheDocument()
   })
 
   it('fills name/description/instructions when a template is chosen', () => {
@@ -108,5 +115,41 @@ describe('PromptsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy helper prompt' }))
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Vault answers only from my own notes'))
     expect(await screen.findByText('Copied')).toBeInTheDocument()
+  })
+
+  it('imports a personality from a file', () => {
+    const props = makeProps()
+    render(<PromptsView {...props} />)
+    fireEvent.click(screen.getByText('Import personality'))
+    expect(props.onImportPrompt).toHaveBeenCalled()
+  })
+
+  it('exports and copies the selected personality as JSON', () => {
+    const props = makeProps({
+      editingPrompt: makePrompt('prm_1', 'Concise', 'Be concise'),
+      promptBodyOpen: true,
+      promptDraft: { name: 'Concise', body: 'Be concise', description: '' },
+    })
+    render(<PromptsView {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    expect(props.onExportPrompt).toHaveBeenCalledWith('file')
+    fireEvent.click(screen.getByRole('button', { name: 'Copy JSON' }))
+    expect(props.onExportPrompt).toHaveBeenCalledWith('clipboard')
+  })
+
+  it('previews the draft against the notes', async () => {
+    const props = makeProps({
+      promptBodyOpen: true,
+      promptDraft: { name: 'Concise', body: 'Be concise', description: '' },
+    })
+    render(<PromptsView {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByText('Preview: Concise')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run preview' }))
+    expect(await screen.findByText(/Preview answer/)).toBeInTheDocument()
+    expect(window.lkv.prompts.preview).toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'Be concise', compare: false }),
+    )
   })
 })

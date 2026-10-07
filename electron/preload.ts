@@ -60,6 +60,11 @@ import type {
   ProjectSummary,
   RemovedPlugin,
   OllamaHealth,
+  PersonalityExportInput,
+  PersonalityExportResult,
+  PersonalityImportResult,
+  PersonalityPreviewInput,
+  PersonalityPreviewResult,
   Prompt,
   SearchQueryInput,
   SearchQueryResult,
@@ -172,6 +177,11 @@ const api = {
     update: (id: string, patch: UpdatePromptPatch): Promise<Prompt | null> =>
       ipcRenderer.invoke('prompts:update', id, patch),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('prompts:delete', id),
+    export: (input: PersonalityExportInput): Promise<PersonalityExportResult> =>
+      ipcRenderer.invoke('prompts:export', input),
+    import: (): Promise<PersonalityImportResult> => ipcRenderer.invoke('prompts:import'),
+    preview: (input: PersonalityPreviewInput): Promise<PersonalityPreviewResult> =>
+      ipcRenderer.invoke('prompts:preview', input),
   },
   profiles: {
     list: (): Promise<ChatProfile[]> => ipcRenderer.invoke('profiles:list'),

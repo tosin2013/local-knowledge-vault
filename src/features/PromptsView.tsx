@@ -10,6 +10,7 @@ import {
   PERSONALITY_TEMPLATES,
   type PersonalityTemplate,
 } from '../personalityHelp'
+import { PersonalityPreviewDialog } from './PersonalityPreviewDialog'
 
 export interface PromptDraft {
   name: string
@@ -33,6 +34,12 @@ export interface PromptsViewProps {
   onUseInAsk: (promptId: string) => void
   onDeletePrompt: () => void
   onSavePrompt: () => void
+  /** Export the selected personality to a file or the clipboard (#164). */
+  onExportPrompt: (target: 'file' | 'clipboard') => void
+  /** Import a personality from a JSON file (#164). */
+  onImportPrompt: () => void
+  /** Result of the last export/import, shown briefly in the editor. */
+  shareNotice: string
 }
 
 export function PromptsView(props: PromptsViewProps) {
@@ -52,9 +59,13 @@ export function PromptsView(props: PromptsViewProps) {
     onUseInAsk,
     onDeletePrompt,
     onSavePrompt,
+    onExportPrompt,
+    onImportPrompt,
+    shareNotice,
   } = props
 
   const [copied, setCopied] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const applyTemplate = (t: PersonalityTemplate) => {
     onDraft(() => ({ name: t.name, description: t.description, body: t.instructions }))
@@ -80,15 +91,20 @@ export function PromptsView(props: PromptsViewProps) {
         sx={{ bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', borderRadius: 0 }}
       >
         <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider' }}>
-          <Button
-            fullWidth
-            size="small"
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={onNewPrompt}
-          >
-            New personality
-          </Button>
+          <Stack spacing={0.5}>
+            <Button
+              fullWidth
+              size="small"
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={onNewPrompt}
+            >
+              New personality
+            </Button>
+            <Button fullWidth size="small" variant="outlined" onClick={onImportPrompt}>
+              Import personality
+            </Button>
+          </Stack>
         </Box>
         <Box className="session-list" sx={{ p: 1 }}>
           {prompts.length === 0 && (
@@ -238,6 +254,31 @@ export function PromptsView(props: PromptsViewProps) {
                     Personality guide
                   </Link>
                 </Stack>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={!promptDraft.body.trim()}
+                    onClick={() => setPreviewOpen(true)}
+                  >
+                    Preview
+                  </Button>
+                  {editingPrompt && (
+                    <>
+                      <Button size="small" onClick={() => onExportPrompt('file')}>
+                        Export
+                      </Button>
+                      <Button size="small" onClick={() => onExportPrompt('clipboard')}>
+                        Copy JSON
+                      </Button>
+                    </>
+                  )}
+                  {shareNotice && (
+                    <Typography variant="caption" color="success.main">
+                      {shareNotice}
+                    </Typography>
+                  )}
+                </Stack>
                 <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
                   {editingPrompt && (
                     <Button color="error" variant="outlined" onClick={onDeletePrompt}>
@@ -262,6 +303,12 @@ export function PromptsView(props: PromptsViewProps) {
           </>
         )}
       </Box>
+      <PersonalityPreviewDialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        body={promptDraft.body}
+        name={promptDraft.name}
+      />
     </Box>
   )
 }
