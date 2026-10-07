@@ -380,7 +380,6 @@ export function createLkvMock(): LkvMock {
       listRecent: vi.fn().mockResolvedValue([]),
       calibration: vi.fn().mockResolvedValue(makeStudyCalibration()),
     },
-    },
     ollama: {
       health: vi.fn().mockResolvedValue({ ok: true, models: [] }),
     },

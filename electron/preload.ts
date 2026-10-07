@@ -132,7 +132,6 @@ const api = {
     calibration: (): Promise<StudyCalibration> =>
       ipcRenderer.invoke('study:calibration'),
   },
-  },
   ollama: {
     health: (): Promise<OllamaHealth> => ipcRenderer.invoke('ollama:health'),
   },
