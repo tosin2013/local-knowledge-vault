@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   Divider,
   Slider,
   Stack,
@@ -17,6 +16,7 @@ import {
 import SchoolIcon from '@mui/icons-material/School'
 import SaveIcon from '@mui/icons-material/Save'
 import type { VaultPluginRenderProps } from '../types'
+import { AnswerText, CitationChips } from '../../components/answer/AnswerText'
 import type {
   AskGroundedResult,
   StudyCalibration,
@@ -48,7 +48,7 @@ function signedPts(v: number): string {
  * for the calibration strip. Every Vault-specific learning effect is a
  * hypothesis; the pilot in #218 measures it.
  */
-export function StudyView({ onClose }: VaultPluginRenderProps) {
+export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
   const [question, setQuestion] = useState('')
   const [asked, setAsked] = useState<string | null>(null)
   const [pending, setPending] = useState<AskGroundedResult | null>(null)
@@ -297,16 +297,8 @@ export function StudyView({ onClose }: VaultPluginRenderProps) {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                 Answer from your notes (feedback)
               </Typography>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                {pending.answer}
-              </Typography>
-              {pending.citations.length > 0 && (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 1 }}>
-                  {pending.citations.map((c) => (
-                    <Chip key={c.id} size="small" variant="outlined" label={c.title} />
-                  ))}
-                </Stack>
-              )}
+              <AnswerText text={pending.answer} citations={pending.citations} onSelectCitation={onOpenNote} />
+              <CitationChips citations={pending.citations} onSelectCitation={onOpenNote} />
               {pending.offline && (
                 <Alert severity="warning" sx={{ mt: 1.5 }}>
                   AI offline — showing fallback copy. Start a local model or add a provider in

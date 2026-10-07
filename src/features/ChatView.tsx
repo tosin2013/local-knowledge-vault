@@ -10,7 +10,6 @@ import {
   FormControl,
   IconButton,
   InputLabel,
-  Link,
   List,
   ListItemButton,
   ListItemText,
@@ -36,12 +35,12 @@ import type {
   Prompt,
   ProviderConfig,
 } from '../../electron/types'
+import { AnswerText } from '../components/answer/AnswerText'
 import {
   findGroundedDefaultPrompt,
   isBuiltinProfileId,
   listBuiltinProfiles,
   parseCitations,
-  parseInlineCitations,
   personalityDisplayName,
   type ChatProfileId,
 } from '../domain'
@@ -288,34 +287,13 @@ export function ChatView(props: ChatViewProps) {
                     borderColor: 'divider',
                   }}
                 >
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
-                    {isUser || cites.length === 0
-                      ? m.content
-                      : parseInlineCitations(m.content, cites).map((seg, i) =>
-                          seg.kind === 'text' ? (
-                            <span key={i}>{seg.text}</span>
-                          ) : (
-                            <Link
-                              key={i}
-                              component="button"
-                              onClick={() => onSelectNote(seg.citation.id)}
-                              aria-label={`Citation ${seg.number}: ${seg.citation.title}`}
-                              title={seg.citation.title}
-                              sx={{
-                                color: 'primary.main',
-                                textDecoration: 'none',
-                                verticalAlign: 'super',
-                                fontSize: '0.72em',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                '&:hover': { textDecoration: 'underline' },
-                              }}
-                            >
-                              [{seg.number}]
-                            </Link>
-                          ),
-                        )}
-                  </Typography>
+                  {m.role === 'assistant' ? (
+                    <AnswerText text={m.content} citations={cites} onSelectCitation={onSelectNote} />
+                  ) : (
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+                      {m.content}
+                    </Typography>
+                  )}
                   {cites.length > 0 && (
                     <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 1 }}>
                       {cites.map((c, i) => (
