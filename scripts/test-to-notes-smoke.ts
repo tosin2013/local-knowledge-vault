@@ -79,7 +79,8 @@ async function main(): Promise<void> {
     parseAiJson,
     parseTestResultsWithAi,
   } = require('../electron/test-to-notes')
-  const { redactError, isRateLimited, retryAfterMs } = require('../electron/providers/http')
+  const { redactError, isRateLimited, retryAfterMs, formatWait } = require('../electron/providers/http')
+  const { offlineCopy } = require('../electron/generate')
 
   // --- isCorrectMarker ---
   console.log('isCorrectMarker')
@@ -275,6 +276,25 @@ async function main(): Promise<void> {
   assert(retryAfterMs('try again in 7.5s') === 7500, 'retry-after parses seconds')
   assert(retryAfterMs('try again in 2m3.1s') === 123100, 'retry-after parses minutes+seconds')
   assert(retryAfterMs('try again in 450ms') === 450, 'retry-after parses milliseconds')
+  assert(retryAfterMs('try again in 2h') === 7_200_000, 'retry-after parses hours')
+  assert(retryAfterMs('try again in 2 minutes') === 120_000, 'retry-after parses the minutes word')
+  assert(retryAfterMs('no wait info here') === undefined, 'retry-after is undefined without a wait')
+  assert(redactError('request id: abc123 failed') === 'request id <redacted> failed', 'request ids are redacted')
+  assert(formatWait(450) === '450 ms', 'formatWait formats milliseconds')
+  assert(formatWait(12_000) === '12 s', 'formatWait formats seconds')
+  assert(formatWait(120_000) === '2 m', 'formatWait formats minutes')
+  assert(formatWait(7_200_000) === '2 h', 'formatWait formats hours')
+
+  const daily = offlineCopy(
+    { error: 'Groq HTTP 429: daily limit reached for org_x', provider: 'groq', providerLabel: 'Groq' },
+    'suffix',
+  )
+  assert(/Daily rate limit/.test(daily), 'a daily limit is told apart from a per-minute limit')
+  const noWait = offlineCopy(
+    { error: 'Groq HTTP 429: rate limit reached', provider: 'groq', providerLabel: 'Groq' },
+    'suffix',
+  )
+  assert(/try again shortly/.test(noWait), 'a rate limit without retry-after says try again shortly')
 
   setMockLlmGenerate({ ok: false, error: 'Groq HTTP 429: rate limit reached, try again in 12 s', provider: 'groq' })
   const rateParsed = await parseTestResultsWithAi({ text: '1. What is 2+2? ✗\nYour answer: 5' })

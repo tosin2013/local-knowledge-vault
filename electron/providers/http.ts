@@ -63,7 +63,7 @@ export function redactError(text: string): string {
   return (text ?? '')
     .replace(/\borg_[a-z0-9_-]+/gi, 'org_<redacted>')
     .replace(/\breq_[a-z0-9_-]+/gi, 'req_<redacted>')
-    .replace(/\brequest[-_ ]?id(?:[=:]\s*)?[a-z0-9_-]+/gi, 'request id <redacted>')
+    .replace(/\brequest[-_ ]?id(?:[=:\s]+)?[a-z0-9_-]+/gi, 'request id <redacted>')
 }
 
 /** A provider error that is a rate limit (HTTP 429 or "rate limit" in the message). */
