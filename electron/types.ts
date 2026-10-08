@@ -797,6 +797,10 @@ export interface TestToNotesParseResult {
   items: TestToNotesItem[]
   /** True when the AI path failed and the heuristic parser was used instead. */
   offline?: boolean
+  /** True when the AI path failed with a rate limit (429). */
+  rateLimited?: boolean
+  /** Parsed "try again in X" wait, in milliseconds, when rate limited. */
+  retryAfterMs?: number
   error?: string
 }
 
@@ -811,6 +815,10 @@ export interface TestToNotesSuggestion {
   uncited?: boolean
   /** True when no model could be reached (body is friendly fallback copy). */
   offline?: boolean
+  /** True when the model call failed with a rate limit (429). */
+  rateLimited?: boolean
+  /** Parsed "try again in X" wait, in milliseconds, when rate limited. */
+  retryAfterMs?: number
   error?: string
 }
 

@@ -79,6 +79,7 @@ async function main(): Promise<void> {
     parseAiJson,
     parseTestResultsWithAi,
   } = require('../electron/test-to-notes')
+  const { redactError, isRateLimited, retryAfterMs } = require('../electron/providers/http')
 
   // --- isCorrectMarker ---
   console.log('isCorrectMarker')
@@ -262,6 +263,29 @@ async function main(): Promise<void> {
 
   const emptyParse = await parseTestResultsWithAi({ text: '   ' })
   assert(emptyParse.items.length === 0 && emptyParse.offline !== true, 'empty input returns no items without a model call')
+
+  // --- #274: error redaction + rate-limit classification ---
+  console.log('\n#274 rate-limit errors')
+  assert(
+    redactError('Rate limit for org_abc123 and req_xyz789') === 'Rate limit for org_<redacted> and req_<redacted>',
+    'org_ and req_ ids are redacted',
+  )
+  assert(isRateLimited('Groq HTTP 429: rate limit reached') === true, 'HTTP 429 is rate limited')
+  assert(isRateLimited('Connection refused') === false, 'a network error is not rate limited')
+  assert(retryAfterMs('try again in 7.5s') === 7500, 'retry-after parses seconds')
+  assert(retryAfterMs('try again in 2m3.1s') === 123100, 'retry-after parses minutes+seconds')
+  assert(retryAfterMs('try again in 450ms') === 450, 'retry-after parses milliseconds')
+
+  setMockLlmGenerate({ ok: false, error: 'Groq HTTP 429: rate limit reached, try again in 12 s', provider: 'groq' })
+  const rateParsed = await parseTestResultsWithAi({ text: '1. What is 2+2? ✗\nYour answer: 5' })
+  assert(rateParsed.rateLimited === true, 'a 429 parse fallback is flagged rate limited')
+  assert(rateParsed.offline !== true, 'a 429 parse fallback is not flagged offline')
+  assert(rateParsed.retryAfterMs === 12000, 'the parse result carries the retry-after')
+
+  const rateSuggestion = await analyzeTestResults([{ question: 'What is the powerhouse of the cell?', answer: 'The nucleus', correct: false }])
+  assert(rateSuggestion.length === 1 && rateSuggestion[0].rateLimited === true, 'a 429 suggestion is flagged rate limited')
+  assert(rateSuggestion[0].offline !== true, 'a 429 suggestion is not flagged offline')
+  assert(/Rate limited/i.test(rateSuggestion[0].body ?? ''), 'the suggestion body says rate limited, not offline')
 
   closeDb()
   fs.rmSync(tmp, { recursive: true, force: true })

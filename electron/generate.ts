@@ -13,6 +13,7 @@ import type {
 import { getItem } from './db'
 import { searchQuery } from './search'
 import { llmGenerate, providerDisplayName } from './llm'
+import { formatWait, isRateLimited, retryAfterMs } from './providers/http'
 
 const CITE_RE = /\[(itm_[a-zA-Z0-9]+)\]/g
 /** Same as CITE_RE but with optional leading spaces so a stripped marker does not
@@ -233,6 +234,13 @@ export function offlineCopy(
   const name = providerDisplayName(gen.provider, gen.providerLabel)
   if (/api key/i.test(msg)) return `${msg}. ${suffix} — add the key in Advanced → AI providers, or use a local model.`
   if (/no models|ollama pull/i.test(msg)) return `${msg}. ${suffix}.`
+  if (isRateLimited(msg)) {
+    if (/daily|per day|24 ?hours?/i.test(msg)) {
+      return `Daily rate limit reached for ${name} — try later or switch provider. ${suffix}.`
+    }
+    const wait = retryAfterMs(msg)
+    return `Rate limited by ${name}${wait ? ` — try again in ${formatWait(wait)}` : ' — try again shortly'}. ${suffix}.`
+  }
   if (/no local model detected|not running/i.test(msg)) {
     return `Vault runs on local models — start Ollama or LM Studio (or add a cloud provider in Advanced). ${suffix}.`
   }

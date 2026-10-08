@@ -40,12 +40,21 @@ function fieldText(...parts: Array<string | undefined>): string {
     .join('\n\n')
 }
 
+function humanizeMs(ms: number): string {
+  if (ms < 1000) return `${ms} ms`
+  if (ms < 60_000) return `${Math.round(ms / 1000)} s`
+  return `${Math.round(ms / 60_000)} m`
+}
+
 export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
   const [raw, setRaw] = useState('')
   const [items, setItems] = useState<TestToNotesItem[]>([])
   const [parsing, setParsing] = useState(false)
   const [parseOffline, setParseOffline] = useState(false)
+  const [parseRateLimited, setParseRateLimited] = useState(false)
+  const [parseRetryAfterMs, setParseRetryAfterMs] = useState<number | undefined>(undefined)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [parseTick, setParseTick] = useState(0)
   const [project, setProject] = useState('')
   const [suggestions, setSuggestions] = useState<TestToNotesSuggestion[]>([])
   const [analyzing, setAnalyzing] = useState(false)
@@ -66,6 +75,8 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
       setItems([])
       setParsing(false)
       setParseOffline(false)
+      setParseRateLimited(false)
+      setParseRetryAfterMs(undefined)
       setParseError(null)
       return
     }
@@ -74,6 +85,8 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
       setItems(parseTestResults(text))
       setParsing(false)
       setParseOffline(false)
+      setParseRateLimited(false)
+      setParseRetryAfterMs(undefined)
       setParseError(null)
       return
     }
@@ -83,17 +96,20 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
         const res = await parse({ text })
         setItems(res.items ?? [])
         setParseOffline(!!res.offline)
+        setParseRateLimited(!!res.rateLimited)
+        setParseRetryAfterMs(res.retryAfterMs)
         setParseError(res.error ?? null)
       } catch (e) {
         setItems(parseTestResults(text))
         setParseOffline(true)
+        setParseRateLimited(false)
         setParseError(e instanceof Error ? e.message : String(e))
       } finally {
         setParsing(false)
       }
     }, 300)
     return () => clearTimeout(timer)
-  }, [raw])
+  }, [raw, parseTick])
 
   const hasAnalyzeApi = !!window.lkv?.testToNotes?.analyze
 
@@ -184,6 +200,7 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
   }
 
   const anyOffline = suggestions.some((s) => s.offline)
+  const anyRateLimited = suggestions.some((s) => s.rateLimited)
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5 }}>
@@ -242,11 +259,31 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
           {error}
         </Alert>
       )}
-      {(parseOffline || parseError) && (
+      {parseRateLimited && (
+        <Alert
+          severity="warning"
+          action={
+            <Button size="small" color="inherit" onClick={() => setParseTick((t) => t + 1)}>
+              Retry with AI
+            </Button>
+          }
+        >
+          {parseRetryAfterMs != null
+            ? `Rate limited — try again in ${humanizeMs(parseRetryAfterMs)}. `
+            : 'Rate limited — try again shortly. '}
+          Parsed with the built-in parser; results may include extra lines.
+        </Alert>
+      )}
+      {!parseRateLimited && (parseOffline || parseError) && (
         <Alert severity="warning">
           {parseError
             ? `AI parsing failed (${parseError}) — showing the built-in parser's result.`
             : 'AI offline — showing the built-in parser\u2019s result.'}
+        </Alert>
+      )}
+      {anyRateLimited && (
+        <Alert severity="warning">
+          Some drafts were rate limited — run Suggest fixes again to retry them.
         </Alert>
       )}
       {anyOffline && (
@@ -361,22 +398,26 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
                   )}
                 </CardContent>
                 <CardActions sx={{ px: 2, pb: 1.5, pt: 0, flexWrap: 'wrap', gap: 0.5 }}>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    disabled={savedSuggestions[index]}
-                    onClick={() => void saveSuggestion(suggestion, index)}
-                  >
-                    Save as draft note
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<ContentCopyIcon />}
-                    onClick={() => void copySuggestion(suggestion)}
-                  >
-                    Copy
-                  </Button>
+                  {!suggestion.offline && !suggestion.rateLimited && !suggestion.error && (
+                    <>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        disabled={savedSuggestions[index]}
+                        onClick={() => void saveSuggestion(suggestion, index)}
+                      >
+                        Save as draft note
+                      </Button>
+                      <Button
+                        size="small"
+                        startIcon={<ContentCopyIcon />}
+                        onClick={() => void copySuggestion(suggestion)}
+                      >
+                        Copy
+                      </Button>
+                    </>
+                  )}
                 </CardActions>
               </Card>
             ))}
