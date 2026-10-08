@@ -986,6 +986,8 @@ export interface ReviewRateInput {
 
 export interface ReviewEnqueueInput {
   itemId: string
+  /** Make two-way cards when the note is a list (#273). Default true. */
+  pairs?: boolean
 }
 
 /** What "Study this project" did (#262). */
@@ -999,6 +1001,16 @@ export interface StudyEnrollResult {
   alreadyScheduled: number
   /** Notes left out, each with a reason. */
   skipped: Array<{ itemId: string; title: string; reason: string }>
+  /** List-like notes that got two-way list cards (#273). */
+  pairNotes: number
+  /** Two-way list cards created (included in `cards`). */
+  pairCards: number
+}
+
+/** Options for enrolling notes (#273). */
+export interface StudyEnrollOptions {
+  /** Make two-way cards for list-like notes (acronyms, ports, terms). Default true. */
+  pairs?: boolean
 }
 
 /** The last study session's grades (#262). A session is a run of reviews with gaps under 30 minutes. */
@@ -1043,6 +1055,8 @@ export interface ReviewEnqueueResult {
   /** Cards the note has in total after the call. */
   cards: number
   alreadyEnrolled: boolean
+  /** Two-way list cards among `created` (#273). */
+  pairCards?: number
 }
 
 export interface ReviewListInput {

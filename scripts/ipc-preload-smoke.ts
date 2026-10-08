@@ -363,6 +363,15 @@ async function main(): Promise<void> {
   assert(examRated.intervalDays === 3, 'review:rate anchors the first interval to the project exam date')
   const bulk = await ipcRendererMock.invoke('review:enqueueProject', 'IPC Exam') as { notes: number; alreadyScheduled: number; skipped: unknown[] }
   assert(bulk.notes === 0 && bulk.alreadyScheduled === 1 && Array.isArray(bulk.skipped), 'review:enqueueProject is idempotent over enrolled notes')
+  // Two-way list cards (#273): on by default, off with { pairs: false }.
+  const listBody = 'AES - Advanced Encryption Standard\nDNS - Domain Name System\nFTP - File Transfer Protocol\n'
+  const listOn = await ipcRendererMock.invoke('items:create', { title: 'IPC acronyms', body: listBody, kind: 'note', para: 'resources', project: 'IPC Lists' }) as { id: string }
+  const listOff = await ipcRendererMock.invoke('items:create', { title: 'IPC acronyms 2', body: listBody, kind: 'note', para: 'resources', project: 'IPC Lists 2' }) as { id: string }
+  const pairOn = await ipcRendererMock.invoke('review:enqueue', { itemId: listOn.id }) as { created: number; pairCards?: number }
+  assert(pairOn.created === 6 && pairOn.pairCards === 6, 'review:enqueue makes two-way list cards for a list note')
+  const pairOff = await ipcRendererMock.invoke('review:enqueueProject', 'IPC Lists 2', { pairs: false }) as { pairCards: number; notes: number }
+  assert(pairOff.pairCards === 0 && pairOff.notes === 1, 'review:enqueueProject passes { pairs: false }')
+  void listOff
   const ipcStats = await ipcRendererMock.invoke('review:stats', 'IPC Exam') as { totalCards: number; examDate: string | null; lastSession: { reviewed: number } | null }
   assert(ipcStats.totalCards === 1 && ipcStats.examDate === examDay && ipcStats.lastSession?.reviewed === 1, 'review:stats returns the project numbers')
   const enrolledIds = await ipcRendererMock.invoke('review:enrolled', [examNote.id, 'itm_missing']) as string[]

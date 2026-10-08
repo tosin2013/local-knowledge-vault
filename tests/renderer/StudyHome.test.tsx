@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { StudyHome, enrollSummary } from '../../src/features/study/StudyHome'
+import { StudyHome, enrollSummary, pairSummary } from '../../src/features/study/StudyHome'
 import { lkvMock } from './lkv'
 
 const BIO_STATS = {
@@ -63,6 +63,8 @@ describe('StudyHome (#262)', () => {
       notes: 12,
       cards: 30,
       alreadyScheduled: 5,
+      pairNotes: 1,
+      pairCards: 80,
       skipped: [
         { itemId: 'a', title: 'Regents · p.1', reason: 'boilerplate (cover, instructions, copyright or site chrome)' },
         { itemId: 'b', title: 'Draft: ATP', reason: 'unconfirmed AI draft (confirm it in your own words first)' },
@@ -72,7 +74,8 @@ describe('StudyHome (#262)', () => {
     renderHome()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Study this project' }))
-    await waitFor(() => expect(lkv.review.enqueueProject).toHaveBeenCalledWith('Biology'))
+    await waitFor(() => expect(lkv.review.enqueueProject).toHaveBeenCalledWith('Biology', { pairs: true }))
+    expect(await screen.findByText(/80 two-way list cards from 1 list \(acronyms, ports, terms\)/)).toBeInTheDocument()
     expect(await screen.findByText('12 notes → 30 cards, 3 skipped')).toBeInTheDocument()
     expect(screen.getByText('5 notes were already scheduled and left as they are.')).toBeInTheDocument()
     expect(
@@ -161,8 +164,27 @@ describe('StudyHome (#262)', () => {
   })
 
   it('formats the enroll summary', () => {
-    expect(enrollSummary({ project: 'x', notes: 1, cards: 1, alreadyScheduled: 0, skipped: [] })).toBe(
+    expect(enrollSummary({ project: 'x', notes: 1, cards: 1, alreadyScheduled: 0, skipped: [], pairNotes: 0, pairCards: 0 })).toBe(
       '1 note → 1 card, 0 skipped',
     )
+    expect(pairSummary({ pairNotes: 0, pairCards: 0 })).toBe('')
+    expect(pairSummary({ pairNotes: 2, pairCards: 1 })).toBe(
+      '1 two-way list card from 2 lists (acronyms, ports, terms): each item is asked both ways.',
+    )
+  })
+
+  it('"Two-way cards for lists" can be turned off and is remembered (#273)', async () => {
+    window.localStorage.removeItem('lkv.study.pairs')
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 20 }])
+    lkv.review.stats.mockResolvedValue({ ...BIO_STATS, examDate: null, lastSession: null })
+    renderHome()
+    const box = await screen.findByLabelText('Two-way cards for lists (acronyms, ports, terms)')
+    expect(box).toBeChecked()
+    fireEvent.click(box)
+    expect(window.localStorage.getItem('lkv.study.pairs')).toBe('off')
+    fireEvent.click(screen.getByRole('button', { name: 'Study this project' }))
+    await waitFor(() => expect(lkv.review.enqueueProject).toHaveBeenCalledWith('Biology', { pairs: false }))
+    window.localStorage.removeItem('lkv.study.pairs')
   })
 })

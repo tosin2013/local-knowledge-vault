@@ -59,6 +59,12 @@ Vault shows a hint if it detects one.
    **Missed**, **Partly** or **Got it**; missed cards come back at the end of the session. The summary
    shows your accuracy, how your confidence matched it, the cards you were sure of but missed, the notes
    to revisit and when the next cards are due. Click **Ask** in the toggle to return.
+
+   Lists get special cards. A note that is mostly `AES - Advanced Encryption Standard` lines, a port table
+   or `Term: definition` lines becomes two-way cards, with no model: "What does AES stand for?" and later
+   "What is the acronym for Advanced Encryption Standard?", or "Port 443 → ?" and "HTTPS uses which port?".
+   Untick **Two-way cards for lists (acronyms, ports, terms)** on **Home** to get ordinary questions instead.
+   Editing the list keeps the schedules of lines you didn't change.
 6. **Learn from a practice test.** In **Study**, open the **Import practice test** tab, pick the
    project, and paste your results into **Paste practice-test results** (or click **Open file…** for a
    PDF, TXT or CSV with a text layer). Plain text works:

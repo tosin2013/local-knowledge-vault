@@ -10,6 +10,7 @@ import { useStudyProject, type StudyProjectProps } from './useStudyProject'
 import type { SearchHit, StudyStats } from '../../../electron/types'
 import { NEW_CARDS_PER_DAY_MAX } from './examDate'
 import { StudySession } from './StudySession'
+import { addedMessage, readPairsPref } from './pairsPref'
 
 export type ReviewViewProps = VaultPluginRenderProps & StudyProjectProps
 
@@ -80,18 +81,14 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
     }
     setError(null)
     try {
-      const res = await window.lkv.review.enqueue({ itemId: hit.id })
+      const res = await window.lkv.review.enqueue({ itemId: hit.id, pairs: readPairsPref() })
       if (res?.alreadyEnrolled) {
         setEnrolled((prev) => ({ ...prev, [hit.id]: true }))
         setStatus(`“${hit.title}” is already in Study.`)
         return
       }
       setAdded((prev) => ({ ...prev, [hit.id]: true }))
-      setStatus(
-        res && res.created > 1
-          ? `Added “${hit.title}” to Study as ${res.created} cards (one per section).`
-          : `Added “${hit.title}” to Study.`,
-      )
+      setStatus(addedMessage(hit.title, res?.created ?? 0, res?.pairCards ?? 0))
       void refreshStats()
       setSessionKey((k) => k + 1)
     } catch (e) {

@@ -60,6 +60,7 @@ import type {
   ProjectResult,
   ProjectSettings,
   StudyEnrollResult,
+  StudyEnrollOptions,
   StudyStats,
   ProjectSummary,
   RemovedPlugin,
@@ -153,8 +154,8 @@ const api = {
       ipcRenderer.invoke('review:enqueue', input),
     remove: (itemId: string): Promise<boolean> => ipcRenderer.invoke('review:remove', itemId),
     /** "Study this project" (#262): enroll every live note, idempotently. */
-    enqueueProject: (project: string): Promise<StudyEnrollResult> =>
-      ipcRenderer.invoke('review:enqueueProject', project),
+    enqueueProject: (project: string, options?: StudyEnrollOptions): Promise<StudyEnrollResult> =>
+      ipcRenderer.invoke('review:enqueueProject', project, options),
     /** Study home numbers for a project ('' = all projects). */
     stats: (project?: string): Promise<StudyStats> => ipcRenderer.invoke('review:stats', project),
     /** Which of these notes already have cards in Study ("Already in Study"). */
