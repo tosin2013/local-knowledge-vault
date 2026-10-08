@@ -79,7 +79,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
     setError(null)
     try {
       await window.lkv.review.rate({
-        itemId: item.id,
+        cardId: item.card_id,
         grade,
         targetDate: targetDate || undefined,
       })
@@ -120,12 +120,18 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
     }
     setError(null)
     try {
-      await window.lkv.review.enqueue({
+      const res = await window.lkv.review.enqueue({
         itemId: hit.id,
         targetDate: targetDate || undefined,
       })
       setAdded((prev) => ({ ...prev, [hit.id]: true }))
-      setStatus(`Added “${hit.title}” to review.`)
+      setStatus(
+        res?.alreadyEnrolled
+          ? `“${hit.title}” is already in review.`
+          : res && res.created > 1
+            ? `Added “${hit.title}” to review as ${res.created} cards (one per section).`
+            : `Added “${hit.title}” to review.`,
+      )
       void refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -182,11 +188,19 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
           Nothing due.
         </Typography>
       ) : (
-        <Card variant="outlined" sx={{ flexShrink: 0 }}>
+        <Card variant="outlined" sx={{ flexShrink: 0 }} key={current.card_id}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-              {current.summary?.trim() || current.title}
+              {current.question?.trim() || current.summary?.trim() || current.title}
             </Typography>
+            {current.chunk_index != null && current.chunk_count > 1 && (
+              <Chip
+                size="small"
+                variant="outlined"
+                sx={{ mb: 1 }}
+                label={`Part ${current.chunk_index + 1} of ${current.chunk_count}`}
+              />
+            )}
             {revealed ? (
               <Box
                 sx={{
@@ -200,7 +214,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
                 }}
               >
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                  {current.body || 'This note has no body yet.'}
+                  {current.card_text || 'This note has no body yet.'}
                 </Typography>
               </Box>
             ) : (

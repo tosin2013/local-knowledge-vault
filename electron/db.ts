@@ -25,6 +25,7 @@ import type {
   UpdatePromptPatch,
 } from './types'
 import { splitIntoChunks } from './chunking'
+import { hashText } from './text-hash'
 
 let db: Database.Database | null = null
 
@@ -61,7 +62,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -84,6 +85,9 @@ function migrate(database: Database.Database): void {
     migrateV6(database)
     // Backfill chunks for notes that predate the chunk table (one-time).
     backfillChunks(database)
+  }
+  if (version < 7) {
+    migrateV7(database)
   }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
@@ -184,6 +188,146 @@ function migrateV6(database: Database.Database): void {
       INSERT INTO note_chunks_fts(rowid, body) VALUES (new.rowid, new.body);
     END;
   `)
+}
+
+/**
+ * v7 (#259, card model): study cards. A card is the unit that is reviewed and
+ * scheduled — a whole short note, one chunk of a long note, and later a
+ * practice-test item (#265) or a reverse pair (#273). See
+ * docs/adr/0004-study-cards.md.
+ *
+ * - `study_cards`: what is being studied. `item_id` always points at a note, so
+ *   the card's project (and exam date) is the note's *current* project.
+ *   `chunk_index` is NULL for a whole-note card. `question`/`answer`/`quote`
+ *   stay NULL until generation (#263). `source_key` is unique and makes
+ *   enrollment idempotent.
+ * - `card_schedule`: the SM-2 state, one row per card (was `review_schedule`,
+ *   one row per note).
+ * - `review_log`: one row per grade, the review history that `review_schedule`
+ *   never kept (it only had the last grade).
+ *
+ * Existing note-keyed `review_schedule` rows each become a whole-note card with
+ * the same schedule, and the last grade becomes one `review_log` row marked
+ * `migrated`. The old table is renamed `review_schedule_legacy` (kept as a
+ * backup) when it had rows, and dropped when it was empty.
+ */
+function migrateV7(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS study_cards (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      chunk_index INTEGER,
+      chunk_hash TEXT,
+      note_hash TEXT,
+      origin TEXT NOT NULL DEFAULT 'note' CHECK(origin IN ('note','practice-test','reverse')),
+      question TEXT,
+      answer TEXT,
+      quote TEXT,
+      source_test TEXT,
+      source_test_date TEXT,
+      source_key TEXT NOT NULL UNIQUE,
+      priority INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','pending','suspended','retired')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_study_cards_item ON study_cards(item_id, chunk_index);
+
+    CREATE TABLE IF NOT EXISTS card_schedule (
+      card_id TEXT PRIMARY KEY REFERENCES study_cards(id) ON DELETE CASCADE,
+      due_at TEXT NOT NULL,
+      interval_days REAL NOT NULL DEFAULT 0,
+      ease REAL NOT NULL DEFAULT 2.5,
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      last_grade TEXT,
+      last_reviewed_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_card_schedule_due ON card_schedule(due_at);
+
+    CREATE TABLE IF NOT EXISTS review_log (
+      id TEXT PRIMARY KEY,
+      card_id TEXT NOT NULL REFERENCES study_cards(id) ON DELETE CASCADE,
+      grade TEXT NOT NULL,
+      reviewed_at TEXT NOT NULL,
+      interval_days REAL,
+      ease REAL,
+      due_at TEXT,
+      migrated INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_review_log_card ON review_log(card_id, reviewed_at);
+    CREATE INDEX IF NOT EXISTS idx_review_log_time ON review_log(reviewed_at);
+  `)
+
+  if (!tableExists(database, 'review_schedule')) return
+  const legacy = database
+    .prepare(
+      `SELECT rs.*, items.body AS body
+       FROM review_schedule rs JOIN items ON items.id = rs.item_id`,
+    )
+    .all() as Array<Record<string, unknown>>
+  const total = Number(
+    (database.prepare('SELECT COUNT(*) AS c FROM review_schedule').get() as { c: number }).c,
+  )
+  if (total === 0) {
+    database.exec('DROP TABLE review_schedule')
+    return
+  }
+  const insertCard = database.prepare(
+    `INSERT OR IGNORE INTO study_cards
+       (id, item_id, chunk_index, chunk_hash, note_hash, origin, source_key, status, created_at, updated_at)
+     VALUES (@id, @item_id, NULL, @hash, @hash, 'note', @source_key, 'active', @created_at, @updated_at)`,
+  )
+  const insertSchedule = database.prepare(
+    `INSERT OR IGNORE INTO card_schedule
+       (card_id, due_at, interval_days, ease, reps, lapses, last_grade, last_reviewed_at, created_at, updated_at)
+     VALUES (@card_id, @due_at, @interval_days, @ease, @reps, @lapses, @last_grade, @last_reviewed_at, @created_at, @updated_at)`,
+  )
+  const insertLog = database.prepare(
+    `INSERT INTO review_log (id, card_id, grade, reviewed_at, interval_days, ease, due_at, migrated)
+     VALUES (@id, @card_id, @grade, @reviewed_at, @interval_days, @ease, @due_at, 1)`,
+  )
+  const run = database.transaction(() => {
+    for (const row of legacy) {
+      const cardId = newId('crd')
+      const body = String(row.body ?? '')
+      insertCard.run({
+        id: cardId,
+        item_id: String(row.item_id),
+        hash: hashText(body),
+        source_key: `note:${String(row.item_id)}`,
+        created_at: String(row.created_at),
+        updated_at: String(row.updated_at),
+      })
+      insertSchedule.run({
+        card_id: cardId,
+        due_at: String(row.due_at),
+        interval_days: Number(row.interval_days ?? 0),
+        ease: Number(row.ease ?? 2.5),
+        reps: Number(row.reps ?? 0),
+        lapses: Number(row.lapses ?? 0),
+        last_grade: row.last_grade == null ? null : String(row.last_grade),
+        last_reviewed_at: row.last_reviewed_at == null ? null : String(row.last_reviewed_at),
+        created_at: String(row.created_at),
+        updated_at: String(row.updated_at),
+      })
+      if (row.last_grade != null && row.last_reviewed_at != null) {
+        insertLog.run({
+          id: newId('rvl'),
+          card_id: cardId,
+          grade: String(row.last_grade),
+          reviewed_at: String(row.last_reviewed_at),
+          interval_days: Number(row.interval_days ?? 0),
+          ease: Number(row.ease ?? 2.5),
+          due_at: String(row.due_at),
+        })
+      }
+    }
+    database.exec('ALTER TABLE review_schedule RENAME TO review_schedule_legacy')
+  })
+  run()
 }
 
 /** Re-derive one note's chunks from its body (delete + reinsert). */

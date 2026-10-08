@@ -59,8 +59,16 @@ export function makeHit(id: string, overrides: Partial<SearchHit> = {}): SearchH
 }
 
 export function makeReviewItem(id: string, overrides: Partial<ReviewQueueItem> = {}): ReviewQueueItem {
-  return {
+  const base: ReviewQueueItem = {
     ...makeItem(id),
+    card_id: `crd_${id}`,
+    chunk_index: null,
+    chunk_count: 1,
+    card_text: '',
+    origin: 'note',
+    question: null,
+    answer: null,
+    quote: null,
     due_at: '2026-09-28T00:00:00.000Z',
     interval_days: 0,
     ease: 2.5,
@@ -70,6 +78,8 @@ export function makeReviewItem(id: string, overrides: Partial<ReviewQueueItem> =
     last_reviewed_at: null,
     ...overrides,
   }
+  // A whole-note card reveals the note body unless a test sets card_text.
+  return { ...base, card_text: overrides.card_text ?? base.body }
 }
 
 export function makeReviewState(overrides: Partial<ReviewState> = {}): ReviewState {
@@ -359,10 +369,8 @@ export function createLkvMock(): LkvMock {
     review: {
       listDue: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
-      rate: vi.fn().mockImplementation((input: { itemId: string; grade: string }) =>
-        Promise.resolve(makeReviewState({ reps: 1 })),
-      ),
-      enqueue: vi.fn().mockResolvedValue(makeReviewState({ intervalDays: 0, reps: 0 })),
+      rate: vi.fn().mockImplementation(() => Promise.resolve(makeReviewState({ reps: 1 }))),
+      enqueue: vi.fn().mockResolvedValue({ created: 1, cards: 1, alreadyEnrolled: false }),
       remove: vi.fn().mockResolvedValue(true),
     },
     study: {
