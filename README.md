@@ -39,6 +39,10 @@ it again: `xattr -dr com.apple.quarantine /Applications/Vault.app`.
 
 ## Quick start (local first)
 
+New to Vault? The **[getting-started guides](docs/getting-started/README.md)** walk through a first
+session for students, readers, Obsidian users, local-AI and privacy fans, people learning from
+video, and anyone who just wants a cloud key. The short version:
+
 1. Install [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai).
 2. Pull the recommended model:
    ```bash
