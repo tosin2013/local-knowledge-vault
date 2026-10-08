@@ -272,7 +272,8 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
       <Typography variant="caption" color="text.secondary">
         Each short note becomes one card; a long note or imported page becomes one card per section. A session
         asks one question per card, written from that section when the card first comes up, and you answer from
-        memory before you see your note.
+        memory before you see your note. A list of acronyms, ports or terms becomes two-way cards instead, one per
+        item and direction, with no AI needed.
       </Typography>
     </Box>
   )
