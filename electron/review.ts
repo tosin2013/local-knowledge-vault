@@ -506,6 +506,12 @@ export function countDueReviews(before?: string, project?: string): number {
  * cards leaves them untouched (never resurrects a schedule).
  */
 export function enqueueReview(itemId: string): ReviewEnqueueResult {
+  const kind = getDb().prepare('SELECT kind FROM items WHERE id = ?').get(itemId) as { kind: string } | undefined
+  if (kind?.kind === 'practice-test') {
+    // Its questions are already cards (#265); never add note cards on top.
+    const n = getDb().prepare('SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ?').get(itemId) as { c: number }
+    return { created: 0, cards: Number(n.c), alreadyEnrolled: true }
+  }
   const { created, alreadyEnrolled } = createNoteCards(itemId)
   const total = getDb()
     .prepare('SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ?')

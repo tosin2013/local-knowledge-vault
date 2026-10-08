@@ -536,6 +536,31 @@ function importEpub(fileName: string, buf: Buffer): Promise<BookImportResult> {
     }))
 }
 
+/**
+ * The text layer of a PDF, page by page (repeated headers and banners removed),
+ * for pasting a practice test or exam into Study (#265). No OCR.
+ */
+export async function pdfText(buf: Buffer): Promise<string> {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buf),
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    disableFontFace: true,
+  } as Parameters<typeof pdfjs.getDocument>[0])
+  try {
+    const doc = await loadingTask.promise
+    const pageLines: PdfLine[][] = []
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n)
+      pageLines.push(extractPageLines(await page.getTextContent()))
+    }
+    return cleanPdfPages(pageLines).pages.filter((p) => p.trim()).join('\n\n')
+  } finally {
+    await loadingTask.destroy()
+  }
+}
+
 async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResult> {
   let destroy: (() => Promise<void>) | null = null
   try {

@@ -244,6 +244,68 @@ describe('StudySession (#263)', () => {
     expect(screen.getByText('Writing a question from your note…')).toBeInTheDocument()
   })
 
+  it('reveals a practice-test card with the test answer, explanation and a draft waiting (#265)', async () => {
+    const lkv = startWith([makeReviewItem('itm_test', { card_id: 'crd_pt', origin: 'practice-test', last_grade: 'again' })])
+    const onOpenNote = vi.fn()
+    lkv.study.cardQuestion.mockResolvedValue(
+      makeCardQuestion('crd_pt', {
+        itemId: 'itm_test',
+        title: 'Core 2 practice exam · 2026-10-08',
+        origin: 'practice-test',
+        kind: 'test',
+        question: 'What should the technician do next according to the malware removal procedure?',
+        answer: 'Quarantine the infected system',
+        quote: null,
+        sectionText: 'Quarantine stops the spread.',
+        citations: [],
+        explanation: 'Quarantine stops the spread.',
+        sourceTest: { itemId: 'itm_test', name: 'Core 2 practice exam', date: '2026-10-08' },
+        linkedNote: { id: 'itm_draft', title: 'Fix: malware', confirmed: false },
+      }),
+    )
+    render(<StudySession project="A+" onOpenNote={onOpenNote} />)
+    await begin()
+    expect(screen.getByText('Practice test')).toBeInTheDocument()
+    expect(screen.getByText('Core 2 practice exam · 2026-10-08')).toBeInTheDocument()
+    expect(screen.getByText('Missed last time')).toBeInTheDocument()
+    answer('Disable System Restore')
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal answer' }))
+    expect(await screen.findByTestId('session-answer')).toHaveTextContent('Quarantine the infected system')
+    expect(screen.getByTestId('session-explanation')).toHaveTextContent('Quarantine stops the spread.')
+    expect(screen.getByTestId('draft-waiting')).toBeInTheDocument()
+    // No note link until the draft is confirmed; the test itself opens.
+    expect(screen.queryByRole('button', { name: 'Open note' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Compare with your note')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open the test' }))
+    expect(onOpenNote).toHaveBeenCalledWith('itm_test')
+  })
+
+  it('a diagram card asks to open the test; a keyless card says so', async () => {
+    const lkv = startWith([makeReviewItem('itm_test', { card_id: 'crd_fig', origin: 'practice-test' })])
+    lkv.study.cardQuestion.mockResolvedValue(
+      makeCardQuestion('crd_fig', {
+        origin: 'practice-test',
+        kind: 'test',
+        question: 'The diagram below shows a cell. Which letter is the mitochondrion?',
+        answer: null,
+        quote: null,
+        citations: [{ id: 'itm_note', title: 'Cell structure' }],
+        openSource: true,
+        sourceTest: { itemId: 'itm_test', name: 'Unit quiz', date: null },
+        linkedNote: { id: 'itm_note', title: 'Cell structure', confirmed: true },
+      }),
+    )
+    render(<StudySession project="" onOpenNote={vi.fn()} />)
+    await begin()
+    expect(screen.getByText(/needs the test's figure/)).toBeInTheDocument()
+    expect(screen.getByText('Unit quiz')).toBeInTheDocument()
+    answer('C')
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal answer' }))
+    expect(await screen.findByText(/didn't include the correct answer/)).toBeInTheDocument()
+    expect(screen.getByText(/Check it against your note/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open note Cell structure' })).toBeInTheDocument()
+  })
+
   it('formats due dates and tolerates bad ones', () => {
     expect(formatDue(null)).toBe('')
     expect(formatDue('not a date')).toBe('')

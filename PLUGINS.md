@@ -78,8 +78,8 @@ Study section; a saved disabled entry for them is ignored.
 ### Import practice test
 
 - **Was:** the `test-to-notes` panel.
-- **What:** paste practice-test results (numbered plain text with ✓/✗ marks, or CSV `question,answer,correct`), see a correct/wrong summary, and turn each wrong answer into a short corrective note grounded in your notes. Suggestions are saved with status **AI draft**; correct answers can be saved as flash cards.
-- **How to try:** Study → **Import practice test** → paste results → **Suggest fixes** → **Save as draft note**.
+- **What:** paste or open practice-test results (numbered plain text with ✓/✗ marks, exam-site exports, answer sheets, or CSV `question,answer,correct[,correct answer,explanation]`), name and date the test, and **Add to Study** (#265): each missed question becomes a Study card seeded as Missed, built from the test's own Q&A, and linked to a covering note or to a corrective **AI draft** (cited once confirmed). **Also add the ones I got right** adds the correct ones as low-priority new cards. The test is saved as one `practice-test` item without the learner's wrong answers. **Suggest fixes** stays as an optional model step; a saved suggestion links to its card. IPC: `practiceTest:import`, `practiceTest:link`, `practiceTest:openFile`.
+- **How to try:** Study → **Import practice test** → paste results → **Add to Study** → **Study session** → **Start session**.
 
 ## MCP connections
 

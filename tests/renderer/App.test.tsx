@@ -37,7 +37,7 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: 'Home' })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByTestId('study-home')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: 'Import practice test' }))
-    expect(await screen.findByText('Test to notes')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Import practice test' })).toBeInTheDocument()
     // Back to Ask, then Study again keeps the last section.
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
     await waitFor(() => expect(screen.queryByTestId('study-tab')).not.toBeInTheDocument())

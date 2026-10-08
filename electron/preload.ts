@@ -91,6 +91,9 @@ import type {
   StudySessionStartInput,
   TestToNotesAnalyzeInput,
   TestToNotesParseInput,
+  PracticeTestImportInput,
+  PracticeTestImportResult,
+  PracticeTestFile,
   TestToNotesParseResult,
   TestToNotesSuggestion,
   UpdateChatProfilePatch,
@@ -129,6 +132,15 @@ const api = {
       ipcRenderer.invoke('testToNotes:analyze', input),
     parse: (input: TestToNotesParseInput): Promise<TestToNotesParseResult> =>
       ipcRenderer.invoke('testToNotes:parse', input),
+  },
+  practiceTest: {
+    /** Turn parsed practice-test items into Study cards (#265). */
+    import: (input: PracticeTestImportInput): Promise<PracticeTestImportResult> =>
+      ipcRenderer.invoke('practiceTest:import', input),
+    /** Link a practice-test card to a note (e.g. a saved corrective draft). */
+    link: (cardId: string, noteId: string): Promise<boolean> => ipcRenderer.invoke('practiceTest:link', cardId, noteId),
+    /** Pick a PDF / TXT / CSV and read its text (main shows the dialog). */
+    openFile: (): Promise<PracticeTestFile> => ipcRenderer.invoke('practiceTest:openFile'),
   },
   review: {
     listDue: (input?: ReviewListInput): Promise<ReviewQueueItem[]> =>

@@ -258,6 +258,8 @@ async function main(): Promise<void> {
     'ask:grounded',
     // test to notes (#166)
     'testToNotes:analyze', 'testToNotes:parse',
+    // practice tests inside Study (#265)
+    'practiceTest:import', 'practiceTest:link', 'practiceTest:openFile',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
     'review:enqueueProject', 'review:stats', 'review:enrolled',
@@ -382,6 +384,13 @@ async function main(): Promise<void> {
   assert(Array.isArray(notArray) && notArray.length === 0, 'review:enrolled tolerates a non-array input')
   const noProj = await ipcRendererMock.invoke('study:sessionSummary', session.sessionId) as { cards: number }
   assert(typeof noProj.cards === 'number', 'study:sessionSummary defaults the project')
+  const imported = await ipcRendererMock.invoke('practiceTest:import', {
+    project: 'IPC Exam', name: 'IPC quiz', date: '2026-10-08',
+    items: [{ question: 'Which port does RDP use?', answer: '22', correct: false, correctAnswer: '3389' }],
+  }) as { added: number; cardIds: Record<number, string> }
+  assert(imported.added === 1 && !!imported.cardIds[0], 'practiceTest:import adds a card from the test')
+  const linkedOk = await ipcRendererMock.invoke('practiceTest:link', imported.cardIds[0], examNote.id) as boolean
+  assert(linkedOk === true, 'practiceTest:link links the card to a note')
   const cleared = await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', null) as { examDate: string | null }
   assert(cleared.examDate === null, 'projects:setExamDate clears with null')
 

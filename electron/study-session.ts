@@ -26,6 +26,7 @@ import { llmGenerate } from './llm'
 import { isRateLimited, retryAfterMs, formatWait } from './providers/http'
 import { buildGroundedMessages, citationsFromIds, extractCitedIds, validateCitations } from './generate'
 import { hashText } from './text-hash'
+import { VISUAL_RE } from './practice-test'
 import { getCardState, getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
 import { calibrationSummary, clampConfidence, recordStudyAttempt } from './study'
 import type {
@@ -275,6 +276,12 @@ interface CardRow {
   kind: string
   chunk_body: string | null
   chunk_count: number
+  explanation: string | null
+  source_test: string | null
+  source_test_date: string | null
+  link_item_id: string | null
+  link_title: string | null
+  link_status: string | null
 }
 
 function loadCard(cardId: string): CardRow | null {
@@ -282,11 +289,14 @@ function loadCard(cardId: string): CardRow | null {
     .prepare(
       `SELECT c.id, c.item_id, c.chunk_index, c.origin, c.question, c.answer, c.quote,
               c.q_kind, c.q_source_hash, c.q_model, c.q_note,
+              c.explanation, c.source_test, c.source_test_date, c.link_item_id,
+              li.title AS link_title, li.status AS link_status,
               i.title, i.body, i.project, i.para, i.kind,
               nc.body AS chunk_body,
               (SELECT COUNT(*) FROM note_chunks n2 WHERE n2.item_id = i.id) AS chunk_count
        FROM study_cards c
        JOIN items i ON i.id = c.item_id
+       LEFT JOIN items li ON li.id = c.link_item_id AND li.status != 'trashed'
        LEFT JOIN note_chunks nc ON nc.item_id = c.item_id AND nc.chunk_index = c.chunk_index
        WHERE c.id = ?`,
     )
@@ -311,6 +321,28 @@ function saveQuestion(
 }
 
 function baseQuestion(row: CardRow): Omit<StudyCardQuestion, 'kind' | 'question' | 'answer' | 'quote'> {
+  if (row.origin === 'practice-test') {
+    // The test is the answer key; the learner's note is cited only once it is
+    // confirmed in their own words (#217, owner default 2).
+    const linked = row.link_item_id && row.link_title
+      ? { id: row.link_item_id, title: row.link_title, confirmed: row.link_status !== 'ai-draft' }
+      : null
+    return {
+      cardId: row.id,
+      itemId: row.item_id,
+      title: row.title,
+      project: row.project,
+      origin: 'practice-test',
+      sectionText: row.explanation ?? '',
+      chunkIndex: null,
+      chunkCount: 0,
+      citations: linked?.confirmed ? [{ id: linked.id, title: linked.title, project: row.project }] : [],
+      explanation: row.explanation,
+      sourceTest: { itemId: row.item_id, name: row.source_test ?? row.title, date: row.source_test_date },
+      linkedNote: linked,
+      openSource: VISUAL_RE.test(row.question ?? ''),
+    }
+  }
   return {
     cardId: row.id,
     itemId: row.item_id,
