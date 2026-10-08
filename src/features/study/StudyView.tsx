@@ -18,6 +18,7 @@ import SaveIcon from '@mui/icons-material/Save'
 import type { VaultPluginRenderProps } from '../../plugins/types'
 import { AnswerText, CitationChips } from '../../components/answer/AnswerText'
 import { ProjectSelect } from '../ProjectSelect'
+import { useStudyProject, type StudyProjectProps } from './useStudyProject'
 import type {
   AskGroundedResult,
   StudyCalibration,
@@ -49,7 +50,9 @@ function signedPts(v: number): string {
  * for the calibration strip. Every Vault-specific learning effect is a
  * hypothesis; the pilot in #218 measures it.
  */
-export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
+export type StudyViewProps = VaultPluginRenderProps & StudyProjectProps
+
+export function StudyView({ onClose, onOpenNote, project: projectProp, onProjectChange }: StudyViewProps) {
   const [question, setQuestion] = useState('')
   const [asked, setAsked] = useState<string | null>(null)
   const [pending, setPending] = useState<AskGroundedResult | null>(null)
@@ -69,7 +72,7 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const [project, setProject] = useState('')
+  const [project, setProject] = useStudyProject(projectProp, onProjectChange)
   const [sampleQuestions, setSampleQuestions] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
 

@@ -1,9 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { LEGACY_STUDY_PLUGIN_IDS, STUDY_SECTIONS, legacyStudySection } from '../../src/features/study/sections'
+import {
+  LEGACY_STUDY_PLUGIN_IDS,
+  STUDY_PROJECT_KEY,
+  STUDY_SECTIONS,
+  legacyStudySection,
+  loadStudyProject,
+  saveStudyProject,
+} from '../../src/features/study/sections'
 
 describe('Study tab sections (#260)', () => {
-  it('lists the three sections in order', () => {
-    expect(STUDY_SECTIONS.map((s) => s.label)).toEqual(['Review due notes', 'Quiz me on…', 'Import practice test'])
+  it('lists Study home first, then the three sections (#262)', () => {
+    expect(STUDY_SECTIONS.map((s) => s.label)).toEqual(['Home', 'Review due notes', 'Quiz me on…', 'Import practice test'])
+  })
+
+  it('remembers the Study project in localStorage (#262)', () => {
+    expect(loadStudyProject()).toBe('')
+    saveStudyProject('Biology')
+    expect(localStorage.getItem(STUDY_PROJECT_KEY)).toBe('Biology')
+    expect(loadStudyProject()).toBe('Biology')
+    saveStudyProject('')
+    expect(localStorage.getItem(STUDY_PROJECT_KEY)).toBeNull()
   })
 
   it('maps the former add-on ids onto their Study section', () => {

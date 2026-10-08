@@ -27,7 +27,7 @@ export default function App() {
   // Cross-cutting navigation / notification state.
   const [mode, setMode] = useState<Mode>('chat')
   const [activePluginId, setActivePluginId] = useState<string | null>(null)
-  const [studySection, setStudySection] = useState<StudySection>('review')
+  const [studySection, setStudySection] = useState<StudySection>('home')
   const [pluginsMenuAnchor, setPluginsMenuAnchor] = useState<null | HTMLElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

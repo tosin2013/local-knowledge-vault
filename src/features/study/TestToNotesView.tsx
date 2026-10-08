@@ -17,6 +17,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import SaveIcon from '@mui/icons-material/Save'
 import type { VaultPluginRenderProps } from '../../plugins/types'
 import { ProjectSelect } from '../ProjectSelect'
+import { useStudyProject, type StudyProjectProps } from './useStudyProject'
 import type { TestToNotesItem, TestToNotesSuggestion } from '../../../electron/types'
 import { parseTestResults, summarizeAttempts } from '../../../electron/test-to-notes-parse'
 
@@ -46,7 +47,9 @@ function humanizeMs(ms: number): string {
   return `${Math.round(ms / 60_000)} m`
 }
 
-export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
+export type TestToNotesViewProps = VaultPluginRenderProps & StudyProjectProps
+
+export function TestToNotesView({ onClose, project: projectProp, onProjectChange }: TestToNotesViewProps) {
   const [raw, setRaw] = useState('')
   const [items, setItems] = useState<TestToNotesItem[]>([])
   const [parsing, setParsing] = useState(false)
@@ -55,7 +58,7 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
   const [parseRetryAfterMs, setParseRetryAfterMs] = useState<number | undefined>(undefined)
   const [parseError, setParseError] = useState<string | null>(null)
   const [parseTick, setParseTick] = useState(0)
-  const [project, setProject] = useState('')
+  const [project, setProject] = useStudyProject(projectProp, onProjectChange)
   const [suggestions, setSuggestions] = useState<TestToNotesSuggestion[]>([])
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)

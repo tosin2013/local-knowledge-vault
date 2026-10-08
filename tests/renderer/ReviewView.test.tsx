@@ -191,6 +191,17 @@ describe('ReviewView', () => {
     )
   })
 
+  it('scopes the note search to the selected project (#262)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 2 }])
+    render(<ReviewView project="Biology" onProjectChange={() => {}} />)
+    fireEvent.change(screen.getByLabelText(/Search your notes/i), { target: { value: 'photosynthesis' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await waitFor(() =>
+      expect(lkv.search.query).toHaveBeenCalledWith({ text: 'photosynthesis', limit: 8, filters: { project: 'Biology' } }),
+    )
+  })
+
   it('scopes the due list to the selected project', async () => {
     const lkv = lkvMock()
     lkv.projects.list.mockResolvedValue([{ name: 'Work', count: 2 }])

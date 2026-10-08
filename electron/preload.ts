@@ -59,6 +59,8 @@ import type {
   ProviderTestResult,
   ProjectResult,
   ProjectSettings,
+  StudyEnrollResult,
+  StudyStats,
   ProjectSummary,
   RemovedPlugin,
   OllamaHealth,
@@ -132,6 +134,11 @@ const api = {
     enqueue: (input: ReviewEnqueueInput): Promise<ReviewEnqueueResult> =>
       ipcRenderer.invoke('review:enqueue', input),
     remove: (itemId: string): Promise<boolean> => ipcRenderer.invoke('review:remove', itemId),
+    /** "Study this project" (#262): enroll every live note, idempotently. */
+    enqueueProject: (project: string): Promise<StudyEnrollResult> =>
+      ipcRenderer.invoke('review:enqueueProject', project),
+    /** Study home numbers for a project ('' = all projects). */
+    stats: (project?: string): Promise<StudyStats> => ipcRenderer.invoke('review:stats', project),
   },
   study: {
     record: (input: StudyAttemptInput): Promise<StudyAttempt> =>

@@ -103,6 +103,28 @@ projects" scope, has no exam date and gets plain spacing.
 The old ReviewView "Target exam date" was component state passed to one `review:rate` call and never stored, so
 there is nothing to migrate onto projects. The IPC no longer takes a date from the caller.
 
+### Study this project (#262)
+
+`review:enqueueProject(project)` enrolls every live note in a project at the card unit. It is idempotent: a note that
+already has cards counts as "already scheduled" and is left alone. It returns
+`{notes, cards, alreadyScheduled, skipped[{itemId, title, reason}]}`, which Study home shows as
+"N notes → M cards, K skipped".
+
+These are left out, each with a reason (`enrollSkipReason`, pure):
+
+- **Unconfirmed AI drafts** (`status = 'ai-draft'`): enrolled after the own-words confirm (#217). The evaluation found
+  0 of 2 usable questions from drafts.
+- **Video transcripts:** a learner adds single parts from Review by choice, as the evaluation decided.
+- **Archived notes.** Trashed notes are ignored and not listed.
+- **Empty notes, and notes under 20 real words** (after dropping `Source:`/`Page:` header lines).
+- **Boilerplate** (`boilerplateReason`). Signals are grouped (copyright, exam logistics, exam policy, site chrome,
+  blank page, contents), so a header repeated on every page counts once. A page is skipped when:
+  - two or more groups match;
+  - three or more exam-logistics phrases match (an exam cover or instructions page); or
+  - one group matches on a page of 120 words or fewer.
+
+  A long content page that carries one copyright header is kept.
+
 ## Consequences
 
 - One schedule per card: a 30-page book can be enrolled at page or chunk level and each part is graded on its own.

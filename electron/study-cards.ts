@@ -14,7 +14,7 @@
  */
 import { getDb, newId, nowIso } from './db'
 import { hashText } from './text-hash'
-import type { StudyCard, StudyCardOrigin, StudyCardStatus } from './types'
+import type { StudyCard, StudyCardOrigin, StudyCardStatus, StudyEnrollResult } from './types'
 
 /** Notes at or under this many characters are studied as one card (#263). */
 export const WHOLE_NOTE_MAX_CHARS = 1200
@@ -161,4 +161,162 @@ export function deleteCardsForItem(itemId: string): number {
 /** Remove one card. Returns true when it existed. */
 export function deleteCard(cardId: string): boolean {
   return getDb().prepare('DELETE FROM study_cards WHERE id = ?').run(cardId).changes > 0
+}
+
+// --- Bulk enrolment: "Study this project" (#262) ---------------------------
+
+/** Lines import paths prepend to a body (`Source:`, `Page:` …), not content. */
+const BODY_HEADER_LINE = /^(source|page|pages|url|fetched|imported|author)s?:.*$/i
+
+/** Words that carry letters or digits, after dropping import header lines. */
+export function contentWords(body: string): string[] {
+  const lines = (body ?? '').split(/\r?\n/)
+  let i = 0
+  while (i < lines.length && (BODY_HEADER_LINE.test(lines[i].trim()) || !lines[i].trim())) i++
+  return lines
+    .slice(i)
+    .join(' ')
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w))
+}
+
+/** Fewer real words than this is too little to quiz on. */
+export const MIN_STUDY_WORDS = 20
+/** A page this short that matches a boilerplate signal is treated as boilerplate. */
+const SHORT_PAGE_WORDS = 120
+
+/**
+ * Boilerplate signals, grouped so one repeated header (for example the
+ * "Copyright © 2024 CompTIA, Inc. All rights reserved." line on every page)
+ * counts once. Each group holds distinct phrases.
+ */
+const BOILERPLATE_GROUPS: Array<{ group: string; patterns: RegExp[] }> = [
+  {
+    group: 'copyright',
+    patterns: [/all rights reserved/i, /copyright\s*(©|\(c\)|\d{4})/i, /©\s*\d{4}/, /\bISBN[\s:-]*[\dX-]{10,}/i],
+  },
+  {
+    group: 'exam-logistics',
+    patterns: [
+      /do not open this (examination|exam|test)? ?booklet/i,
+      /communications? device[\s\S]{0,60}prohibited/i,
+      /(separate|your) answer sheet/i,
+      /student name\s*_{3,}/i,
+      /school name\s*_{3,}/i,
+      /\bproctor\b/i,
+      /sign the declaration/i,
+      /until the signal is given/i,
+      /record (all )?(of )?your answers/i,
+      /calculator must be available/i,
+    ],
+  },
+  {
+    group: 'exam-policy',
+    patterns: [/brain dumps?/i, /candidate agreement/i, /authorized materials use policy/i, /exam policies/i],
+  },
+  {
+    group: 'web-chrome',
+    patterns: [
+      /we use cookies/i,
+      /accept (all )?cookies/i,
+      /cookie (policy|settings|preferences)/i,
+      /privacy policy/i,
+      /terms of (use|service)/i,
+      /subscribe to our newsletter/i,
+    ],
+  },
+  { group: 'blank', patterns: [/this page (is )?intentionally left blank/i] },
+  { group: 'contents', patterns: [/^\s*(table of )?contents\s*$/im] },
+]
+
+/**
+ * Why a note should not become study cards, or null when it should. Pure.
+ *
+ * - fewer than {@link MIN_STUDY_WORDS} real words → too short;
+ * - boilerplate when two or more signal groups match, three or more distinct
+ *   exam-logistics phrases match (an exam cover or instructions page), or one
+ *   group matches on a short page (≤ 120 words).
+ *
+ * A long content page with one repeated copyright header is kept.
+ */
+export function boilerplateReason(body: string): string | null {
+  const text = body ?? ''
+  const words = contentWords(text)
+  if (words.length === 0) return 'empty'
+  if (words.length < MIN_STUDY_WORDS) return 'too short to quiz on'
+  const groups = new Set<string>()
+  let logistics = 0
+  for (const { group, patterns } of BOILERPLATE_GROUPS) {
+    const hits = patterns.filter((p) => p.test(text)).length
+    if (hits > 0) groups.add(group)
+    if (group === 'exam-logistics') logistics = hits
+  }
+  if (groups.size >= 2 || logistics >= 3 || (groups.size === 1 && words.length <= SHORT_PAGE_WORDS)) {
+    return 'boilerplate (cover, instructions, copyright or site chrome)'
+  }
+  return null
+}
+
+export interface EnrollCandidate {
+  id: string
+  title: string
+  body: string
+  kind: string
+  status: string
+  enrolled: boolean
+}
+
+/**
+ * Why a project note is left out of "Study this project", or null to enroll it.
+ * Pure. Unconfirmed AI drafts wait for the own-words confirm (#217); video
+ * transcripts are enrolled one at a time from Review, by choice.
+ */
+export function enrollSkipReason(note: Pick<EnrollCandidate, 'body' | 'kind' | 'status'>): string | null {
+  if (note.status === 'ai-draft') return 'unconfirmed AI draft (confirm it in your own words first)'
+  if (note.status === 'archived') return 'archived'
+  if (note.kind === 'transcript') return 'video transcript (add single parts from Review)'
+  return boilerplateReason(note.body)
+}
+
+export type EnrollProjectResult = StudyEnrollResult
+
+/**
+ * "Study this project" (#262): enroll every live note in a project at the card
+ * unit. Idempotent: notes that already have cards are counted, not touched.
+ * Trashed notes are ignored; skipped notes come back with a reason.
+ */
+export function enrollProject(project: string): EnrollProjectResult {
+  const name = (project ?? '').trim()
+  if (!name) throw new Error('Pick a project to study')
+  const database = getDb()
+  const rows = database
+    .prepare(
+      `SELECT i.id, i.title, i.body, i.kind, i.status,
+              EXISTS (SELECT 1 FROM study_cards c WHERE c.item_id = i.id) AS enrolled
+       FROM items i
+       WHERE i.project = ? AND i.status != 'trashed'
+       ORDER BY i.created_at, i.id`,
+    )
+    .all(name) as Array<{ id: string; title: string; body: string; kind: string; status: string; enrolled: number }>
+
+  const result: EnrollProjectResult = { project: name, notes: 0, cards: 0, alreadyScheduled: 0, skipped: [] }
+  database.transaction(() => {
+    for (const row of rows) {
+      if (row.enrolled) {
+        result.alreadyScheduled++
+        continue
+      }
+      const reason = enrollSkipReason(row)
+      if (reason) {
+        result.skipped.push({ itemId: row.id, title: row.title, reason })
+        continue
+      }
+      const { created } = createNoteCards(row.id)
+      if (created.length > 0) {
+        result.notes++
+        result.cards += created.length
+      }
+    }
+  })()
+  return result
 }

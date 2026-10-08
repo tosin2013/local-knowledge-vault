@@ -5,9 +5,10 @@
  * matching Study section so stale ids (old menu entries, saved disabled-plugin
  * lists) open the Study tab instead of an "Unknown plugin" warning.
  */
-export type StudySection = 'review' | 'quiz' | 'import'
+export type StudySection = 'home' | 'review' | 'quiz' | 'import'
 
 export const STUDY_SECTIONS: { id: StudySection; label: string }[] = [
+  { id: 'home', label: 'Home' },
   { id: 'review', label: 'Review due notes' },
   { id: 'quiz', label: 'Quiz me on…' },
   { id: 'import', label: 'Import practice test' },
@@ -24,4 +25,24 @@ export const LEGACY_STUDY_PLUGIN_IDS: Readonly<Record<string, StudySection>> = O
 export function legacyStudySection(id: string | null | undefined): StudySection | null {
   if (!id || !Object.prototype.hasOwnProperty.call(LEGACY_STUDY_PLUGIN_IDS, id)) return null
   return LEGACY_STUDY_PLUGIN_IDS[id]
+}
+
+/** localStorage key for the Study project picker, shared by every section (#262). */
+export const STUDY_PROJECT_KEY = 'lkv.study.project'
+
+export function loadStudyProject(): string {
+  try {
+    return window.localStorage?.getItem(STUDY_PROJECT_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function saveStudyProject(project: string): void {
+  try {
+    if (project) window.localStorage?.setItem(STUDY_PROJECT_KEY, project)
+    else window.localStorage?.removeItem(STUDY_PROJECT_KEY)
+  } catch {
+    /* storage unavailable: the choice lasts for this session only */
+  }
 }
