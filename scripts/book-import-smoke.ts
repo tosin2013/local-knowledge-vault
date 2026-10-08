@@ -189,6 +189,20 @@ async function main(): Promise<void> {
     'a sentence spanning pages is joined across the note boundary',
   )
 
+  // The final note keeps its trailing fragment (there is no next note to carry it to).
+  const tail = groupPages(['Complete sentence. A trailing fragment with no period'], { maxChars: 200 })
+  assert(tail.length === 1 && tail[0].text.includes('A trailing fragment with no period'), 'the final note keeps its trailing fragment')
+
+  // A trailing fragment longer than maxChars is flushed whole, not carried.
+  const overlong = groupPages(
+    ['Complete sentence. ' + 'word '.repeat(30).trim(), 'Next page text.'],
+    { maxChars: 40 },
+  )
+  assert(
+    overlong.length === 2 && overlong[0].text.endsWith('word'),
+    'a trailing fragment longer than maxChars is flushed whole, not carried',
+  )
+
   // --- titles ---
   console.log('\ntitles')
   assert(pageNoteTitle('My Book', 3) === 'My Book · p.3', 'single-page title is p.N')
