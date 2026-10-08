@@ -246,24 +246,37 @@ const BANNER_PATTERNS: RegExp[] = [
 /** A numbered section heading like "8.1 Overview of Photosynthesis". */
 const SECTION_HEADING_RE = /^\d{1,3}(?:\.\d+)*\s+\S.{2,}/
 
+export interface PdfLine {
+  text: string
+  /** Representative font height in PDF units (0 when unknown). */
+  height: number
+}
+
 /** Extract text lines from pdfjs `getTextContent()` items, grouped by y-position. */
-export function extractPageLines(content: unknown): string[] {
+export function extractPageLines(content: unknown): PdfLine[] {
   const items = (content as { items?: unknown[] } | undefined)?.items ?? []
-  const lines = new Map<number, Array<{ x: number; str: string }>>()
+  const lines = new Map<number, Array<{ x: number; str: string; height: number }>>()
   for (const raw of items) {
-    const it = raw as { str?: unknown; transform?: unknown }
+    const it = raw as { str?: unknown; transform?: unknown; height?: unknown }
     if (typeof it?.str !== 'string' || !it.str.trim()) continue
     const t = it.transform as number[] | undefined
     const y = t && t.length >= 6 ? Math.round(t[5]) : 0
     const x = t && t.length >= 6 ? t[4] : 0
+    const height = typeof it.height === 'number' && it.height > 0 ? it.height : 0
     const arr = lines.get(y) ?? []
-    arr.push({ x, str: it.str })
+    arr.push({ x, str: it.str, height })
     lines.set(y, arr)
   }
   return [...lines.entries()]
     .sort((a, b) => b[0] - a[0])
-    .map(([, arr]) => arr.sort((p, q) => p.x - q.x).map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
+    .map(([, arr]) => {
+      const sorted = arr.sort((p, q) => p.x - q.x)
+      return {
+        text: sorted.map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim(),
+        height: sorted.reduce((m, p) => Math.max(m, p.height), 0),
+      }
+    })
+    .filter((l) => l.text)
 }
 
 export interface CleanedPdfPages {
@@ -273,15 +286,31 @@ export interface CleanedPdfPages {
   removedLines: number
 }
 
+/** Smallest positive line height for a page (a proxy for body text size). */
+function minLineHeight(lines: PdfLine[]): number {
+  const heights = (lines ?? []).map((l) => l.height).filter((h) => h > 0)
+  if (heights.length === 0) return 0
+  return Math.min(...heights)
+}
+
+/** A line is a section heading when it is a numbered section or clearly larger than body text. */
+function isSectionHeading(line: PdfLine, bodyHeight: number): boolean {
+  const text = line.text.trim()
+  if (!text || text.length > 80) return false
+  if (SECTION_HEADING_RE.test(text)) return true
+  return bodyHeight > 0 && line.height > bodyHeight * 1.25
+}
+
 /**
  * Remove junk that repeats on printed pages (#272): a line that appears on at
  * least half the pages is a running header/footer (or a cookie banner) and is
  * dropped. Known banner phrases are dropped even when they do not repeat. Also
- * detects a numbered section heading ("8.1 Overview …") per page.
+ * detects a section heading — a numbered section, or a line in a clearly larger
+ * font than the body text.
  */
-export function cleanPdfPages(pageLines: string[][]): CleanedPdfPages {
+export function cleanPdfPages(pageLines: PdfLine[][]): CleanedPdfPages {
   const list = pageLines ?? []
-  const lineSets = list.map((lines) => new Set((lines ?? []).map((l) => (l ?? '').trim()).filter(Boolean)))
+  const lineSets = list.map((lines) => new Set((lines ?? []).map((l) => l.text.trim()).filter(Boolean)))
 
   const counts = new Map<string, number>()
   for (const set of lineSets) for (const l of set) counts.set(l, (counts.get(l) ?? 0) + 1)
@@ -296,16 +325,17 @@ export function cleanPdfPages(pageLines: string[][]): CleanedPdfPages {
   for (const lines of list) {
     const kept: string[] = []
     let section: string | null = null
-    for (const raw of lines ?? []) {
-      const line = (raw ?? '').trim()
-      if (!line) continue
-      const drop = repeated.has(line) || BANNER_PATTERNS.some((re) => re.test(line))
+    const bodyHeight = minLineHeight(lines ?? [])
+    for (const line of lines ?? []) {
+      const text = line.text.trim()
+      if (!text) continue
+      const drop = repeated.has(text) || BANNER_PATTERNS.some((re) => re.test(text))
       if (drop) {
         removedLines++
         continue
       }
-      if (!section && line.length <= 80 && SECTION_HEADING_RE.test(line)) section = line.slice(0, 80)
-      kept.push(line)
+      if (!section && isSectionHeading(line, bodyHeight)) section = text.slice(0, 80)
+      kept.push(text)
     }
     cleaned.push(kept.join(' '))
     sectionTitles.push(section)
@@ -516,7 +546,7 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
       /* metadata is optional */
     }
 
-    const pageLines: string[][] = []
+    const pageLines: PdfLine[][] = []
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n)
       const content = await page.getTextContent()
@@ -529,8 +559,16 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
 
     const itemIds: string[] = []
     let imported = 0
+    let skipped = 0
     runInTransaction(() => {
       for (const group of groupPages(cleanedPages)) {
+        // A page that is only boilerplate (cover, instructions, copyright) has
+        // almost no real words after cleaning — skip it (#272).
+        const words = group.text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w))
+        if (words.length < MIN_SECTION_WORDS) {
+          skipped++
+          continue
+        }
         const section = sectionTitles[group.startPage - 1] ?? null
         const item = createItem({
           title: pageNoteTitleWithSection(title, group.startPage, group.endPage, section),
@@ -554,7 +592,7 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
       format: 'pdf',
       project: title,
       imported,
-      skipped: 0,
+      skipped,
       emptyPages,
       removedLines,
       itemIds,

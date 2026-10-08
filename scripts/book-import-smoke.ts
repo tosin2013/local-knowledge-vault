@@ -191,19 +191,20 @@ async function main(): Promise<void> {
   assert(
     extractPageLines({
       items: [
-        { str: 'Header', transform: [1, 0, 0, 1, 72, 700] },
-        { str: 'Body', transform: [1, 0, 0, 1, 72, 680] },
+        { str: 'Header', transform: [1, 0, 0, 1, 72, 700], height: 10 },
+        { str: 'Body', transform: [1, 0, 0, 1, 72, 680], height: 10 },
       ],
-    }).join('|') === 'Header|Body',
+    }).map((l) => l.text).join('|') === 'Header|Body',
     'extractPageLines groups text items into top-first lines',
   )
 
+  const L = (text: string, height = 10) => ({ text, height })
   const header = 'OpenStax Biology 2e'
   const banner = 'We use cookies to improve your experience.'
   const cleaned = cleanPdfPages([
-    [header, '8.1 Overview of Photosynthesis', 'Plants capture light energy.'],
-    [header, banner, 'Photosynthesis occurs in chloroplasts.'],
-    [header, banner, 'Carbon dioxide is fixed by RuBisCO.'],
+    [L(header), L('8.1 Overview of Photosynthesis', 14), L('Plants capture light energy.')],
+    [L(header), L(banner), L('Photosynthesis occurs in chloroplasts.')],
+    [L(header), L(banner), L('Carbon dioxide is fixed by RuBisCO.')],
   ])
   assert(cleaned.removedLines === 5, `drops the repeated header and banner (removed ${cleaned.removedLines})`)
   assert(cleaned.pages.every((p) => !p.includes(header)), 'repeated header is gone from every page')
@@ -214,7 +215,14 @@ async function main(): Promise<void> {
     pageNoteTitleWithSection('Bio', 1, 1, '8.1 Overview') === 'Bio · p.1 · 8.1 Overview',
     'section heading is appended to the page title',
   )
-  assert(cleanPdfPages([['Only one page']]).pages[0] === 'Only one page', 'a single page is untouched')
+  assert(cleanPdfPages([[L('Only one page')]]).pages[0] === 'Only one page', 'a single page is untouched')
+
+  // A larger-font heading is detected even without a numbered section.
+  const sized = cleanPdfPages([
+    [L('Body text line one.'), L('Body text line two.')],
+    [L('Section Heading', 18), L('More body text.')],
+  ])
+  assert(sized.sectionTitles[1] === 'Section Heading', 'detects a larger-font heading')
 
   // --- EPUB import (temp dir + real DB) ---
   console.log('\nEPUB import (temp tree)')
