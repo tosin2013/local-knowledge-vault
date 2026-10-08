@@ -97,6 +97,7 @@ async function main(): Promise<void> {
     youtubeEmbedUrl,
     listMediaProjects,
     notesNearPlayhead,
+    setYtDlpRootsOverrideForTests,
   } = require('../electron/media-ingest')
   const { updatePrompt } = require('../electron/db')
 
@@ -192,12 +193,16 @@ async function main(): Promise<void> {
     assert(resolveYtDlp()?.cmd === stubJs, 'LKV_YTDLP_PATH hit')
     delete process.env.LKV_YTDLP_PATH
     // Isolate from any real install: broken PATH kills `which` + python probes,
-    // empty HOME kills the ~/.local/bin + userData candidates.
+    // empty HOME kills the ~/.local/bin + userData candidates, and the roots
+    // override hides the project-venv candidates a dev checkout may have (#234).
     const savedHome = process.env.HOME
     const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-empty-home-'))
+    const emptyRoots = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-empty-roots-'))
+    setYtDlpRootsOverrideForTests({ dirname: emptyRoots, cwd: emptyRoots })
     process.env.HOME = emptyHome
     process.env.PATH = '/nonexistent-dir-xyz'
     assert(resolveYtDlp() === null, 'null when nothing installed')
+    setYtDlpRootsOverrideForTests(null)
     process.env.PATH = savedPath
     process.env.HOME = savedHome
 
@@ -255,6 +260,8 @@ async function main(): Promise<void> {
     delete process.env.LKV_YTDLP_PATH
     const savedHome2 = process.env.HOME
     const emptyHome2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-empty-home-'))
+    const emptyRoots2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-empty-roots-'))
+    setYtDlpRootsOverrideForTests({ dirname: emptyRoots2, cwd: emptyRoots2 })
     process.env.HOME = emptyHome2
     process.env.PATH = '/nonexistent-dir-xyz'
     try {
@@ -263,6 +270,7 @@ async function main(): Promise<void> {
     } catch (e) {
       assert((e as Error).message.includes('yt-dlp not found'), 'missing yt-dlp throws')
     }
+    setYtDlpRootsOverrideForTests(null)
     process.env.PATH = savedPath
     process.env.HOME = savedHome2
 

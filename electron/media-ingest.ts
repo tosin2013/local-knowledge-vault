@@ -429,6 +429,17 @@ export function runYtDlp(
 }
 
 /**
+ * Test seam for #234: the offline smoke cannot hide the `__dirname/..` venv
+ * candidate via PATH/HOME, so it can point both project-venv roots at an
+ * empty temp dir. Production code never calls this.
+ */
+let ytDlpRootsOverride: { dirname: string; cwd: string } | null = null
+
+export function setYtDlpRootsOverrideForTests(roots: { dirname: string; cwd: string } | null): void {
+  ytDlpRootsOverride = roots
+}
+
+/**
  * Locate yt-dlp: LKV_YTDLP_PATH → PATH → <userData>/bin → common install dirs → project venv →
  * python -m yt_dlp. Apps launched from Finder/Explorer get a minimal PATH, so the well-known
  * install dirs (Homebrew, pipx/uv, Scoop, winget) are probed explicitly.
@@ -459,9 +470,10 @@ export function resolveYtDlp(): { cmd: string; argsPrefix: string[] } | null {
           '/usr/bin/yt-dlp',
           path.join(home, '.local', 'bin', 'yt-dlp'),
         ]),
-    // Project-local venv created for Media chat MVP (dev checkouts)
-    path.join(__dirname, '..', '.venv-ytdlp', isWin ? 'Scripts' : 'bin', exe),
-    path.join(process.cwd(), '.venv-ytdlp', isWin ? 'Scripts' : 'bin', exe),
+    // Project-local venv created for Media chat MVP (dev checkouts). The roots
+    // are overridable so the offline smoke can hide them (#234).
+    path.join(ytDlpRootsOverride?.dirname ?? path.join(__dirname, '..'), '.venv-ytdlp', isWin ? 'Scripts' : 'bin', exe),
+    path.join(ytDlpRootsOverride?.cwd ?? process.cwd(), '.venv-ytdlp', isWin ? 'Scripts' : 'bin', exe),
   ]
   for (const c of candidates) {
     if (fs.existsSync(c)) return { cmd: c, argsPrefix: [] }
