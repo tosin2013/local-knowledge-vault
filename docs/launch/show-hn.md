@@ -21,8 +21,9 @@ How it works:
   and no network.
 - Ask retrieves matching notes, sends the passages to the model with fixed grounding rules, and
   checks the answer: any citation to a note that wasn't in the retrieved set is dropped, and the
-  rest show as numbered citations [1], [2] that open the note. If search finds nothing, Vault says
-  so without calling a model.
+  rest show as numbered citations [1], [2] that open the note. An answer that cites nothing gets a
+  "No notes cited" chip; an honest "it's not in your notes" doesn't. If search finds nothing, Vault
+  says so without calling a model.
 - Local models by default: it auto-detects Ollama or LM Studio. The first-run card recommends
   `qwen3:8b`.
 - You can add a cloud provider if you want (OpenAI, Anthropic, Gemini, OpenRouter, Mistral,
