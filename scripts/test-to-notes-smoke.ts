@@ -256,6 +256,16 @@ async function main(): Promise<void> {
   assert(aiParsed.items.length === 1 && aiParsed.items[0].correct === true, 'AI parse returns structured items')
   assert(aiParsed.offline !== true, 'a successful AI parse is not marked offline')
 
+  // Formats the built-in parser reads exactly skip the model (the mock would return 1 item).
+  const keyedExport = await parseTestResultsWithAi({
+    text:
+      'Question 1 of 2   Incorrect\nWhich port does SSH use?\n  A. 21\n  B. 22   (Correct answer)\nYour answer: A\n\n' +
+      'Question 2 of 2   Correct\nWhich port does HTTPS use?\n  A. 443   (Correct answer)\n  B. 80\nYour answer: A\n',
+  })
+  assert(keyedExport.items.length === 2 && !keyedExport.error, 'an export with an answer key per item is parsed without the model')
+  const csvParse = await parseTestResultsWithAi({ text: 'question,answer,correct\nWhat is 2+2?,5,no\nCapital of France?,Paris,yes' })
+  assert(csvParse.items.length === 2 && csvParse.items[0].correct === false, 'a CSV export is parsed without the model')
+
   setMockLlmGenerate({ ok: false, error: 'Connection refused', provider: 'ollama' })
   const fallback = await parseTestResultsWithAi({ text: '1. What is 2+2? ✗\nYour answer: 5' })
   assert(fallback.offline === true, 'an offline AI parse is marked offline')

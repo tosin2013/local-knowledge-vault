@@ -49,6 +49,7 @@ import { askGrounded } from './generate'
 import { parsePersonalityPack, personalityFileName, serializePersonalityPack } from './personality-pack'
 import { sendChatTurn } from './chat'
 import { analyzeTestResults, parseTestResultsWithAi } from './test-to-notes'
+import { importPracticeTest, linkPracticeCard, readPracticeTestFile } from './practice-test'
 import {
   listDueReviews,
   countDueReviews,
@@ -154,6 +155,7 @@ import type {
   StudyAnswerInput,
   TestToNotesAnalyzeInput,
   TestToNotesParseInput,
+  PracticeTestImportInput,
   ReviewEnqueueInput,
   ReviewListInput,
   ReviewRateInput,
@@ -499,6 +501,26 @@ function registerIpc(): void {
   ipcMain.handle('testToNotes:parse', (_e, input: TestToNotesParseInput) =>
     parseTestResultsWithAi(input)
   )
+
+  // Practice tests inside Study (#265): cards straight from the test's own Q&A.
+  ipcMain.handle('practiceTest:import', (_e, input: PracticeTestImportInput) => importPracticeTest(input))
+  ipcMain.handle('practiceTest:link', (_e, cardId: string, noteId: string) =>
+    linkPracticeCard(String(cardId ?? ''), String(noteId ?? '')),
+  )
+  // The main process picks the file; the renderer never passes a path.
+  ipcMain.handle('practiceTest:openFile', async () => {
+    const opts: OpenDialogOptions = {
+      title: 'Open practice test or exam',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Practice tests', extensions: ['pdf', 'txt', 'csv', 'md'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    }
+    const r = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths[0]) return { canceled: true }
+    return readPracticeTestFile(r.filePaths[0])
+  })
 
   // Spaced review (#216) over study cards (#259 card model).
   ipcMain.handle('review:listDue', (_e, input?: ReviewListInput) =>

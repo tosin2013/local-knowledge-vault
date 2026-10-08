@@ -6,8 +6,10 @@ import {
   Card,
   CardActions,
   CardContent,
+  Checkbox,
   Chip,
   Divider,
+  FormControlLabel,
   Stack,
   TextField,
   Typography,
@@ -15,24 +17,28 @@ import {
 import QuizIcon from '@mui/icons-material/Quiz'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import SaveIcon from '@mui/icons-material/Save'
+import FileOpenIcon from '@mui/icons-material/FileOpen'
+import SchoolIcon from '@mui/icons-material/School'
 import type { VaultPluginRenderProps } from '../../plugins/types'
 import { ProjectSelect } from '../ProjectSelect'
 import { useStudyProject, type StudyProjectProps } from './useStudyProject'
-import type { TestToNotesItem, TestToNotesSuggestion } from '../../../electron/types'
-import { parseTestResults, summarizeAttempts } from '../../../electron/test-to-notes-parse'
+import type { PracticeTestImportResult, TestToNotesItem, TestToNotesSuggestion } from '../../../electron/types'
+import { parseTestResults, resolveOption, summarizeAttempts } from '../../../electron/test-to-notes-parse'
+import { guessTestName, importSummary, linkSummary, todayLocal } from './practiceTest'
 
-const FORMAT_HINT = `Paste plain text or CSV. Examples:
+const FORMAT_HINT = `Paste plain text, CSV or a copied results page. Examples:
 
 1. What is the capital of France? ✓
 Your answer: Paris
 
-2. What is 2 + 2? ✗
-Your answer: 5
+Question 2 of 10   Incorrect
+Which command repairs protected Windows system files?
+  A. chkdsk
+  B. sfc /scannow   (Correct answer)
+Your answer: A
+Explanation: sfc /scannow replaces corrupted system files.
 
-Or CSV:
-question,answer,correct
-What is 2 + 2?,5,no
-Capital of France?,Paris,yes`
+Q12: B (correct: D)`
 
 function fieldText(...parts: Array<string | undefined>): string {
   return parts
@@ -47,8 +53,24 @@ function humanizeMs(ms: number): string {
   return `${Math.round(ms / 60_000)} m`
 }
 
+/** The learner's answer as text: "A" → "A. Disable System Restore" when the options are known. */
+function answerText(item: TestToNotesItem): string {
+  const a = (item.answer ?? '').trim()
+  if (!a) return ''
+  const text = resolveOption(a, item.options)
+  return text === a ? a : `${a}. ${text}`
+}
+
 export type TestToNotesViewProps = VaultPluginRenderProps & StudyProjectProps
 
+/**
+ * Import practice test (#265). Paste results (or open a PDF / TXT / CSV),
+ * check the parse, then **Add to Study**: every missed question becomes a card
+ * with the test's own question, answer and explanation, starting as Missed.
+ * Items with only a number ask for their question text. "Also add the ones I
+ * got right" adds correct items as low-priority cards. Suggest fixes still
+ * drafts grounded corrective notes, and a saved draft is linked to its card.
+ */
 export function TestToNotesView({ onClose, project: projectProp, onProjectChange }: TestToNotesViewProps) {
   const [raw, setRaw] = useState('')
   const [items, setItems] = useState<TestToNotesItem[]>([])
@@ -59,21 +81,39 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
   const [parseError, setParseError] = useState<string | null>(null)
   const [parseTick, setParseTick] = useState(0)
   const [project, setProject] = useStudyProject(projectProp, onProjectChange)
+  const [testName, setTestName] = useState('')
+  const [nameTouched, setNameTouched] = useState(false)
+  const [testDate, setTestDate] = useState(todayLocal())
+  const [includeCorrect, setIncludeCorrect] = useState(false)
+  const [questionTexts, setQuestionTexts] = useState<Record<number, string>>({})
+  const [importing, setImporting] = useState(false)
+  const [imported, setImported] = useState<PracticeTestImportResult | null>(null)
   const [suggestions, setSuggestions] = useState<TestToNotesSuggestion[]>([])
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [fileNote, setFileNote] = useState<string | null>(null)
   const [savedSuggestions, setSavedSuggestions] = useState<Record<number, boolean>>({})
-  const [savedCorrect, setSavedCorrect] = useState<Record<number, boolean>>({})
 
   const summary = useMemo(() => summarizeAttempts(items), [items])
-  const correctItems = useMemo(() => items.filter((it) => it.correct), [items])
-  const wrongItems = useMemo(() => items.filter((it) => !it.correct), [items])
+  const indexed = useMemo(() => items.map((item, index) => ({ item, index })), [items])
+  const correctItems = useMemo(() => indexed.filter(({ item }) => item.correct), [indexed])
+  const wrongItems = useMemo(() => indexed.filter(({ item }) => !item.correct), [indexed])
+  const needText = useMemo(
+    () => indexed.filter(({ item, index }) => item.needsText && !(questionTexts[index] ?? '').trim()),
+    [indexed, questionTexts],
+  )
+
+  // Suggest a test name from the paste until the learner types one.
+  useEffect(() => {
+    if (!nameTouched) setTestName(guessTestName(raw))
+  }, [raw, nameTouched])
 
   // Parse pasted results with the model (debounced). Falls back to the
   // deterministic parser when the AI path is unavailable or fails.
   useEffect(() => {
     const text = raw
+    setImported(null)
     if (!text.trim()) {
       setItems([])
       setParsing(false)
@@ -98,15 +138,16 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
       try {
         const res = await parse({ text })
         setItems(res.items ?? [])
+        setQuestionTexts({})
         setParseOffline(!!res.offline)
         setParseRateLimited(!!res.rateLimited)
         setParseRetryAfterMs(res.retryAfterMs)
         setParseError(res.error ?? null)
-      } catch (e) {
+      } catch {
         setItems(parseTestResults(text))
         setParseOffline(true)
         setParseRateLimited(false)
-        setParseError(e instanceof Error ? e.message : String(e))
+        setParseError(null)
       } finally {
         setParsing(false)
       }
@@ -115,14 +156,68 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
   }, [raw, parseTick])
 
   const hasAnalyzeApi = !!window.lkv?.testToNotes?.analyze
+  const hasImportApi = !!window.lkv?.practiceTest?.import
+  const hasFileApi = !!window.lkv?.practiceTest?.openFile
+
+  const openFile = async () => {
+    const open = window.lkv?.practiceTest?.openFile
+    if (!open) return
+    setError(null)
+    try {
+      const res = await open()
+      if (res.canceled) return
+      if (res.error || !res.text) {
+        setError(res.error ?? 'Could not read that file.')
+        return
+      }
+      setRaw(res.text)
+      setFileNote(
+        res.truncated
+          ? `Opened ${res.name}. It was long, so only the first part was loaded.`
+          : `Opened ${res.name}. Check the questions below before adding them.`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const addToStudy = async () => {
+    const importTest = window.lkv?.practiceTest?.import
+    if (!importTest) {
+      setError('Import practice test is unavailable — restart Vault after updating.')
+      return
+    }
+    setImporting(true)
+    setError(null)
+    setStatus(null)
+    try {
+      const texts = Object.fromEntries(
+        Object.entries(questionTexts).filter(([, v]) => v.trim().length > 0),
+      ) as Record<number, string>
+      const res = await importTest({
+        project: project || null,
+        name: testName.trim() || 'Practice test',
+        date: testDate || null,
+        items,
+        includeCorrect,
+        questionTexts: texts,
+      })
+      setImported(res)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const suggestFixes = async () => {
     if (!hasAnalyzeApi) {
-      setError('Test to notes IPC is unavailable — restart Vault after updating.')
+      setError('Reading practice tests is unavailable — restart Vault after updating.')
       return
     }
-    if (wrongItems.length === 0) {
-      setStatus('No incorrect items to work on.')
+    const wrong = wrongItems.map(({ item }) => item).filter((it) => !it.needsText)
+    if (wrong.length === 0) {
+      setStatus('No incorrect items with question text to work on.')
       return
     }
     setAnalyzing(true)
@@ -130,7 +225,7 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
     setStatus(null)
     try {
       const result = await window.lkv.testToNotes.analyze({
-        items: wrongItems,
+        items: wrong,
         ...(project ? { filters: { project } } : {}),
       })
       setSuggestions(result)
@@ -154,7 +249,7 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
     }
     setError(null)
     try {
-      await window.lkv.items.create({
+      const note = await window.lkv.items.create({
         title: suggestion.title,
         body: suggestion.body,
         kind: 'note',
@@ -164,30 +259,15 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
         project: project || null,
       })
       setSavedSuggestions((prev) => ({ ...prev, [index]: true }))
-      setStatus('Saved as an AI draft note — review and confirm it from your notes.')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  const saveFlashCard = async (item: TestToNotesItem, index: number) => {
-    if (!window.lkv?.items?.create) {
-      setError('Saving notes is unavailable — restart Vault after updating.')
-      return
-    }
-    setError(null)
-    try {
-      await window.lkv.items.create({
-        title: item.question,
-        body: `Q: ${item.question}\n\nA: ${item.answer}`,
-        kind: 'note',
-        status: 'ai-draft',
-        para: 'resources',
-        summary: `Practice-test flash-card: ${item.question}`.slice(0, 200),
-        project: project || null,
-      })
-      setSavedCorrect((prev) => ({ ...prev, [index]: true }))
-      setStatus('Saved a reinforcement flash-card.')
+      // Link the draft to its practice-test card, if the test is already in Study.
+      const match = wrongItems.find(({ item }) => item.question === suggestion.question)
+      const cardId = match && imported ? imported.cardIds[match.index] : undefined
+      if (cardId && note?.id && window.lkv?.practiceTest?.link) {
+        await window.lkv.practiceTest.link(cardId, note.id)
+        setStatus('Saved as an AI draft and linked to its Study card. Confirm it in your own words from your notes.')
+      } else {
+        setStatus('Saved as an AI draft note — review and confirm it from your notes.')
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -205,12 +285,43 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
   const anyOffline = suggestions.some((s) => s.offline)
   const anyRateLimited = suggestions.some((s) => s.rateLimited)
 
+  const itemCard = ({ item, index }: { item: TestToNotesItem; index: number }) => (
+    <Card key={`item-${index}`} variant="outlined" data-testid={`practice-item-${index}`}>
+      <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+        {item.needsText ? (
+          <TextField
+            size="small"
+            fullWidth
+            label={`Question text for ${item.question}`}
+            placeholder="Type or paste the question from the test"
+            value={questionTexts[index] ?? ''}
+            onChange={(e) => setQuestionTexts((prev) => ({ ...prev, [index]: e.target.value }))}
+            sx={{ mb: 0.5 }}
+          />
+        ) : (
+          <Typography variant="body2" fontWeight={600}>
+            {item.question}
+          </Typography>
+        )}
+        <Typography variant="body2" color="text.secondary">
+          {item.answer ? `Your answer: ${answerText(item)}` : 'No answer recorded.'}
+          {item.correctAnswer && !item.correct ? ` · Correct: ${resolveOption(item.correctAnswer, item.options)}` : ''}
+        </Typography>
+        {item.explanation && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+            {item.explanation}
+          </Typography>
+        )}
+      </CardContent>
+    </Card>
+  )
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5, overflow: 'auto' }}>
       <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
         <QuizIcon color="primary" fontSize="small" />
         <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
-          Test to notes
+          Import practice test
         </Typography>
         {onClose && (
           <Button size="small" onClick={onClose}>
@@ -220,34 +331,73 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
       </Stack>
 
       <Typography variant="body2" color="text.secondary">
-        Paste practice-test results in almost any format, split them into correct and incorrect, and
-        turn each wrong answer into a grounded note you can review and save. Parsing uses your model;
-        when it is offline Vault falls back to its built-in parser.
+        Paste your results or open a file. Each question you missed becomes a Study card with the test&apos;s own
+        answer and explanation, first in your next session. Vault links it to your note that covers it, or drafts a
+        short corrective note for you to confirm in your own words. Past exam papers belong here, not in your notes.
       </Typography>
 
-      <ProjectSelect value={project} onChange={setProject} label="Project" />
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+        <ProjectSelect value={project} onChange={setProject} label="Project" />
+        <TextField
+          size="small"
+          label="Test name"
+          value={testName}
+          onChange={(e) => {
+            setNameTouched(true)
+            setTestName(e.target.value)
+          }}
+          placeholder="e.g. Core 2 practice exam #3"
+          sx={{ minWidth: 240, flex: 1 }}
+        />
+        <TextField
+          size="small"
+          type="date"
+          label="Date taken"
+          value={testDate}
+          onChange={(e) => setTestDate(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+        />
+      </Stack>
 
-      <TextField
-        label="Paste practice-test results"
-        placeholder={FORMAT_HINT}
-        value={raw}
-        onChange={(e) => setRaw(e.target.value)}
-        multiline
-        minRows={6}
-        maxRows={14}
-        fullWidth
-        inputProps={{ 'aria-label': 'Paste practice-test results' }}
-      />
+      <Stack direction="row" spacing={1} alignItems="flex-start">
+        <TextField
+          label="Paste practice-test results"
+          placeholder={FORMAT_HINT}
+          value={raw}
+          onChange={(e) => {
+            setRaw(e.target.value)
+            setFileNote(null)
+          }}
+          multiline
+          minRows={6}
+          maxRows={14}
+          fullWidth
+          inputProps={{ 'aria-label': 'Paste practice-test results' }}
+        />
+      </Stack>
+      {(hasFileApi || fileNote) && (
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          {hasFileApi && (
+            <Button size="small" variant="outlined" startIcon={<FileOpenIcon />} onClick={() => void openFile()}>
+              Open file…
+            </Button>
+          )}
+          <Typography variant="caption" color="text.secondary">
+            {fileNote ?? 'PDF (text layer), TXT or CSV. Scanned pages need OCR first.'}
+          </Typography>
+        </Stack>
+      )}
 
       <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
         <Typography variant="subtitle2" fontWeight={600}>
           {parsing
             ? 'Parsing…'
             : `${summary.total} items · ${summary.correct} correct · ${summary.wrong} wrong`}
+          {!parsing && needText.length > 0 ? ` · ${needText.length} need question text` : ''}
         </Typography>
         {!hasAnalyzeApi && (
           <Typography variant="caption" color="warning.main">
-            Test to notes IPC unavailable — restart Vault after updating.
+            Practice-test import is unavailable — restart Vault after updating.
           </Typography>
         )}
       </Stack>
@@ -274,67 +424,63 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
           {parseRetryAfterMs != null
             ? `Rate limited — try again in ${humanizeMs(parseRetryAfterMs)}. `
             : 'Rate limited — try again shortly. '}
-          Parsed with the built-in parser; results may include extra lines.
+          Parsed with the built-in parser; check the items below.
         </Alert>
       )}
       {!parseRateLimited && (parseOffline || parseError) && (
         <Alert severity="warning">
-          {parseError
-            ? `AI parsing failed (${parseError}) — showing the built-in parser's result.`
-            : 'AI offline — showing the built-in parser\u2019s result.'}
-        </Alert>
-      )}
-      {anyRateLimited && (
-        <Alert severity="warning">
-          Some drafts were rate limited — run Suggest fixes again to retry them.
-        </Alert>
-      )}
-      {anyOffline && (
-        <Alert severity="warning">
-          AI offline — the drafts below are fallback copy. Start a local model or add a provider in
-          Advanced, then run Suggest fixes again.
+          {parseOffline
+            ? 'AI offline — showing the built-in parser\u2019s result.'
+            : `${parseError} Check the items below — this is showing the built-in parser\u2019s result.`}
         </Alert>
       )}
 
-      <Box sx={{ overflow: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <Divider textAlign="left">
-          <Typography variant="caption" color="text.secondary">
-            Correct
-          </Typography>
-        </Divider>
-        {correctItems.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            No correct items yet.
-          </Typography>
-        ) : (
-          correctItems.map((item, index) => (
-            <Card key={`correct-${index}-${item.question}`} variant="outlined">
-              <CardContent sx={{ pb: 1 }}>
+      {items.length > 0 && (
+        <Card variant="outlined" sx={{ flexShrink: 0 }}>
+          <CardContent sx={{ pb: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Button
+                variant="contained"
+                startIcon={<SchoolIcon />}
+                disabled={importing || parsing || !hasImportApi}
+                onClick={() => void addToStudy()}
+              >
+                {importing ? 'Adding…' : 'Add to Study'}
+              </Button>
+              <FormControlLabel
+                control={<Checkbox size="small" checked={includeCorrect} onChange={(e) => setIncludeCorrect(e.target.checked)} />}
+                label="Also add the ones I got right"
+              />
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Missed questions start as Missed and come first. The ones you got right are added as low-priority cards
+              only if you tick the box.
+            </Typography>
+            {imported && (
+              <Alert severity={imported.added > 0 || imported.alreadyAdded > 0 ? 'success' : 'info'} sx={{ mt: 1 }} data-testid="import-result">
                 <Typography variant="body2" fontWeight={600}>
-                  {item.question}
+                  {importSummary(imported)}.
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {item.answer ? `Your answer: ${item.answer}` : 'No answer recorded.'}
+                {linkSummary(imported) && <Typography variant="body2">{linkSummary(imported)}.</Typography>}
+                {imported.needText.length > 0 && (
+                  <Typography variant="body2">
+                    Type the question text for the items marked below, then Add to Study again.
+                  </Typography>
+                )}
+                <Typography variant="caption">
+                  Saved as “{imported.name} · {imported.date}”{project ? ` in ${project}` : ''}. Start a session from
+                  Study session.
                 </Typography>
-              </CardContent>
-              <CardActions sx={{ px: 2, pb: 1.5, pt: 0 }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<SaveIcon />}
-                  disabled={savedCorrect[index]}
-                  onClick={() => void saveFlashCard(item, index)}
-                >
-                  {savedCorrect[index] ? 'Flash-card saved' : 'Save flash-card'}
-                </Button>
-              </CardActions>
-            </Card>
-          ))
-        )}
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flexShrink: 0 }}>
         <Divider textAlign="left">
           <Typography variant="caption" color="text.secondary">
-            Incorrect
+            Missed ({wrongItems.length})
           </Typography>
         </Divider>
         {wrongItems.length === 0 ? (
@@ -343,29 +489,46 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
           </Typography>
         ) : (
           <Stack spacing={1}>
-            {wrongItems.map((item, index) => (
-              <Card key={`wrong-${index}-${item.question}`} variant="outlined">
-                <CardContent sx={{ py: 1 }}>
-                  <Typography variant="body2" fontWeight={600}>
-                    {item.question}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {item.answer ? `Your answer: ${item.answer}` : 'No answer recorded.'}
-                  </Typography>
-                </CardContent>
-              </Card>
-            ))}
+            {wrongItems.map(itemCard)}
             <Box>
               <Button
-                variant="contained"
+                variant="outlined"
                 size="small"
                 disabled={analyzing || !hasAnalyzeApi}
                 onClick={() => void suggestFixes()}
               >
                 {analyzing ? 'Drafting…' : 'Suggest fixes'}
               </Button>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                Optional: drafts a grounded corrective note from your own notes for each missed question.
+              </Typography>
             </Box>
           </Stack>
+        )}
+
+        <Divider textAlign="left">
+          <Typography variant="caption" color="text.secondary">
+            Got right ({correctItems.length})
+          </Typography>
+        </Divider>
+        {correctItems.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No correct items yet.
+          </Typography>
+        ) : (
+          <Stack spacing={1}>{correctItems.map(itemCard)}</Stack>
+        )}
+
+        {anyRateLimited && (
+          <Alert severity="warning">
+            Some drafts were rate limited — run Suggest fixes again to retry them.
+          </Alert>
+        )}
+        {anyOffline && (
+          <Alert severity="warning">
+            AI offline — the drafts below are fallback copy. Start a local model or add a provider in
+            Advanced, then run Suggest fixes again.
+          </Alert>
         )}
 
         {suggestions.length > 0 && (

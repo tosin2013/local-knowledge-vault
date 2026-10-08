@@ -59,8 +59,9 @@ Vault shows a hint if it detects one.
    **Missed**, **Partly** or **Got it**; missed cards come back at the end of the session. The summary
    shows your accuracy, how your confidence matched it, the cards you were sure of but missed, the notes
    to revisit and when the next cards are due. Click **Ask** in the toggle to return.
-6. **Learn from a practice test.** In **Study**, open the **Import practice test** tab and paste your results into
-   **Paste practice-test results**. Plain text works:
+6. **Learn from a practice test.** In **Study**, open the **Import practice test** tab, pick the
+   project, and paste your results into **Paste practice-test results** (or click **Open file…** for a
+   PDF, TXT or CSV with a text layer). Plain text works:
 
    ```text
    1. What is the capital of France? ✓
@@ -68,20 +69,31 @@ Vault shows a hint if it detects one.
 
    2. What is 2 + 2? ✗
    Your answer: 5
+   Correct answer: 4
+   Explanation: 2 + 2 = 4.
    ```
 
-   CSV with `question,answer,correct` columns works too. Vault splits the items into **Correct**
-   and **Incorrect**. Click **Suggest fixes** to get a short corrective note for each wrong answer,
-   based on your notes, then **Save as draft note** for the ones you want. For correct items,
-   **Save flash-card** keeps the question as a note.
+   CSV with `question,answer,correct` columns works too (optional `correct answer` and `explanation`
+   columns), as do common exam-site exports ("Question 3 of 50 … Incorrect"). Vault splits the items into
+   **Missed** and **Got right** and suggests a **Test name**; set the **Date taken** and click **Add to
+   Study**. Each missed question becomes a Study card right away, using the test's own question and
+   answer, and comes up first in your next session. Tick **Also add the ones I got right** to review those
+   too, later. An answer sheet with only letters ("Q3: B (correct: D)") asks you to type each question's
+   text first. Vault keeps the test (never your wrong answers) as one note marked **Practice test**;
+   **Study this project** skips practice tests and exam papers, so they don't become note cards.
+
+   When a missed question matches one of your notes, its card links to that note. Otherwise Vault writes a
+   short corrective **AI draft**; the card cites it once you confirm the draft in your own words. **Suggest
+   fixes** (optional) asks the model for a better corrective note grounded in your notes; **Save as draft
+   note** links it to the question's card.
 
 ## 4. What to expect
 
 - **Cited answers** you can check against the chapter they came from.
 - **Honest gaps:** if the book doesn't cover your question, Vault says "I couldn't find that in
   your notes" or that the notes don't cover it. That's the right answer, not an error.
-- **AI drafts stay drafts.** Notes written by the model (from **Test to notes** or **Save as
-  note**) carry an **AI draft** label and rank below your own notes. Open one, click **Edit**, and
+- **AI drafts stay drafts.** Notes written by the model (from **Import practice test** or
+  **Save as note**) carry an **AI draft** label and rank below your own notes. Open one, click **Edit**, and
   either change it and **Save**, or write one line in **In your own words** and click
   **Confirm draft**. Putting it in your own words is part of the learning.
 

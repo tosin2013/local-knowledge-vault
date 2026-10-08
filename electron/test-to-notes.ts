@@ -24,17 +24,22 @@ import {
   validateCitations,
   finalizeAnswer,
 } from './generate'
-import { MAX_TEST_FIELD_CHARS, parseTestResults } from './test-to-notes-parse'
+import { MAX_TEST_FIELD_CHARS, parseTestResults, resolveOption } from './test-to-notes-parse'
 
 export * from './test-to-notes-parse'
 
 export const TEST_TO_NOTES_PARSE_SYSTEM = `You parse pasted practice-test results into a structured list.
-The input can be plain text, CSV, a quiz export, or transcript-like text in almost any format.
-For every question you find, output a JSON array of objects with exactly these keys:
-- "question" (string): the question or prompt
+The input can be plain text, CSV, a quiz export, a copied results page, or an answer sheet, in almost any format.
+For every question you find, output a JSON array of objects with these keys:
+- "question" (string): the question text only, without the answer options. For an answer-sheet line with no question text (e.g. "Q12: B (correct: D)"), use "Question 12".
 - "answer" (string): the learner's given answer, or "" when none is recorded
 - "correct" (boolean): true when the learner got it right, false otherwise
-Infer correctness from ✓/✗, correct/incorrect, right/wrong, yes/no, or true/false markers — and from the answer itself when it is obviously right or wrong.
+- "correctAnswer" (string, optional): the test's correct answer when the input shows it
+- "explanation" (string, optional): the test's explanation when the input shows one
+- "options" (array of strings, optional): the answer options exactly as shown, e.g. ["A. chkdsk", "B. sfc /scannow"]
+- "needsText" (boolean, optional): true when only a question number is known
+Infer correctness from ✓/✗, correct/incorrect, right/wrong, yes/no, or true/false markers, from "(Correct answer)" markers, or by comparing the learner's answer with the correct answer.
+Skip headers, titles, score lines, timers and other text that is not a question.
 Output ONLY the JSON array. No commentary, no code fences.`
 
 function capField(value: unknown): string {
@@ -78,14 +83,27 @@ export function parseAiJson(text: string): TestToNotesItem[] | null {
       obj.correct === 'true' ||
       obj.correct === 'yes' ||
       obj.correct === 1
-    items.push({ question, answer, correct })
+    const item: TestToNotesItem = { question, answer, correct }
+    const options = Array.isArray(obj.options) ? obj.options.map(capField).filter((o) => o.length > 0) : []
+    if (options.length > 0) item.options = options.slice(0, 12)
+    const correctAnswer = capField(obj.correctAnswer)
+    if (correctAnswer) item.correctAnswer = resolveOption(correctAnswer, item.options)
+    const explanation = capField(obj.explanation)
+    if (explanation) item.explanation = explanation
+    if (obj.needsText === true || /^question\s+\d+$/i.test(question)) item.needsText = true
+    items.push(item)
   }
   return items
 }
 
+/** Longest paste sent to the model; the built-in parser handles the rest. */
+export const MAX_AI_PARSE_CHARS = 24_000
+
 /**
  * Parse pasted test results with the model, falling back to the deterministic
- * parser when the model is offline or returns an unexpected shape.
+ * parser when the model is offline or returns an unexpected shape. An
+ * unexpected reply is retried once (#265: the Regents answer sheet needed a
+ * second try); every fallback says why (#274).
  */
 export async function parseTestResultsWithAi(
   input: { text: string },
@@ -93,22 +111,39 @@ export async function parseTestResultsWithAi(
   const raw = (input?.text ?? '').replace(/\r\n?/g, '\n')
   if (!raw.trim()) return { items: [] }
 
-  const gen = await llmGenerate({ system: TEST_TO_NOTES_PARSE_SYSTEM, prompt: `Test results:\n${raw}` })
-  if (!gen.ok) {
-    const rateLimited = isRateLimited(gen.error)
+  // Formats the built-in parser reads exactly need no model call (Groq's free
+  // tier is ~130 calls a day): answer sheets, CSV exports, and exports where
+  // every item carries its answer key ("(Correct answer)", "Correct answer: …").
+  const offlineItems = parseTestResults(raw)
+  const csv = /^\s*"?question"?\s*,/i.test(raw.trimStart().split('\n')[0] ?? '')
+  const keyed = offlineItems.every((it) => it.needsText || !!it.correctAnswer?.trim())
+  if (offlineItems.length >= 2 && (csv || keyed)) return { items: offlineItems }
+
+  if (raw.length > MAX_AI_PARSE_CHARS) {
     return {
-      items: parseTestResults(raw),
-      offline: !rateLimited,
-      rateLimited,
-      retryAfterMs: rateLimited ? retryAfterMs(gen.error) : undefined,
-      error: gen.error,
+      items: offlineItems,
+      error: `The paste is longer than ${Math.round(MAX_AI_PARSE_CHARS / 1000)}k characters, so the built-in parser was used.`,
     }
   }
-  const parsed = parseAiJson(gen.text)
-  if (parsed && parsed.length > 0) return { items: parsed }
+  const request = { system: TEST_TO_NOTES_PARSE_SYSTEM, prompt: `Test results:\n${raw}` }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const gen = await llmGenerate(request)
+    if (!gen.ok) {
+      const rateLimited = isRateLimited(gen.error)
+      return {
+        items: offlineItems,
+        offline: !rateLimited,
+        rateLimited,
+        retryAfterMs: rateLimited ? retryAfterMs(gen.error) : undefined,
+        error: gen.error,
+      }
+    }
+    const parsed = parseAiJson(gen.text)
+    if (parsed && parsed.length > 0) return { items: parsed }
+  }
   return {
-    items: parseTestResults(raw),
-    error: 'The model returned an unexpected format; used the built-in parser instead.',
+    items: offlineItems,
+    error: 'The model returned an unexpected format twice; used the built-in parser instead.',
   }
 }
 
@@ -117,12 +152,25 @@ export const TEST_TO_NOTES_SYSTEM_EXTRA = `You are writing a short corrective st
 Write 2–5 plain sentences that: (a) state the correct answer using ONLY the numbered passages; (b) briefly name what the learner's answer got wrong; (c) avoid preamble, headings and lists.
 Cite every factual claim with the exact passage id, e.g. [itm_abc123]. Do not invent facts or cite ids that are not listed.`
 
-/** Short, readable card title derived from the question. */
+/** Short, readable card title derived from the question, never cut mid-word (#265). */
 export function deriveTitle(question: string): string {
   const cleaned = (question ?? '').replace(/\s+/g, ' ').trim()
   const base = cleaned || 'practice-test question'
-  const clipped = base.length > 60 ? base.slice(0, 57).trimEnd() + '…' : base
-  return `Fix: ${clipped}`
+  if (base.length <= 60) return `Fix: ${base}`
+  const cut = base.slice(0, 58)
+  const space = cut.lastIndexOf(' ')
+  const clipped = (space >= 30 ? cut.slice(0, space) : cut).replace(/[\s,;:.\-–—]+$/, '')
+  return `Fix: ${clipped}…`
+}
+
+/** Remove `[itm_…]` markers from a draft body; the sources are listed by title instead (#265). */
+export function draftBodyWithoutIds(body: string, citations: Array<{ title: string }>): string {
+  const text = (body ?? '')
+    .replace(/\s*\[(?:itm_[A-Za-z0-9]+(?:\s*,\s*)?)+\]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+  if (citations.length === 0) return text
+  return `${text}\n\nSources: ${citations.map((c) => c.title).join('; ')}`
 }
 
 /**
@@ -186,12 +234,13 @@ export async function analyzeTestResults(
     const allowed = new Set(hits.map((h) => h.id))
     const validIds = validateCitations(extractCitedIds(gen.text), allowed)
     const finalized = finalizeAnswer(gen.text, allowed)
+    const citations = citationsFromIds(validIds)
     suggestions.push({
       question,
       yourAnswer,
       title,
-      body: finalized.answer,
-      citations: citationsFromIds(validIds),
+      body: draftBodyWithoutIds(finalized.answer, citations),
+      citations,
       uncited: finalized.uncited,
     })
   }

@@ -785,8 +785,17 @@ export interface McpCallToolResult {
 /** One parsed practice-test item: the question, what the learner answered, and if it was right. */
 export interface TestToNotesItem {
   question: string
+  /** What the learner answered ('' when none is recorded); a letter when the test had options. */
   answer: string
   correct: boolean
+  /** The test's correct answer, when the results show it (#265). */
+  correctAnswer?: string
+  /** The test's explanation, when the results show it. */
+  explanation?: string
+  /** Multiple-choice options as shown, e.g. ["A. chkdsk", "B. sfc /scannow"]. */
+  options?: string[]
+  /** True when only a number was found ("Q12: B (correct: D)"): the question text has to be typed in. */
+  needsText?: boolean
 }
 
 export interface TestToNotesAnalyzeInput {
@@ -827,6 +836,56 @@ export interface TestToNotesSuggestion {
   rateLimited?: boolean
   /** Parsed "try again in X" wait, in milliseconds, when rate limited. */
   retryAfterMs?: number
+  error?: string
+}
+
+/* ---- Practice tests inside Study (#265) ---- */
+
+export interface PracticeTestImportInput {
+  /** The Study project the test belongs to ('' / null = no project). */
+  project?: string | null
+  /** The test's name, e.g. "Core 2 practice exam #3". */
+  name: string
+  /** YYYY-MM-DD; defaults to today. */
+  date?: string | null
+  items: TestToNotesItem[]
+  /** "Also add the ones I got right" (lower-priority cards). */
+  includeCorrect?: boolean
+  /** Question text typed in for items that had only a number, by item index. */
+  questionTexts?: Record<number, string>
+}
+
+export interface PracticeTestSkipped {
+  index: number
+  question: string
+  reason: string
+}
+
+export interface PracticeTestImportResult {
+  /** The practice-test page that holds the test (kind `practice-test`). */
+  testItemId: string
+  name: string
+  date: string
+  /** New cards created by this import. */
+  added: number
+  /** Cards that already existed from an earlier import of the same test. */
+  alreadyAdded: number
+  /** Item indexes that still need question text. */
+  needText: number[]
+  skipped: PracticeTestSkipped[]
+  /** Cards linked to an existing note in the project. */
+  linked: number
+  /** Corrective AI drafts created for questions no note covers. */
+  drafts: number
+  /** Per-item outcome, by item index: the card id when one exists. */
+  cardIds: Record<number, string>
+}
+
+export interface PracticeTestFile {
+  canceled?: boolean
+  name?: string
+  text?: string
+  truncated?: boolean
   error?: string
 }
 
@@ -1097,6 +1156,17 @@ export interface StudyCardQuestion {
   rateLimited?: boolean
   /** The model that wrote a `generated` question. */
   model?: string | null
+  /** Practice-test cards (#265): the test's explanation, shown on reveal. */
+  explanation?: string | null
+  /** Practice-test cards: where the question came from. */
+  sourceTest?: { itemId: string; name: string; date: string | null } | null
+  /**
+   * Practice-test cards: the learner's note that covers the question. Shown on
+   * reveal only once it is confirmed (an AI draft waits for the own-words edit).
+   */
+  linkedNote?: { id: string; title: string; confirmed: boolean } | null
+  /** Diagram / graph items: recall or sketch, then open the test to check. */
+  openSource?: boolean
 }
 
 export interface StudySessionStartInput {

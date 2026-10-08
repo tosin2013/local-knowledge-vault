@@ -218,12 +218,48 @@ The session loop lives in `electron/study-session.ts` (IPC `study:startSession`,
 - **Migration v9** only adds nullable columns (`study_cards.q_*`, `study_attempts.card_id/item_id/session_id/grade`)
   and an index; existing cards, schedules and logs are untouched.
 
+### Practice tests (#265, schema v10)
+
+Past exam papers and practice-test results are **practice tests, not notes** (owner default 1). Retrieval practice
+with corrective feedback is the strongest effect in
+[the learning-science basis](../local-knowledge-vault-study-effects-on-learning.md) (Roediger & Karpicke 2006;
+Butler & Roediger 2008), so a missed question should be studied as a question, straight away.
+
+- **Import** (`practiceTest:import`, Study → **Import practice test**): the parsed items, a test name, the date taken
+  and the project. The test is stored as **one** item of kind `practice-test`, titled "name · date", holding the
+  questions, correct answers and explanations, never the learner's wrong answers. Re-importing the same test
+  (project + name + date) reuses it.
+- **Cards:** `origin = 'practice-test'`, `item_id` = the test item, `source_key = test:<hash(project,name,date)>#<n>`
+  (unique, so a re-import adds nothing twice), `q_kind = 'test'`, `question` = the test's question with inline
+  options removed (recall, not recognition), `answer` = the correct answer, `explanation` = the test's explanation.
+  Wrong items are seeded as **Missed** (`last_grade = 'again'`, `lapses = 1`, due today, one `review_log` row with
+  `migrated = 1` so session stats ignore it) and so come first in `buildReviewQueue`, outside the new-card budget.
+  Correct items are added only with **Also add the ones I got right**, as new cards with priority −1.
+- **Visual items** ("diagram", "figure", "exhibit", …) become open-the-source cards: the session asks the learner to
+  recall or sketch, then **Open the test**. A performance-based question keeps its first line as the question and
+  the steps as the explanation.
+- **Answer sheets** with only letters ("Q3: B (correct: D)") need the question text; items without it are reported
+  as "need question text" and get no card until the learner types it.
+- **Link to the learner's note** (`study_cards.link_item_id`, v10): a project search for the question and answer
+  (excluding practice tests, AI drafts, trashed and archived items) with at least two overlapping words and an answer
+  word links the card to that note. Otherwise a deterministic corrective **AI draft** is written and linked. The
+  session cites the linked note only once it is confirmed (status ≠ `ai-draft`); until then it says a draft is
+  waiting (owner default 2: never block on confirmation). **Suggest fixes** stays optional; a saved suggestion is
+  linked with `practiceTest:link`.
+- **Study this project** skips `practice-test` items and pages that look like exam papers (three or more questions with
+  `(1)`–`(3)` or `A.`–`C.` options), and still skips video transcripts; a single part can be added with **Add to
+  review** (owner default 4). **Add to review** on a practice test reports it as already in Study.
+- **Files:** `practiceTest:openFile` opens a PDF (text layer only), TXT or CSV in the main process and returns up to
+  60,000 characters for the paste box.
+- **Migration v10** adds the nullable columns `study_cards.explanation` and `study_cards.link_item_id`; nothing else
+  changes.
+
 ## Consequences
 
 - One schedule per card: a 30-page book can be enrolled at page or chunk level and each part is graded on its own.
 - Practice-test cards (#265) and reverse cards (#273) need no new tables: they are rows with a different `origin` and
-  `source_key`. A practice-test question with no confirmed note is a `pending` card on its AI draft until the user
-  confirms it.
+  `source_key`. A practice-test card is usable at once with the test's own Q&A; its link to an AI draft is only
+  cited after the user confirms the draft.
 - Deleting a note deletes its cards, schedules and history (cascade). Trashing or archiving hides them from the
   queue.
 - `review_schedule_legacy` stays in migrated vaults until a later release drops it.

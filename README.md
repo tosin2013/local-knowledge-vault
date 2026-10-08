@@ -144,8 +144,10 @@ accept it, and explains why a broken pack was rejected.
   - **Quiz me on…** Type a question, write what you remember first, then reveal the grounded,
     cited answer as feedback, rate your confidence and grade yourself. A calibration strip shows
     how well your confidence matches your results.
-  - **Import practice test.** Paste practice-test results and turn each wrong answer into a
-    grounded corrective note (Test to notes).
+  - **Import practice test.** Paste or open practice-test results; each missed question becomes a
+    Study card at once (the test's own question and answer), linked to the note that covers it or to a
+    corrective AI draft you confirm in your own words. The test is kept as one **Practice test** note,
+    and **Study this project** skips practice tests and exam papers.
 - **AI drafts stay drafts.** Notes written by the model (for example from Import practice test) are saved as
   **AI draft** and rank below your own notes in search. To confirm one, edit it or write a one-line
   summary in your own words.

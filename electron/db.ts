@@ -63,7 +63,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 9
+export const SCHEMA_VERSION = 10
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -95,6 +95,9 @@ function migrate(database: Database.Database): void {
   }
   if (version < 9) {
     migrateV9(database)
+  }
+  if (version < 10) {
+    migrateV10(database)
   }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
@@ -244,6 +247,21 @@ function migrateV9(database: Database.Database): void {
   addColumnIfMissing(database, 'study_attempts', 'session_id', 'TEXT')
   addColumnIfMissing(database, 'study_attempts', 'grade', 'TEXT')
   database.exec('CREATE INDEX IF NOT EXISTS idx_study_attempts_session ON study_attempts(session_id)')
+}
+
+/**
+ * v10 (#265): practice tests inside Study.
+ *
+ * - `study_cards.explanation`: the test's own explanation, shown on reveal.
+ * - `study_cards.link_item_id`: the learner's note that covers a practice-test
+ *   question (an existing note, or a corrective AI draft until it is confirmed).
+ *   No foreign key: a deleted note just leaves the card unlinked.
+ *
+ * Additive only.
+ */
+function migrateV10(database: Database.Database): void {
+  addColumnIfMissing(database, 'study_cards', 'explanation', 'TEXT')
+  addColumnIfMissing(database, 'study_cards', 'link_item_id', 'TEXT')
 }
 
 /**

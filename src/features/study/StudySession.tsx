@@ -280,6 +280,13 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
               {current.chunk_index != null && current.chunk_count > 1 && (
                 <Chip size="small" variant="outlined" label={`Part ${current.chunk_index + 1} of ${current.chunk_count}`} />
               )}
+              {question?.sourceTest && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`${question.sourceTest.name}${question.sourceTest.date ? ` · ${question.sourceTest.date}` : ''}`}
+                />
+              )}
               {current.last_grade === 'again' && <Chip size="small" color="error" variant="outlined" label="Missed last time" />}
             </Stack>
 
@@ -295,6 +302,11 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                 <Typography variant="h6" component="p" sx={{ mb: 1, lineHeight: 1.4 }} data-testid="session-question">
                   {question.question}
                 </Typography>
+                {question.openSource && (
+                  <Alert severity="info" sx={{ mb: 1.5 }}>
+                    This question needs the test&apos;s figure. Recall or sketch your answer, then open the test to check.
+                  </Alert>
+                )}
                 {question.notice && (
                   <Alert severity={question.offline || question.rateLimited ? 'warning' : 'info'} sx={{ mb: 1.5 }}>
                     {question.notice}
@@ -373,6 +385,26 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         </Typography>
                       </Box>
                     )}
+                    {question.origin === 'practice-test' && !question.answer && (
+                      <Typography variant="body2" color="text.secondary">
+                        The test didn&apos;t include the correct answer.{' '}
+                        {question.linkedNote?.confirmed ? 'Check it against your note.' : 'Check your notes or the test.'}
+                      </Typography>
+                    )}
+                    {question.explanation && (
+                      <Box data-testid="session-explanation">
+                        <Typography variant="caption" color="text.secondary">
+                          Why (from the test)
+                        </Typography>
+                        <Typography variant="body2">{question.explanation}</Typography>
+                      </Box>
+                    )}
+                    {question.linkedNote && !question.linkedNote.confirmed && (
+                      <Typography variant="caption" color="text.secondary" data-testid="draft-waiting">
+                        A corrective draft for this question is in your notes. Confirm it in your own words and it will
+                        be linked here.
+                      </Typography>
+                    )}
                     {question.quote && (
                       <Box
                         component="blockquote"
@@ -381,7 +413,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         <Typography variant="body2">“{question.quote}”</Typography>
                       </Box>
                     )}
-                    {(question.kind === 'explain' || !question.answer) && (
+                    {question.origin !== 'practice-test' && (question.kind === 'explain' || !question.answer) && (
                       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, maxHeight: 260, overflow: 'auto' }}>
                         <Typography variant="caption" color="text.secondary">
                           Compare with your note
@@ -404,12 +436,21 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                           aria-label={`Open note ${c.title}`}
                         />
                       ))}
-                      {onOpenNote && (
+                      {onOpenNote && question.origin !== 'practice-test' && (
                         <Button size="small" startIcon={<OpenInNewIcon fontSize="small" />} onClick={() => onOpenNote(question.itemId)}>
                           Open note
                         </Button>
                       )}
-                      {question.kind !== 'explain' && question.answer && question.sectionText && (
+                      {onOpenNote && question.sourceTest && (
+                        <Button
+                          size="small"
+                          startIcon={<OpenInNewIcon fontSize="small" />}
+                          onClick={() => onOpenNote(question.sourceTest!.itemId)}
+                        >
+                          Open the test
+                        </Button>
+                      )}
+                      {question.origin !== 'practice-test' && question.kind !== 'explain' && question.answer && question.sectionText && (
                         <Button size="small" onClick={() => setShowSection((v) => !v)}>
                           {showSection ? 'Hide the section' : 'Show the whole section'}
                         </Button>

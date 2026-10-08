@@ -11,7 +11,7 @@ import type { TestToNotesItem } from './types'
 export const MAX_TEST_FIELD_CHARS = 4000
 
 /** Header cells a CSV first line may contain (case-insensitive). */
-const CSV_COLUMNS = new Set(['question', 'answer', 'your answer', 'correct'])
+const CSV_COLUMNS = new Set(['question', 'answer', 'your answer', 'correct', 'correct answer', 'explanation'])
 
 /**
  * Correctness marker scan for plain text (anywhere in a line).
@@ -98,6 +98,8 @@ function parseCsvRows(raw: string, headerCells: string[]): TestToNotesItem[] {
   const questionIdx = headerCells.indexOf('question')
   const answerIdx = headerCells.findIndex((c) => c === 'answer' || c === 'your answer')
   const correctIdx = headerCells.indexOf('correct')
+  const keyIdx = headerCells.indexOf('correct answer')
+  const explanationIdx = headerCells.indexOf('explanation')
 
   const lines = raw.split('\n').filter((l) => l.trim().length > 0)
   const items: TestToNotesItem[] = []
@@ -108,20 +110,94 @@ function parseCsvRows(raw: string, headerCells: string[]): TestToNotesItem[] {
     const answer = answerIdx >= 0 ? clampField(cells[answerIdx] ?? '') : ''
     const correct =
       correctIdx >= 0 ? parseCsvCorrectCell(cells[correctIdx] ?? '') ?? false : false
-    items.push({ question, answer, correct })
+    const item: TestToNotesItem = { question, answer, correct }
+    const key = keyIdx >= 0 ? clampField(cells[keyIdx] ?? '') : ''
+    if (key) item.correctAnswer = key
+    const explanation = explanationIdx >= 0 ? clampField(cells[explanationIdx] ?? '') : ''
+    if (explanation) item.explanation = explanation
+    items.push(item)
   }
   return items
 }
 
+/** "Question 3 of 10   Incorrect": a results-page header that starts an item. */
+const QUESTION_HEADER_RE = /^\s*question\s+\d+\s+(?:of|\/)\s*\d+\b/i
+/** "Q12: B (correct: D)" / "Q1: 2 (correct: 4)": an answer-sheet line with no question text. */
+const QLINE_RE = /^\s*Q(?:uestion)?\s*(\d+)\s*[:.)-]\s*([A-Za-z0-9]{1,3})\s*\(\s*(?:correct|key|answer)(?:\s+answer)?\s*[:=]\s*([A-Za-z0-9]{1,3})\s*\)\s*$/i
+/** "  B. sfc /scannow   (Correct answer)" or "(2) chloroplast": one option per line. */
+const OPTION_LINE_RE = /^\s*(?:([A-H])[.)]|\(([1-9A-Ha-h])\))\s+(.+)$/
+/** "(1) mitochondrion (2) chloroplast (3) ribosome": several options on one line. */
+const INLINE_OPTION_RE = /\(([1-9A-Ha-h])\)\s*([^()]+?)(?=\s*\([1-9A-Ha-h]\)|$)/g
+const CORRECT_OPTION_RE = /\s*[(\[]\s*correct(?:\s+answer)?\s*[)\]]\s*$/i
+/** "Explanation: …", "Why: …", "Rationale: …". */
+const EXPLANATION_RE = /^\s*(?:explanation|rationale|why)\s*[:：-]\s*(.*)$/i
+/** "Correct answer: D" on its own line. */
+const KEY_LINE_RE = /^\s*(?:correct\s+answer|the\s+correct\s+answer\s+(?:is|was)|key)\s*[:：-]?\s*(.+)$/i
+/** "(correct: D)" after the learner's answer. */
+const INLINE_KEY_RE = /\s*\(\s*correct(?:\s+answer)?\s*[:=]\s*([^)]+)\)\s*/i
+
+/** Remove marker tokens from a learner's answer ("(2) chloroplast ✓" → "(2) chloroplast"). */
+function stripAnswerMarkers(value: string): string {
+  return value
+    .replace(/\s*[✓✔✗✘]\s*/g, ' ')
+    .replace(/\s*\(?\b(?:correct|incorrect|right|wrong)\b\)?\s*$/i, '')
+    .trim()
+}
+
+/** Split "(1) a (2) b" into ["(1) a", "(2) b"]; null when the line holds fewer than two. */
+function inlineOptions(line: string): string[] | null {
+  const found = [...line.matchAll(INLINE_OPTION_RE)].map((m) => `(${m[1]}) ${m[2].trim()}`)
+  return found.length >= 2 ? found : null
+}
+
+/** The option label ("B", "2") and text ("sfc /scannow") of an option string. */
+export function splitOption(option: string): { label: string; text: string } {
+  const m = /^\s*(?:([A-Ha-h1-9])[.)]|\(([1-9A-Ha-h])\))\s*(.*)$/.exec(option ?? '')
+  if (!m) return { label: '', text: (option ?? '').trim() }
+  return { label: (m[1] ?? m[2] ?? '').toUpperCase(), text: m[3].trim() }
+}
+
+/**
+ * Turn a letter or number answer into the option it names: "B" → "sfc /scannow"
+ * when the options are known. Anything else is returned unchanged.
+ */
+export function resolveOption(answer: string, options?: string[]): string {
+  const a = (answer ?? '').trim()
+  if (!a || !options || options.length === 0) return a
+  const label = /^\(?([A-Ha-h1-9])\)?[.)]?(?:\s|$)/.exec(a)?.[1]?.toUpperCase()
+  if (!label) return a
+  const hit = options.map(splitOption).find((o) => o.label === label)
+  if (!hit) return a
+  // "(2) chloroplast" already carries the text; keep the option's own wording.
+  return hit.text
+}
+
+/** Parse "Q12: B (correct: D)" answer-sheet lines (question text missing). */
+function parseAnswerSheet(lines: string[]): TestToNotesItem[] | null {
+  const hits = lines.map((l) => QLINE_RE.exec(l)).filter((m): m is RegExpExecArray => !!m)
+  if (hits.length < 2) return null
+  return hits.map((m) => {
+    const answer = m[2].toUpperCase()
+    const correctAnswer = m[3].toUpperCase()
+    return { question: `Question ${m[1]}`, answer, correctAnswer, correct: answer === correctAnswer, needsText: true }
+  })
+}
+
 /**
  * Split plain text into blocks on blank lines and/or leading number markers
- * (`1.`, `1)`, `Q1:`). Within a block the first line is the question, an
- * answer-prefixed line is the learner's answer, and a correctness marker
- * anywhere sets `correct`. Unmarked items default to incorrect (the learner
- * should still review them).
+ * (`1.`, `1)`, `Q1:`, `Question 3 of 10`). Within a block the first line is
+ * the question, an answer-prefixed line is the learner's answer, option lines
+ * become `options` (one marked "(Correct answer)" is the key), an
+ * "Explanation:" line is kept, and a correctness marker anywhere sets
+ * `correct`. Unmarked items default to incorrect (the learner should still
+ * review them). Header and junk blocks (a title, a score line) with no answer,
+ * marker, options or question mark are dropped (#265).
  */
 export function parsePlainText(raw: string): TestToNotesItem[] {
   const lines = raw.split('\n')
+  const sheet = parseAnswerSheet(lines)
+  if (sheet) return sheet
+
   const blocks: string[][] = []
   let current: string[] = []
   const flush = () => {
@@ -133,27 +209,92 @@ export function parsePlainText(raw: string): TestToNotesItem[] {
       flush()
       continue
     }
-    if (current.length > 0 && NUMBER_PREFIX_RE.test(line)) flush()
+    if (current.length > 0 && (NUMBER_PREFIX_RE.test(line) || QUESTION_HEADER_RE.test(line))) flush()
     current.push(line)
   }
   flush()
 
   const items: TestToNotesItem[] = []
   for (const block of blocks) {
-    const question = clampField(stripQuestionMarkers(block[0].replace(NUMBER_PREFIX_RE, '')))
-    if (!question) continue
-    let answer = ''
+    let start = 0
     let correct: boolean | null = null
-    for (let i = 0; i < block.length; i++) {
-      const line = block[i]
-      if (i > 0 && !answer) {
-        const m = ANSWER_PREFIX_RE.exec(line)
-        if (m) answer = clampField(m[1])
-      }
-      const marker = isCorrectMarker(line)
-      if (marker !== null) correct = marker
+    let numbered = NUMBER_PREFIX_RE.test(block[0])
+    if (QUESTION_HEADER_RE.test(block[0])) {
+      correct = isCorrectMarker(block[0])
+      numbered = true
+      start = 1
     }
-    items.push({ question, answer, correct: correct ?? false })
+    const questionLines: string[] = []
+    const options: string[] = []
+    let answer = ''
+    let correctAnswer = ''
+    let explanation = ''
+    let inExplanation = false
+    let hasAnswerLine = false
+    for (let i = start; i < block.length; i++) {
+      const line = block[i]
+      const isFirst = questionLines.length === 0
+      const marker = isCorrectMarker(line)
+      const explanationMatch = EXPLANATION_RE.exec(line)
+      const answerMatch = !isFirst ? ANSWER_PREFIX_RE.exec(line) : null
+      const keyMatch = !isFirst ? KEY_LINE_RE.exec(line) : null
+      const inline = !isFirst ? inlineOptions(line) : null
+      const optionMatch = !isFirst && !inline ? OPTION_LINE_RE.exec(line) : null
+      if (explanationMatch && !isFirst) {
+        explanation = explanationMatch[1].trim()
+        inExplanation = true
+      } else if (keyMatch) {
+        correctAnswer = stripAnswerMarkers(keyMatch[1])
+        inExplanation = false
+      } else if (answerMatch && !answer) {
+        hasAnswerLine = true
+        let value = answerMatch[1]
+        const inlineKey = INLINE_KEY_RE.exec(value)
+        if (inlineKey) {
+          correctAnswer = inlineKey[1].trim()
+          value = value.replace(INLINE_KEY_RE, ' ')
+        }
+        answer = clampField(stripAnswerMarkers(value))
+        inExplanation = false
+      } else if (inline) {
+        options.push(...inline)
+        inExplanation = false
+      } else if (optionMatch) {
+        const isKey = CORRECT_OPTION_RE.test(line)
+        const label = optionMatch[1] ?? optionMatch[2]
+        const text = optionMatch[3].replace(CORRECT_OPTION_RE, '').trim()
+        const option = optionMatch[1] ? `${label}. ${text}` : `(${label}) ${text}`
+        options.push(option)
+        if (isKey) correctAnswer = text
+        inExplanation = false
+      } else if (inExplanation) {
+        explanation = `${explanation} ${line.trim()}`.trim()
+      } else if (isFirst) {
+        questionLines.push(line)
+      } else if (!answer && options.length === 0) {
+        // A question that wraps onto a second line.
+        questionLines.push(line)
+      }
+      if (marker !== null && !(optionMatch && CORRECT_OPTION_RE.test(line))) correct = marker
+    }
+    // A performance-based question (PBQ) description: the first line names the
+    // task, the rest describes what happened (kept as the explanation).
+    if (/^\s*PBQ\b/i.test(questionLines[0] ?? '') && questionLines.length > 1 && !explanation) {
+      explanation = questionLines.slice(1).join(' ').replace(/\s+/g, ' ').trim()
+      questionLines.splice(1)
+    }
+    const question = clampField(
+      stripQuestionMarkers(questionLines.join(' ').replace(NUMBER_PREFIX_RE, '').replace(/\s+/g, ' ')),
+    )
+    if (!question) continue
+    const looksLikeItem =
+      numbered || hasAnswerLine || correct !== null || options.length > 0 || /\?\s*$/.test(question)
+    if (!looksLikeItem) continue
+    const item: TestToNotesItem = { question, answer, correct: correct ?? false }
+    if (options.length > 0) item.options = options.map(clampField)
+    if (correctAnswer) item.correctAnswer = clampField(resolveOption(correctAnswer, options))
+    if (explanation) item.explanation = clampField(explanation)
+    items.push(item)
   }
   return items
 }

@@ -71,13 +71,13 @@ describe('StudyTab (#260)', () => {
     expect(await screen.findByLabelText('Question')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: 'Import practice test' }))
-    expect(await screen.findByText('Test to notes')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Import practice test' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Back to Ask' })).not.toBeInTheDocument()
   })
 
   it('opens on the section it is given', () => {
     render(<Harness initial="import" />)
     expect(screen.getByRole('tab', { name: 'Import practice test' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('Test to notes')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Import practice test' })).toBeInTheDocument()
   })
 })

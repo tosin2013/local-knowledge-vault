@@ -171,7 +171,8 @@ const SIMILARITY_STOPWORDS = new Set(
   ).split(' '),
 )
 
-function sectionWords(text: string): Set<string> {
+/** Lower-cased content words of a text (function words dropped). */
+export function sectionWords(text: string): Set<string> {
   return new Set(
     (text ?? '')
       .toLowerCase()
@@ -497,10 +498,30 @@ const MIN_OWN_NOTE_WORDS = 3
  * empty or a stub: a short note such as "ATP = the cell's energy currency"
  * is a good card, and a messy paste still holds the learner's material.
  */
+/**
+ * Does this text look like an exam paper (or a results page) rather than notes?
+ * True when it holds at least three multiple-choice option sets: "(1) … (2) …
+ * (3) …" runs or "A. / B. / C." option lines. Questions generated from exam
+ * pages were only 33% usable in the Oct 8 evaluation and one learned a wrong
+ * option as a fact, so exam papers go through Import practice test (#265).
+ */
+export function looksLikeExamPaper(body: string): boolean {
+  const text = body ?? ''
+  const count = (re: RegExp) => (text.match(re) ?? []).length
+  const numbered = Math.min(count(/(?:^|\s)\(1\)\s/g), count(/(?:^|\s)\(2\)\s/g), count(/(?:^|\s)\(3\)\s/g))
+  const lettered = Math.min(count(/^\s*\(?A[.)]\s/gm), count(/^\s*\(?B[.)]\s/gm), count(/^\s*\(?C[.)]\s/gm))
+  return numbered >= 3 || lettered >= 3
+}
+
+export const PRACTICE_TEST_SKIP = 'practice test (its questions are already cards)'
+export const EXAM_PAPER_SKIP = 'exam paper or answer page (import it as a practice test)'
+
 export function enrollSkipReason(note: Pick<EnrollCandidate, 'body' | 'kind' | 'status'>): string | null {
+  if (note.kind === 'practice-test') return PRACTICE_TEST_SKIP
   if (note.status === 'ai-draft') return 'unconfirmed AI draft (confirm it in your own words first)'
   if (note.status === 'archived') return 'archived'
   if (note.kind === 'transcript') return 'video transcript (add single parts from Review)'
+  if (looksLikeExamPaper(note.body)) return EXAM_PAPER_SKIP
   if (IMPORTED_KINDS.has(note.kind)) return boilerplateReason(note.body)
   const words = contentWords(note.body).length
   if (words === 0) return 'empty'
@@ -532,6 +553,11 @@ export function enrollProject(project: string): EnrollProjectResult {
   const result: EnrollProjectResult = { project: name, notes: 0, cards: 0, alreadyScheduled: 0, skipped: [] }
   database.transaction(() => {
     for (const row of rows) {
+      // A practice test's cards are its own; it is never enrolled as a note.
+      if (row.kind === 'practice-test') {
+        result.skipped.push({ itemId: row.id, title: row.title, reason: PRACTICE_TEST_SKIP })
+        continue
+      }
       if (row.enrolled) {
         result.alreadyScheduled++
         continue

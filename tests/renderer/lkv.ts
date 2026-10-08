@@ -406,6 +406,24 @@ export function createLkvMock(): LkvMock {
       analyze: vi.fn().mockResolvedValue([]),
       parse: vi.fn().mockResolvedValue({ items: [] }),
     },
+    practiceTest: {
+      import: vi.fn().mockImplementation((input: { name: string; date?: string | null }) =>
+        Promise.resolve({
+          testItemId: 'itm_test',
+          name: input.name,
+          date: input.date ?? '2026-10-08',
+          added: 1,
+          alreadyAdded: 0,
+          needText: [],
+          skipped: [],
+          linked: 0,
+          drafts: 1,
+          cardIds: { 1: 'crd_test_2' },
+        }),
+      ),
+      link: vi.fn().mockResolvedValue(true),
+      openFile: vi.fn().mockResolvedValue({ canceled: true }),
+    },
     review: {
       listDue: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
