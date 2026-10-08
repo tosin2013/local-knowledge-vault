@@ -813,6 +813,37 @@ export function createItem(input: CreateItemInput): Item {
   return item
 }
 
+/** A note body as it was before an edit: the text and its retrieval chunks. */
+export interface NoteBodyBefore {
+  body: string
+  chunks: string[]
+}
+
+type NoteBodyChangeHook = (itemId: string, before: NoteBodyBefore) => void
+
+const noteBodyChangeHooks: NoteBodyChangeHook[] = []
+
+/**
+ * Run `hook` after a note's body changes in `updateItem`, once its chunks have
+ * been re-derived. Study cards use it to rebuild only the sections that
+ * changed (#286). Returns an unsubscribe function. A hook that throws is
+ * logged and never fails the save.
+ */
+export function onNoteBodyChanged(hook: NoteBodyChangeHook): () => void {
+  noteBodyChangeHooks.push(hook)
+  return () => {
+    const i = noteBodyChangeHooks.indexOf(hook)
+    if (i >= 0) noteBodyChangeHooks.splice(i, 1)
+  }
+}
+
+function chunkBodiesOf(database: Database.Database, itemId: string): string[] {
+  const rows = database
+    .prepare('SELECT body FROM note_chunks WHERE item_id = ? ORDER BY chunk_index')
+    .all(itemId) as Array<{ body: string }>
+  return rows.map((r) => r.body)
+}
+
 export function updateItem(id: string, patch: UpdateItemPatch): Item | null {
   const existing = getItem(id)
   if (!existing) return null
@@ -836,7 +867,21 @@ export function updateItem(id: string, patch: UpdateItemPatch): Item | null {
     )
     .run(updated)
   if (patch.body !== undefined) {
-    syncItemChunks(getDb(), id, updated.body)
+    const database = getDb()
+    const changed = patch.body !== existing.body
+    const before: NoteBodyBefore | null = changed
+      ? { body: existing.body, chunks: chunkBodiesOf(database, id) }
+      : null
+    syncItemChunks(database, id, updated.body)
+    if (before) {
+      for (const hook of [...noteBodyChangeHooks]) {
+        try {
+          hook(id, before)
+        } catch (e) {
+          console.error('[lkv] note body hook failed:', e instanceof Error ? e.message : e)
+        }
+      }
+    }
   }
   return updated
 }

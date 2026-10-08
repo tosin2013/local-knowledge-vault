@@ -11,8 +11,12 @@
  * the project its exam date — is the note's *current* project. Question,
  * answer and quote stay NULL until generation (#263); until then the review
  * prompt falls back to the note's summary or title.
+ *
+ * Editing an enrolled note rebuilds only the sections that changed (#286,
+ * `syncNoteCards`): unchanged sections keep their schedule and history,
+ * removed ones are retired rather than deleted.
  */
-import { getDb, newId, nowIso } from './db'
+import { getDb, newId, nowIso, onNoteBodyChanged, type NoteBodyBefore } from './db'
 import { hashText } from './text-hash'
 import type { StudyCard, StudyCardOrigin, StudyCardStatus, StudyEnrollResult } from './types'
 
@@ -152,6 +156,201 @@ export function createNoteCards(itemId: string): CreateNoteCardsResult {
     alreadyEnrolled: false,
   }
 }
+
+// --- Rebuild changed sections after an edit (#286) ---------------------------
+
+/** Sections at least this similar (word-set Jaccard) count as the same section, edited. */
+export const SECTION_SIMILARITY_MIN = 0.5
+
+/** Function words that every section shares; they would make unrelated sections look alike. */
+const SIMILARITY_STOPWORDS = new Set(
+  (
+    'a an and are as at be been but by can do does for from had has have how if in into is it its may more ' +
+    'most not of on or so such than that the their them then there these they this to too was were what when ' +
+    'where which while who why will with you your'
+  ).split(' '),
+)
+
+function sectionWords(text: string): Set<string> {
+  return new Set(
+    (text ?? '')
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((w) => w.length > 1 && !SIMILARITY_STOPWORDS.has(w)),
+  )
+}
+
+/** Word-set Jaccard similarity of two section texts (function words ignored), 0..1. Pure. */
+export function sectionSimilarity(a: string, b: string): number {
+  const wa = sectionWords(a)
+  const wb = sectionWords(b)
+  if (wa.size === 0 && wb.size === 0) return 1
+  let shared = 0
+  for (const w of wa) if (wb.has(w)) shared++
+  const union = wa.size + wb.size - shared
+  return union === 0 ? 0 : shared / union
+}
+
+/** An existing note-origin card, as the section planner sees it. */
+export interface SectionCard {
+  cardId: string
+  chunkIndex: number | null
+  /** `chunk_hash`: the hash of the section text the card was made from. */
+  hash: string | null
+  status: StudyCardStatus
+  /** The section's text before the edit, when known (needed to spot an edited section). */
+  textBefore: string | null
+}
+
+export interface SectionPlan {
+  /** Same text: the card, its schedule and history stay; only the index may move. */
+  keep: Array<{ cardId: string; chunkIndex: number | null; hash: string }>
+  /** Same section, new text: the card and schedule stay, its question is rebuilt. */
+  edit: Array<{ cardId: string; chunkIndex: number | null; hash: string }>
+  /** New sections: new cards. */
+  add: Array<{ chunkIndex: number | null; hash: string; text: string }>
+  /** Sections that are gone: retire the card (history kept, no longer scheduled). */
+  retire: string[]
+}
+
+/**
+ * Plan how a note's existing cards map onto its sections after an edit (#286).
+ * Pure.
+ *
+ * 1. A section whose hash equals a card's hash keeps that card (a retired card
+ *    with the same text comes back, e.g. after an undo).
+ * 2. Otherwise the most similar unmatched live card whose old text is at least
+ *    {@link SECTION_SIMILARITY_MIN} similar is the same section, edited. This
+ *    matters because chunking is greedy: one inserted sentence shifts later
+ *    chunk boundaries, and a shifted section must not lose its schedule.
+ * 3. Sections left over are new; live cards left over are retired.
+ */
+export function planSectionSync(cards: SectionCard[], units: CardUnit[]): SectionPlan {
+  const plan: SectionPlan = { keep: [], edit: [], add: [], retire: [] }
+  const used = new Set<string>()
+  const next = units.map((u) => ({ ...u, hash: hashText(u.text), done: false }))
+  // Live cards first, so a duplicate hash prefers the card still being studied.
+  const byPreference = [...cards].sort((a, b) => Number(a.status === 'retired') - Number(b.status === 'retired'))
+
+  for (const unit of next) {
+    const match = byPreference.find((c) => !used.has(c.cardId) && c.hash === unit.hash)
+    if (!match) continue
+    used.add(match.cardId)
+    unit.done = true
+    plan.keep.push({ cardId: match.cardId, chunkIndex: unit.chunkIndex, hash: unit.hash })
+  }
+
+  const pairs: Array<{ unit: (typeof next)[number]; card: SectionCard; sim: number }> = []
+  for (const unit of next) {
+    if (unit.done) continue
+    for (const card of cards) {
+      if (used.has(card.cardId) || card.status === 'retired' || card.textBefore == null) continue
+      const sim = sectionSimilarity(card.textBefore, unit.text)
+      if (sim >= SECTION_SIMILARITY_MIN) pairs.push({ unit, card, sim })
+    }
+  }
+  pairs.sort((a, b) => b.sim - a.sim)
+  for (const { unit, card } of pairs) {
+    if (unit.done || used.has(card.cardId)) continue
+    used.add(card.cardId)
+    unit.done = true
+    plan.edit.push({ cardId: card.cardId, chunkIndex: unit.chunkIndex, hash: unit.hash })
+  }
+
+  for (const unit of next) {
+    if (!unit.done) plan.add.push({ chunkIndex: unit.chunkIndex, hash: unit.hash, text: unit.text })
+  }
+  for (const card of cards) {
+    if (!used.has(card.cardId) && card.status !== 'retired') plan.retire.push(card.cardId)
+  }
+  return plan
+}
+
+export interface SectionSyncResult {
+  kept: number
+  edited: number
+  added: number
+  retired: number
+}
+
+/**
+ * Rebuild a note's section cards after its body changed (#286): unchanged
+ * sections keep their card, schedule and grade history; edited sections keep
+ * their schedule and get their question rebuilt; removed sections are retired
+ * (history kept, no longer scheduled); new sections get new cards. Notes that
+ * were never enrolled are left alone. `before` is the body and chunks as they
+ * were before the edit.
+ */
+export function syncNoteCards(itemId: string, before: NoteBodyBefore): SectionSyncResult {
+  const database = getDb()
+  const result: SectionSyncResult = { kept: 0, edited: 0, added: 0, retired: 0 }
+  const rows = database
+    .prepare(`SELECT id, chunk_index, chunk_hash, status FROM study_cards WHERE item_id = ? AND origin = 'note'`)
+    .all(itemId) as Array<{ id: string; chunk_index: number | null; chunk_hash: string | null; status: string }>
+  if (rows.length === 0) return result
+  const item = database.prepare('SELECT body FROM items WHERE id = ?').get(itemId) as { body: string } | undefined
+  if (!item) return result
+
+  const cards: SectionCard[] = rows.map((r) => ({
+    cardId: r.id,
+    chunkIndex: r.chunk_index == null ? null : Number(r.chunk_index),
+    hash: r.chunk_hash,
+    status: r.status as StudyCardStatus,
+    textBefore: r.chunk_index == null ? before.body : (before.chunks[Number(r.chunk_index)] ?? null),
+  }))
+  const plan = planSectionSync(cards, cardUnitsForNote(item.body, chunkBodies(itemId)))
+  const noteHash = hashText(item.body)
+  const ts = nowIso()
+
+  const keep = database.prepare(
+    `UPDATE study_cards SET chunk_index = ?, note_hash = ?, status = 'active', updated_at = ? WHERE id = ?`,
+  )
+  const edit = database.prepare(
+    `UPDATE study_cards SET chunk_index = ?, chunk_hash = ?, note_hash = ?, question = NULL, answer = NULL,
+       quote = NULL, updated_at = ? WHERE id = ?`,
+  )
+  const retire = database.prepare(`UPDATE study_cards SET status = 'retired', updated_at = ? WHERE id = ?`)
+  const insertCard = database.prepare(
+    `INSERT INTO study_cards
+       (id, item_id, chunk_index, chunk_hash, note_hash, origin, source_key, status, created_at, updated_at)
+     VALUES (@id, @item_id, @chunk_index, @chunk_hash, @note_hash, 'note', @source_key, 'active', @ts, @ts)`,
+  )
+  const insertSchedule = database.prepare(
+    `INSERT OR IGNORE INTO card_schedule
+       (card_id, due_at, interval_days, ease, reps, lapses, last_grade, last_reviewed_at, created_at, updated_at)
+     VALUES (@card_id, @ts, 0, @ease, 0, 0, NULL, NULL, @ts, @ts)`,
+  )
+  database.transaction(() => {
+    for (const k of plan.keep) keep.run(k.chunkIndex, noteHash, ts, k.cardId)
+    for (const e of plan.edit) edit.run(e.chunkIndex, e.hash, noteHash, ts, e.cardId)
+    for (const id of plan.retire) retire.run(ts, id)
+    for (const a of plan.add) {
+      const id = newId('crd')
+      // Kept cards may have moved index, so a positional key could collide;
+      // a card added by an edit gets a key tied to its own id.
+      insertCard.run({
+        id,
+        item_id: itemId,
+        chunk_index: a.chunkIndex,
+        chunk_hash: a.hash,
+        note_hash: noteHash,
+        source_key: `note:${itemId}:${id}`,
+        ts,
+      })
+      insertSchedule.run({ card_id: id, ts, ease: DEFAULT_EASE })
+    }
+  })()
+  result.kept = plan.keep.length
+  result.edited = plan.edit.length
+  result.added = plan.add.length
+  result.retired = plan.retire.length
+  return result
+}
+
+// Every body edit that goes through `updateItem` rebuilds the note's cards.
+onNoteBodyChanged((itemId, before) => {
+  syncNoteCards(itemId, before)
+})
 
 /** Remove every card (and its schedule and history) for a note. */
 export function deleteCardsForItem(itemId: string): number {

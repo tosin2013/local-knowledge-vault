@@ -45,8 +45,8 @@ creates all three and moves the old note-keyed schedule over.
 note between projects then carries its cards along with nothing to keep in sync.
 
 **Chunk ids are not stored.** `note_chunks` rows are deleted and re-inserted with new ids on every body edit, so a
-card points at `(item_id, chunk_index)` and keeps `chunk_hash` to detect drift. Until #263 regenerates stale cards, a
-chunk card shows whatever chunk now has its index, or the whole note body if that index no longer exists.
+card points at `(item_id, chunk_index)` and keeps `chunk_hash` to detect drift. Edits re-map cards onto the new
+sections (see "Editing a note", #286), so `chunk_index` always names the card's current section.
 
 ### Card unit for note-origin cards
 
@@ -58,6 +58,25 @@ chunk card shows whatever chunk now has its index, or the whole note body if tha
 
 1,200 characters is roughly what one recall prompt can cover. Enrolment is idempotent: a note with any note-origin
 card counts as already enrolled and nothing is added.
+
+### Editing a note (#286)
+
+When an enrolled note's body changes, `updateItem` re-derives its chunks and then calls `syncNoteCards` (through the
+`onNoteBodyChanged` hook, so every write path is covered). The owner's rule: rebuild only the sections whose hash
+changed. `planSectionSync` (pure) maps the existing note-origin cards onto the new sections:
+
+1. **Unchanged** (a section's hash equals a card's `chunk_hash`): the card, its schedule and its `review_log` stay;
+   only `chunk_index` moves if the section moved. A retired card whose exact text comes back (an undo) is revived.
+2. **Edited** (no hash match, but the old text of a live card is at least 50% similar by word-set Jaccard, function
+   words ignored): the same card and schedule, with the new hash and its question, answer and quote cleared so they
+   are rebuilt. This step exists because chunking is greedy: one inserted sentence shifts every later chunk boundary,
+   and without it a one-line edit near the top of a long note would reset every section below it.
+3. **New** sections get new cards (due now). Their `source_key` is `note:<item>:<card id>`, since a kept card may now
+   sit at the index a positional key would use.
+4. **Removed** sections: the card is set to `retired`. Its schedule and history stay in the database, but it leaves
+   the queue and the stats. Nothing is hard-deleted.
+
+Notes with no note-origin card (not in Study) are left alone, and title-only edits or same-body saves change nothing.
 
 ### `card_schedule` and `review_log`
 
