@@ -125,6 +125,37 @@ These are left out, each with a reason (`enrollSkipReason`, pure):
 
   A long content page that carries one copyright header is kept.
 
+### Exam-aware spacing (#264)
+
+All of these are pure functions in `electron/review.ts`, with unit tests in `scripts/review-smoke.ts`.
+
+- **Days to the exam** (`calendarDaysUntil`): local calendar days, so 1 = tomorrow and 0 = today.
+- **Interval cap** (`capIntervalForExam`, applied inside `scheduleReview`): let `remaining = daysLeft − 1`, since the
+  last useful review day is the day before the exam.
+  - No cap when there is no exam date, when the exam is today, tomorrow or past (plain SM-2 resumes after it), or
+    when the card is due now.
+  - If `remaining ≤ 3`, the interval is at most `remaining`, so the last review lands on the day before the exam.
+  - Otherwise, an interval over half the remaining time becomes `floor(remaining / 2)`, so another review still fits
+    before the final one.
+  - Worked example: a card answered Got it every time with the exam 14 days out is seen on days 0, 3, 8, 10 and 13.
+- **Daily new-card budget** (`newCardBudget`): `ceil(remaining new ÷ max(1, days left − 2))`, at most 25; 25 with no
+  exam.
+  - Regents in 14 days with 60 chunks → 5 a day.
+  - A+ in 30 days with 150 cards → 6 a day.
+  - The budget is worked out from the cards that were new at the start of the day, so it stays the same during the
+    day. Each project has its own budget.
+- **Coverage warning** (`unreachableNewCards`): `remaining new − 25 × max(1, days left − 2)`. Study home and Review
+  show "N cards won't be reached before your exam" instead of cramming them in.
+- **Queue order** (`buildReviewQueue`):
+  1. missed (Again) cards;
+  2. Partly (Hard) cards;
+  3. other due cards, by due date;
+  4. today's new cards, in priority then reading order, within each project's budget.
+
+  Review puts a missed card back at the end of the current session.
+- **One grading scale:** Missed / Partly / Got it, stored as `again` / `hard` / `good`. Easy is gone from the UI;
+  stored `easy` grades are kept and read as Got it. `review:rate` accepts both scales.
+
 ## Consequences
 
 - One schedule per card: a 30-page book can be enrolled at page or chunk level and each part is graded on its own.

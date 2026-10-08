@@ -20,6 +20,9 @@ const BIO_STATS = {
     startedAt: '2026-10-07T13:00:00.000Z',
     endedAt: '2026-10-07T13:20:00.000Z',
   },
+  newPerDay: 5,
+  newLeftToday: 3,
+  unreachable: 0,
 }
 
 function renderHome(project = 'Biology', overrides: { onStartReview?: () => void } = {}) {
@@ -103,7 +106,17 @@ describe('StudyHome (#262)', () => {
   it('explains a project with no notes', async () => {
     const lkv = lkvMock()
     lkv.projects.list.mockResolvedValue([{ name: 'Empty course', count: 0 }])
-    lkv.review.stats.mockResolvedValue({ ...BIO_STATS, project: 'Empty course', examDate: null, due: 0, totalCards: 0, newCards: 0, liveNotes: 0, enrolledNotes: 0, lastSession: null })
+    lkv.review.stats.mockResolvedValue({
+      ...BIO_STATS,
+      project: 'Empty course',
+      examDate: null,
+      due: 0,
+      totalCards: 0,
+      newCards: 0,
+      liveNotes: 0,
+      enrolledNotes: 0,
+      lastSession: null,
+    })
     renderHome('Empty course')
     expect(await screen.findByText(/Empty course has no notes yet/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Study this project' })).toBeDisabled()
@@ -126,6 +139,25 @@ describe('StudyHome (#262)', () => {
     renderHome()
     fireEvent.click(await screen.findByRole('button', { name: 'Study this project' }))
     expect(await screen.findByText('disk full')).toBeInTheDocument()
+  })
+
+  it('shows the daily new-card budget (#264)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 20 }])
+    lkv.review.stats.mockResolvedValue(BIO_STATS)
+    renderHome()
+    await waitFor(() => expect(screen.getByLabelText('Due now')).toHaveTextContent('incl. new: 3 of 5 today'))
+    expect(screen.queryByTestId('coverage-warning')).not.toBeInTheDocument()
+  })
+
+  it('warns when cards will not be reached before the exam (#264)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'A+', count: 300 }])
+    lkv.review.stats.mockResolvedValue({ ...BIO_STATS, project: 'A+', newPerDay: 25, unreachable: 42 })
+    renderHome('A+')
+    expect(await screen.findByTestId('coverage-warning')).toHaveTextContent(
+      "42 cards won't be reached before your exam at 25 new cards a day.",
+    )
   })
 
   it('formats the enroll summary', () => {

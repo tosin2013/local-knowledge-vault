@@ -917,7 +917,12 @@ export interface ReviewRateInput {
   cardId?: string
   /** Legacy: grade the note's first card when no cardId is given. */
   itemId?: string
-  grade: ReviewGrade
+  /**
+   * The UI sends the three-level scale (#264): Missed / Partly / Got it as
+   * `again` / `hard` / `good` (or `missed` / `partial` / `got`). `easy` is
+   * still accepted from older callers.
+   */
+  grade: ReviewGrade | StudySelfGrade
 }
 
 export interface ReviewEnqueueInput {
@@ -953,7 +958,7 @@ export interface StudySessionSummary {
 export interface StudyStats {
   project: string | null
   examDate: string | null
-  /** Cards due now. */
+  /** Cards in today's session queue: due reviews plus today's new cards within budget (#264). */
   due: number
   /** Active cards on live notes. */
   totalCards: number
@@ -964,6 +969,12 @@ export interface StudyStats {
   /** Live notes with at least one card. */
   enrolledNotes: number
   lastSession: StudySessionSummary | null
+  /** New cards a day for this scope (#264): remaining ÷ (days left − 2), at most 25. */
+  newPerDay: number
+  /** New cards still allowed today. */
+  newLeftToday: number
+  /** New cards the daily maximum can't reach before the exam (0 = all reachable). */
+  unreachable: number
 }
 
 /** What enrolling a note produced. */

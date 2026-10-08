@@ -49,7 +49,15 @@ import { askGrounded } from './generate'
 import { parsePersonalityPack, personalityFileName, serializePersonalityPack } from './personality-pack'
 import { sendChatTurn } from './chat'
 import { analyzeTestResults, parseTestResultsWithAi } from './test-to-notes'
-import { listDueReviews, countDueReviews, rateReview, enqueueReview, removeReview, getStudyStats } from './review'
+import {
+  listDueReviews,
+  countDueReviews,
+  rateReview,
+  enqueueReview,
+  removeReview,
+  getStudyStats,
+  toReviewGrade,
+} from './review'
 import { enrollProject } from './study-cards'
 import { listRecentAttempts, recordStudyAttempt, studyCalibration } from './study'
 import { generateStudyQuestions } from './study-questions'
@@ -498,7 +506,7 @@ function registerIpc(): void {
   )
   ipcMain.handle('review:rate', (_e, input: ReviewRateInput) =>
     // The exam date comes from the card's project (#261), not from the caller.
-    rateReview(String(input.cardId ?? input.itemId ?? ''), input.grade)
+    rateReview(String(input.cardId ?? input.itemId ?? ''), toReviewGrade(String(input.grade)))
   )
   ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) => enqueueReview(input.itemId))
   ipcMain.handle('review:remove', (_e, itemId: string) => removeReview(itemId))

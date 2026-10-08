@@ -37,3 +37,6 @@ export function daysToGoLabel(days: number | null): string {
   if (days === 1) return '1 day to go'
   return `${days} days to go`
 }
+
+/** Most new cards a day (mirrors NEW_CARDS_PER_DAY_MAX in electron/review.ts, #264). */
+export const NEW_CARDS_PER_DAY_MAX = 25
