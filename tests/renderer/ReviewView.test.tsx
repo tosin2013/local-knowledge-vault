@@ -41,6 +41,25 @@ describe('ReviewView', () => {
     expect(await screen.findByText('Nothing due.')).toBeInTheDocument()
   })
 
+  it('keeps the due card usable when search results overflow the panel', async () => {
+    const lkv = lkvMock()
+    lkv.review.listDue.mockResolvedValue([NOTE])
+    lkv.search.query.mockResolvedValue({
+      hits: Array.from({ length: 8 }, (_, i) => makeHit(`itm_${i}`, { title: `Result ${i}` })),
+    })
+    render(<ReviewView />)
+
+    expect(await screen.findByText('Photosynthesis')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/Search your notes/i), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    expect(await screen.findByText('Result 0')).toBeInTheDocument()
+
+    // The due card's prompt and Reveal stay usable alongside overflowing results.
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    expect(await screen.findByText(/Chlorophyll captures light/)).toBeInTheDocument()
+  })
+
   it('passes the target exam date through to grading', async () => {
     const lkv = lkvMock()
     lkv.review.listDue.mockResolvedValue([NOTE])
