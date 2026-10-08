@@ -527,6 +527,18 @@ export function useNotes(deps: UseNotesDeps) {
     return res
   }
 
+  /** Set or clear a project's exam date (#261), then refresh the project list. */
+  const setProjectExamDate = async (name: string, examDate: string | null) => {
+    if (!window.lkv?.projects?.setExamDate) return
+    try {
+      const res = await window.lkv.projects.setExamDate(name, examDate)
+      await refreshProjects()
+      return res
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const filterSummary = useMemo(() => {
     const parts: string[] = []
     if (filters.para) parts.push(paraLabel(filters.para))
@@ -621,6 +633,7 @@ export function useNotes(deps: UseNotesDeps) {
     renameProject,
     mergeProject,
     deleteProject,
+    setProjectExamDate,
     patchDraft,
     copyItemId,
     selectItem,

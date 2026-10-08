@@ -11,7 +11,22 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import Database from 'better-sqlite3'
-import { initDb, closeDb, createItem, trashItem, updateItem, deleteItem, getDb } from '../electron/db'
+import {
+  initDb,
+  closeDb,
+  createItem,
+  trashItem,
+  updateItem,
+  deleteItem,
+  getDb,
+  normalizeExamDate,
+  getProjectSettings,
+  setProjectExamDate,
+  listProjects,
+  renameProject,
+  mergeProject,
+  deleteProject,
+} from '../electron/db'
 import { cardUnitsForNote, createNoteCards, listCardsForItem, noteCardKey, WHOLE_NOTE_MAX_CHARS } from '../electron/study-cards'
 import {
   anchorFirstIntervalDays,
@@ -25,6 +40,7 @@ import {
   rateReview,
   getCardState,
   listReviewLog,
+  examDateForCard,
 } from '../electron/review'
 import type { ReviewState } from '../electron/types'
 
@@ -266,6 +282,81 @@ function main(): void {
     'listReviewStates returns card rows',
   )
 
+  // --- Exam date per project (#261) ---
+  console.log('\nproject exam dates')
+  assert(normalizeExamDate('2026-06-01') === '2026-06-01', 'a real ISO date is accepted')
+  assert(normalizeExamDate('') === null && normalizeExamDate(null) === null, 'empty clears the date')
+  for (const bad of ['2026-02-30', '06/01/2026', '2026-6-1', 'tomorrow']) {
+    let rejected = false
+    try {
+      normalizeExamDate(bad)
+    } catch {
+      rejected = true
+    }
+    assert(rejected, `"${bad}" is rejected`)
+  }
+  let noName = false
+  try {
+    setProjectExamDate('  ', '2026-06-01')
+  } catch {
+    noName = true
+  }
+  assert(noName, 'a project name is required')
+
+  const bio = createItem({ title: 'Bio note', body: 'Osmosis moves water.', kind: 'note', para: 'resources', project: 'Bio' })
+  assert(getProjectSettings('Bio').examDate === null, 'a project starts with no exam date')
+  setProjectExamDate('Bio', '2027-01-15')
+  assert(getProjectSettings('Bio').examDate === '2027-01-15', 'the exam date is saved')
+  assert(listProjects().find((p) => p.name === 'Bio')?.examDate === '2027-01-15', 'listProjects returns examDate')
+  assert(listProjects().find((p) => p.name === 'Alpha')?.examDate === null, 'projects without a date list null')
+
+  // A card reads the date from its note's current project.
+  enqueueReview(bio.id)
+  const bioCard = listCardsForItem(bio.id)[0]
+  assert(examDateForCard(bioCard.id) === '2027-01-15', 'a card reads its project exam date')
+  const examIn20 = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10)
+  setProjectExamDate('Bio', examIn20)
+  assert(rateReview(bioCard.id, 'good').intervalDays === 3, 'rateReview anchors the first Good to the exam date (20 d → 3 d)')
+  const loose = createItem({ title: 'Loose note', body: 'No project here.', kind: 'note', para: 'resources' })
+  enqueueReview(loose.id)
+  const looseCard = listCardsForItem(loose.id)[0]
+  assert(examDateForCard(looseCard.id) === null, 'a note with no project has no exam date')
+  assert(rateReview(looseCard.id, 'good').intervalDays === 1, 'no project → plain first interval')
+  updateItem(loose.id, { project: 'Bio' })
+  assert(examDateForCard(looseCard.id) === examIn20, 'moving a note into a project picks up its exam date')
+
+  // Rename carries the settings; the destination keeps its own date on conflict.
+  renameProject('Bio', 'Biology')
+  assert(getProjectSettings('Bio').examDate === null, 'rename removes the old settings row')
+  assert(getProjectSettings('Biology').examDate === examIn20, 'rename carries the exam date')
+  assert(examDateForCard(bioCard.id) === examIn20, 'cards follow the renamed project')
+  createItem({ title: 'Chem note', body: 'x', kind: 'note', para: 'resources', project: 'Chem' })
+  setProjectExamDate('Chem', '2027-03-01')
+  createItem({ title: 'Phys note', body: 'x', kind: 'note', para: 'resources', project: 'Phys' })
+  setProjectExamDate('Phys', '2027-04-01')
+  renameProject('Phys', 'Chem')
+  assert(getProjectSettings('Chem').examDate === '2027-03-01', 'renaming onto a dated project keeps the destination date')
+  assert(getProjectSettings('Phys').examDate === null, 'and drops the source row')
+
+  // Merge: the destination's date wins; a destination with none takes the source's.
+  mergeProject('Biology', 'Chem')
+  assert(getProjectSettings('Chem').examDate === '2027-03-01', 'merge keeps the destination date')
+  assert(getProjectSettings('Biology').examDate === null, 'merge removes the source settings')
+  createItem({ title: 'Geo note', body: 'x', kind: 'note', para: 'resources', project: 'Geo' })
+  createItem({ title: 'Hist note', body: 'x', kind: 'note', para: 'resources', project: 'Hist' })
+  setProjectExamDate('Geo', '2027-05-01')
+  mergeProject('Geo', 'Hist')
+  assert(getProjectSettings('Hist').examDate === '2027-05-01', 'merge into an undated project takes the source date')
+  setProjectExamDate('Hist', null)
+  assert(getProjectSettings('Hist').examDate === null, 'the date can be cleared')
+
+  // Delete removes the settings with the notes.
+  deleteProject('Chem')
+  assert(
+    (getDb().prepare(`SELECT COUNT(*) AS c FROM project_settings WHERE name = 'Chem'`).get() as { c: number }).c === 0,
+    'deleting a project removes its settings',
+  )
+
   closeDb()
 
   // --- Migration v6 → v7: note-keyed review_schedule rows become cards ---
@@ -324,6 +415,23 @@ function main(): void {
   // Re-opening is a no-op (idempotent).
   initDb(migPath)
   assert(listCardsForItem(n1.id).length === 1, 're-opening the migrated vault adds nothing')
+  closeDb()
+
+  // --- Migration v7 → v8: an existing v7 vault gains project_settings ---
+  console.log('\nmigration v8 (project_settings)')
+  const v7Path = path.join(tmp, 'v7.sqlite')
+  initDb(v7Path)
+  createItem({ title: 'Existing', body: 'x', kind: 'note', para: 'resources', project: 'Kept' })
+  closeDb()
+  const raw7 = new Database(v7Path)
+  raw7.exec('DROP TABLE project_settings')
+  raw7.pragma('user_version = 7')
+  raw7.close()
+  initDb(v7Path)
+  assert(Number(getDb().pragma('user_version', { simple: true })) >= 8, 'v7 vault upgrades')
+  assert(listProjects().some((p) => p.name === 'Kept' && p.examDate === null), 'existing projects list with no date')
+  setProjectExamDate('Kept', '2027-02-02')
+  assert(getProjectSettings('Kept').examDate === '2027-02-02', 'the upgraded vault stores exam dates')
   closeDb()
 
   // A fresh vault drops the empty v3 table instead of keeping an empty backup.

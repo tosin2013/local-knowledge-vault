@@ -88,6 +88,21 @@ note (after removing it) splits it into chunk cards.
   `card_text`, `origin`, `question`, `answer` and `quote`.
 - `review:remove` removes all of a note's cards.
 
+### Exam date per project (#261, migration v8)
+
+Projects are derived from `items.project`, so settings live in a separate `project_settings` table
+(`name` primary key, `exam_date`, timestamps):
+
+- **Rename:** the row moves with the project.
+- **Merge:** the destination keeps its own date, or takes the source's if it has none.
+- **Delete:** the row is removed.
+
+A card's exam date is read at grading time from its note's *current* project. A note with no project, and the "All
+projects" scope, has no exam date and gets plain spacing.
+
+The old ReviewView "Target exam date" was component state passed to one `review:rate` call and never stored, so
+there is nothing to migrate onto projects. The IPC no longer takes a date from the caller.
+
 ## Consequences
 
 - One schedule per card: a 30-page book can be enrolled at page or chunk level and each part is graded on its own.

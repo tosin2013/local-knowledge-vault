@@ -15,6 +15,7 @@ import EventRepeatIcon from '@mui/icons-material/EventRepeat'
 import AddIcon from '@mui/icons-material/Add'
 import type { VaultPluginRenderProps } from '../../plugins/types'
 import { ProjectSelect } from '../ProjectSelect'
+import { ExamDateControl } from './ExamDateControl'
 import type { ReviewGrade, ReviewQueueItem, SearchHit } from '../../../electron/types'
 
 /** The SM-2-style four-button scale; `again` is the leftmost (worst) grade. */
@@ -33,7 +34,6 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
-  const [targetDate, setTargetDate] = useState('')
   const [searchText, setSearchText] = useState('')
   const [results, setResults] = useState<SearchHit[]>([])
   const [searching, setSearching] = useState(false)
@@ -78,11 +78,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
     }
     setError(null)
     try {
-      await window.lkv.review.rate({
-        cardId: item.card_id,
-        grade,
-        targetDate: targetDate || undefined,
-      })
+      await window.lkv.review.rate({ cardId: item.card_id, grade })
       setIndex((i) => i + 1)
       setRevealed(false)
       setStatus(`Graded “${grade}”.`)
@@ -120,10 +116,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
     }
     setError(null)
     try {
-      const res = await window.lkv.review.enqueue({
-        itemId: hit.id,
-        targetDate: targetDate || undefined,
-      })
+      const res = await window.lkv.review.enqueue({ itemId: hit.id })
       setAdded((prev) => ({ ...prev, [hit.id]: true }))
       setStatus(
         res?.alreadyEnrolled
@@ -161,7 +154,10 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
         schedules the next review.
       </Typography>
 
-      <ProjectSelect value={project} onChange={setProject} label="Project" />
+      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+        <ProjectSelect value={project} onChange={setProject} label="Project" />
+        <ExamDateControl project={project} />
+      </Stack>
 
       {!hasReviewApi && (
         <Alert severity="warning">Review IPC unavailable — restart Vault after updating.</Alert>
@@ -261,16 +257,6 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
         <Button size="small" variant="contained" disabled={searching} onClick={() => void runSearch()}>
           {searching ? 'Searching…' : 'Search'}
         </Button>
-        <TextField
-          size="small"
-          type="date"
-          label="Target exam date"
-          value={targetDate}
-          onChange={(e) => setTargetDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          inputProps={{ 'aria-label': 'Target exam date' }}
-          sx={{ width: 190 }}
-        />
       </Stack>
 
       {results.length > 0 && (
@@ -301,7 +287,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
 
       <Typography variant="caption" color="text.secondary">
         Intervals are SM-2-style and expand as you recall a note; spacing your reviews beats cramming.
-        A target exam date anchors the first interval to your deadline.
+        A project's exam date anchors the first interval to your deadline.
       </Typography>
 
       {!hasSearchApi && (

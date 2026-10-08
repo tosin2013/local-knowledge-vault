@@ -14,6 +14,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     onRename: vi.fn(),
     onMerge: vi.fn(),
     onDelete: vi.fn(),
+    onSetExamDate: vi.fn(),
     ...overrides,
   }
 }
@@ -51,6 +52,46 @@ describe('ManageProjectsDialog', () => {
     render(<ManageProjectsDialog {...props} />)
     fireEvent.click(screen.getAllByText('Delete')[0])
     expect(props.onDelete).toHaveBeenCalledWith('Work')
+  })
+
+  it('shows each project\'s saved exam date', () => {
+    render(
+      <ManageProjectsDialog
+        {...makeProps({
+          projects: [
+            { name: 'Biology', count: 8, examDate: '2099-06-01' },
+            { name: 'Home', count: 1, examDate: null },
+          ],
+        })}
+      />,
+    )
+    expect(screen.getByText(/8 notes · Exam Jun 1, 2099 \(\d+ days to go\)/)).toBeInTheDocument()
+    expect(screen.getByText('1 note')).toBeInTheDocument()
+  })
+
+  it('sets an exam date for a project', () => {
+    const props = makeProps()
+    render(<ManageProjectsDialog {...props} />)
+    fireEvent.click(screen.getAllByText('Exam date')[0])
+    const field = screen.getByLabelText('Exam date for Work')
+    expect(screen.getByText('Save')).toBeDisabled()
+    fireEvent.change(field, { target: { value: '2026-12-01' } })
+    fireEvent.click(screen.getByText('Save'))
+    expect(props.onSetExamDate).toHaveBeenCalledWith('Work', '2026-12-01')
+  })
+
+  it('clears a saved exam date', () => {
+    const props = makeProps({ projects: [{ name: 'Biology', count: 8, examDate: '2099-06-01' }] })
+    render(<ManageProjectsDialog {...props} />)
+    fireEvent.click(screen.getByText('Exam date'))
+    expect(screen.getByLabelText('Exam date for Biology')).toHaveValue('2099-06-01')
+    fireEvent.click(screen.getByText('Clear'))
+    expect(props.onSetExamDate).toHaveBeenCalledWith('Biology', null)
+  })
+
+  it('hides the exam-date action when no setter is wired', () => {
+    render(<ManageProjectsDialog {...makeProps({ onSetExamDate: undefined })} />)
+    expect(screen.queryByText('Exam date')).not.toBeInTheDocument()
   })
 
   it('shows the empty state when there are no projects', () => {

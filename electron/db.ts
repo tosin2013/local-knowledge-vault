@@ -20,6 +20,7 @@ import type {
   Prompt,
   ProjectResult,
   ProjectSummary,
+  ProjectSettings,
   UpdateChatProfilePatch,
   UpdateItemPatch,
   UpdatePromptPatch,
@@ -62,7 +63,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 7
+export const SCHEMA_VERSION = 8
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -88,6 +89,9 @@ function migrate(database: Database.Database): void {
   }
   if (version < 7) {
     migrateV7(database)
+  }
+  if (version < 8) {
+    migrateV8(database)
   }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
@@ -187,6 +191,24 @@ function migrateV6(database: Database.Database): void {
       VALUES ('delete', old.rowid, old.body);
       INSERT INTO note_chunks_fts(rowid, body) VALUES (new.rowid, new.body);
     END;
+  `)
+}
+
+/**
+ * v8 (#261): per-project settings. Projects are derived from `items.project`, so
+ * there was nowhere to keep a setting such as the exam date. Rows are keyed by
+ * the project name and follow renames, merges and deletes (see
+ * `moveProjectSettings`). There is nothing to backfill: the old ReviewView
+ * "Target exam date" was never persisted (it only anchored one grade).
+ */
+function migrateV8(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS project_settings (
+      name TEXT PRIMARY KEY,
+      exam_date TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `)
 }
 
@@ -626,14 +648,88 @@ export function listItemsByProjectExact(project: string, kind?: string): Item[] 
 export function listProjects(): ProjectSummary[] {
   const rows = getDb()
     .prepare(
-      `SELECT project AS name, COUNT(*) AS count
-       FROM items
-       WHERE project IS NOT NULL AND TRIM(project) != '' AND status != 'trashed'
-       GROUP BY project
-       ORDER BY project COLLATE NOCASE`
+      `SELECT i.project AS name, COUNT(*) AS count, ps.exam_date AS exam_date
+       FROM items i
+       LEFT JOIN project_settings ps ON ps.name = i.project
+       WHERE i.project IS NOT NULL AND TRIM(i.project) != '' AND i.status != 'trashed'
+       GROUP BY i.project
+       ORDER BY i.project COLLATE NOCASE`
     )
-    .all() as Array<{ name: string; count: number }>
-  return rows.map((r) => ({ name: String(r.name), count: Number(r.count) }))
+    .all() as Array<{ name: string; count: number; exam_date: string | null }>
+  return rows.map((r) => ({
+    name: String(r.name),
+    count: Number(r.count),
+    examDate: r.exam_date ? String(r.exam_date) : null,
+  }))
+}
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/**
+ * Validate an exam date: `YYYY-MM-DD` that is a real calendar day. Empty or
+ * null clears the date (returns null). Throws on anything else.
+ */
+export function normalizeExamDate(value: string | null | undefined): string | null {
+  const v = (value ?? '').trim()
+  if (!v) return null
+  const m = ISO_DATE.exec(v)
+  if (!m) throw new Error('Exam date must be a date like 2026-06-01')
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  const dt = new Date(Date.UTC(y, mo - 1, d))
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) {
+    throw new Error(`${v} is not a real date`)
+  }
+  return v
+}
+
+/** Settings for one project (an absent row means no settings yet). */
+export function getProjectSettings(name: string): ProjectSettings {
+  const n = (name ?? '').trim()
+  if (!n) return { name: '', examDate: null }
+  const row = getDb().prepare('SELECT exam_date FROM project_settings WHERE name = ?').get(n) as
+    | { exam_date: string | null }
+    | undefined
+  return { name: n, examDate: row?.exam_date ? String(row.exam_date) : null }
+}
+
+/** Set (or clear, with null/'') a project's exam date. */
+export function setProjectExamDate(name: string, examDate: string | null | undefined): ProjectSettings {
+  const n = (name ?? '').trim()
+  if (!n) throw new Error('Pick a project to set its exam date')
+  const date = normalizeExamDate(examDate)
+  const ts = nowIso()
+  getDb()
+    .prepare(
+      `INSERT INTO project_settings (name, exam_date, created_at, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(name) DO UPDATE SET exam_date = excluded.exam_date, updated_at = excluded.updated_at`
+    )
+    .run(n, date, ts, ts)
+  return { name: n, examDate: date }
+}
+
+/**
+ * Carry `from`'s settings to `to` on rename or merge. The destination keeps its
+ * own exam date when it has one; otherwise it takes the source's. The source
+ * row is removed either way.
+ */
+function moveProjectSettings(database: Database.Database, from: string, to: string): void {
+  const src = database.prepare('SELECT * FROM project_settings WHERE name = ?').get(from) as
+    | { exam_date: string | null; created_at: string }
+    | undefined
+  if (!src) return
+  const dst = database.prepare('SELECT exam_date FROM project_settings WHERE name = ?').get(to) as
+    | { exam_date: string | null }
+    | undefined
+  const ts = nowIso()
+  if (!dst) {
+    database
+      .prepare('INSERT INTO project_settings (name, exam_date, created_at, updated_at) VALUES (?, ?, ?, ?)')
+      .run(to, src.exam_date, src.created_at, ts)
+  } else if (!dst.exam_date && src.exam_date) {
+    database.prepare('UPDATE project_settings SET exam_date = ?, updated_at = ? WHERE name = ?').run(src.exam_date, ts, to)
+  }
+  database.prepare('DELETE FROM project_settings WHERE name = ?').run(from)
 }
 
 /** Rename a project (exact match) across notes and chat profiles. */
@@ -643,11 +739,14 @@ export function renameProject(from: string, to: string): ProjectResult {
   if (!prev || !next) throw new Error('Both project names are required')
   if (prev === next) return { count: 0 }
   const database = getDb()
-  const items = database
-    .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
-    .run(next, nowIso(), prev)
-  database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(next, prev)
-  return { count: items.changes }
+  return database.transaction(() => {
+    const items = database
+      .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
+      .run(next, nowIso(), prev)
+    database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(next, prev)
+    moveProjectSettings(database, prev, next)
+    return { count: items.changes }
+  })()
 }
 
 /** Move every note (and chat profile) from `from` into `into`. */
@@ -657,11 +756,14 @@ export function mergeProject(from: string, into: string): ProjectResult {
   if (!src || !dst) throw new Error('Both project names are required')
   if (src === dst) return { count: 0 }
   const database = getDb()
-  const items = database
-    .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
-    .run(dst, nowIso(), src)
-  database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(dst, src)
-  return { count: items.changes }
+  return database.transaction(() => {
+    const items = database
+      .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
+      .run(dst, nowIso(), src)
+    database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(dst, src)
+    moveProjectSettings(database, src, dst)
+    return { count: items.changes }
+  })()
 }
 
 /** Delete every note (and chat profile) under a project name. */
@@ -669,9 +771,12 @@ export function deleteProject(name: string): ProjectResult {
   const n = (name ?? '').trim()
   if (!n) throw new Error('Project name is required')
   const database = getDb()
-  const items = database.prepare('DELETE FROM items WHERE project = ?').run(n)
-  database.prepare('DELETE FROM chat_profiles WHERE project = ?').run(n)
-  return { count: items.changes }
+  return database.transaction(() => {
+    const items = database.prepare('DELETE FROM items WHERE project = ?').run(n)
+    database.prepare('DELETE FROM chat_profiles WHERE project = ?').run(n)
+    database.prepare('DELETE FROM project_settings WHERE name = ?').run(n)
+    return { count: items.changes }
+  })()
 }
 
 export function getItem(id: string): Item | null {

@@ -58,6 +58,7 @@ import type {
   ProviderSelection,
   ProviderTestResult,
   ProjectResult,
+  ProjectSettings,
   ProjectSummary,
   RemovedPlugin,
   OllamaHealth,
@@ -245,6 +246,11 @@ const api = {
       ipcRenderer.invoke('projects:merge', from, into),
     delete: (name: string): Promise<ProjectResult> =>
       ipcRenderer.invoke('projects:delete', name),
+    getSettings: (name: string): Promise<ProjectSettings> =>
+      ipcRenderer.invoke('projects:getSettings', name),
+    /** Set or clear (null / '') a project's exam date (`YYYY-MM-DD`). */
+    setExamDate: (name: string, examDate: string | null): Promise<ProjectSettings> =>
+      ipcRenderer.invoke('projects:setExamDate', name, examDate),
   },
   citationPack: {
     export: (input: CitationPackExportInput): Promise<CitationPackExportResult> =>

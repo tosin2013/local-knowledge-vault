@@ -470,6 +470,7 @@ export default function App() {
           onRename={(from, to) => void notes.renameProject(from, to)}
           onMerge={(from, into) => void notes.mergeProject(from, into)}
           onDelete={(name) => void notes.deleteProject(name)}
+          onSetExamDate={(name, date) => void notes.setProjectExamDate(name, date)}
         />
 
         <TrashDialog
