@@ -48,6 +48,7 @@ import {
 import { FirstRunLocalCard, SmallModelHint } from '../components/ai/FirstRunLocalCard'
 import { ProvidersPanel } from '../components/ai/ProvidersPanel'
 import { AnswerProviderChip } from '../components/ai/AnswerProviderChip'
+import { UncitedAnswerChip } from '../components/ai/UncitedAnswerChip'
 
 export interface ChatViewProps {
   advanced: boolean
@@ -333,6 +334,7 @@ export function ChatView(props: ChatViewProps) {
                     </Stack>
                   )}
                   {m.role === 'assistant' && <AnswerProviderChip providerJson={m.provider_json} />}
+                  {m.role === 'assistant' && <UncitedAnswerChip uncited={m.uncited} />}
                   {m.role === 'assistant' && (
                     <Button
                       size="small"

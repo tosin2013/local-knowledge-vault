@@ -1,0 +1,16 @@
+{
+  "$comment": "Completion bar for #235: an honest 'not in your notes' answer is no longer flagged as a grounding failure, and the uncited warning is per-message metadata (a UI chip) instead of text baked into the stored content. Legacy rows carrying the embedded label are cleaned on read. Verified failing first: finalizeAnswer embedded the label into every uncited answer including refusals, and ChatMessage had no uncited field.",
+  "authority_id": "235",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q 'isHonestRefusal' electron/generate.ts" },
+    { "check": "command_exit", "target": "grep -q 'stripUncitedLabel' electron/db.ts" },
+    { "check": "command_exit", "target": "grep -q 'uncited' electron/types.ts" },
+    { "check": "command_exit", "target": "grep -q 'migrateV5' electron/db.ts" },
+    { "check": "file_exists", "target": "src/components/ai/UncitedAnswerChip.tsx" },
+    { "check": "tests_pass", "target": "npm run test:grounding-routing" },
+    { "check": "tests_pass", "target": "npm run test:mvp" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

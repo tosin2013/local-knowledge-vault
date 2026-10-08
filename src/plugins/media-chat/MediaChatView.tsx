@@ -670,6 +670,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         session_id: sessionId ?? '',
         role: 'user',
         content: rawInput,
+        uncited: false,
         citations_json: null,
         hits_json: null,
         provider_json: null,

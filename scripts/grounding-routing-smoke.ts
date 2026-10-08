@@ -62,7 +62,7 @@ async function main(): Promise<void> {
 
   // 1) Initialize DB
   const dbFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-gr-')), 'test.sqlite')
-  const { initDb, closeDb, getDb, createItem, createSession, createPrompt } = require('../electron/db')
+  const { initDb, closeDb, getDb, createItem, createSession, createPrompt, appendMessage, listMessages } = require('../electron/db')
   initDb(dbFile)
 
   // Create some test items for citation testing
@@ -219,16 +219,54 @@ async function main(): Promise<void> {
     stripInvalidCitations('No markers at all.', ['itm_1']) === 'No markers at all.',
     'stripInvalidCitations leaves clean text untouched'
   )
+  const cited = finalizeAnswer('Answer [itm_1].', ['itm_1'])
   assert(
-    finalizeAnswer('Answer [itm_1].', ['itm_1']) === 'Answer [itm_1].',
+    cited.answer === 'Answer [itm_1].' && cited.uncited === false,
     'finalizeAnswer keeps a cited answer unchanged'
   )
+  const uncitedFin = finalizeAnswer('Answer [itm_fake].', ['itm_1'])
   assert(
-    finalizeAnswer('Answer [itm_fake].', ['itm_1']) === `${UNCITED_LABEL}\n\nAnswer.`,
-    'finalizeAnswer labels an answer that cites nothing'
+    uncitedFin.answer === 'Answer.' && uncitedFin.uncited === true,
+    'finalizeAnswer flags an answer that cites nothing (label not in text)'
+  )
+  const refusalFin = finalizeAnswer(
+    "I'm sorry, but none of the passages contain information about that.",
+    ['itm_1']
   )
   assert(
-    finalizeAnswer('   ', ['itm_1']) === '(empty model response)',
+    refusalFin.uncited === false,
+    'finalizeAnswer does not flag an honest "not in your notes" refusal (#235)'
+  )
+  const refusalFin2 = finalizeAnswer(
+    'The notes do not cover this topic.',
+    ['itm_1']
+  )
+  assert(refusalFin2.uncited === false, 'a plain "notes do not cover this" is not flagged (#235)')
+  assert(
+    finalizeAnswer('None of the passages you provided contain information about vitamin D.', ['itm_1'])
+      .uncited === false,
+    '"none of the passages contain…" is not flagged (#235)'
+  )
+  assert(
+    finalizeAnswer('I could not find this in the provided excerpts.', ['itm_1']).uncited === false,
+    '"could not find this in the excerpts" is not flagged (#235)'
+  )
+  assert(
+    finalizeAnswer('There is no information about vitamin D in the notes.', ['itm_1']).uncited
+      === false,
+    '"no information in the notes" is not flagged (#235)'
+  )
+  assert(
+    finalizeAnswer('Vitamin D is a fat-soluble vitamin.', ['itm_1']).uncited === true,
+    'a substantive uncited answer is still flagged (#235)'
+  )
+  assert(
+    finalizeAnswer('Answer: take 2000 IU daily.', ['itm_1']).uncited === true,
+    'a short factual answer with no citation is still flagged (#235)'
+  )
+  const emptyFin = finalizeAnswer('   ', ['itm_1'])
+  assert(
+    emptyFin.answer === '(empty model response)' && emptyFin.uncited === false,
     'finalizeAnswer empty text is the sentinel, not labelled'
   )
 
@@ -290,10 +328,37 @@ async function main(): Promise<void> {
   const withPrompt = await sendChatTurn({ sessionId: session.id, text: 'test', promptId: prompt.id, filters: { project: 'test' } })
   assert(withPrompt.assistant.content.includes('Prompt answer'), 'sendChatTurn uses prompt body as systemExtra')
 
-  // --- sendChatTurn: uncited answer is labelled (#38) ---
+  // --- sendChatTurn: uncited answer is flagged as metadata, never stored text (#38, #235) ---
   setMockLlmGenerate({ ok: true, text: 'An answer that cites nothing' })
   const uncited = await sendChatTurn({ sessionId: session.id, text: 'alpha', filters: { project: 'test' } })
-  assert(uncited.assistant.content.startsWith(UNCITED_LABEL), 'sendChatTurn labels an uncited answer')
+  assert(
+    uncited.assistant.uncited === true && !uncited.assistant.content.includes(UNCITED_LABEL),
+    'sendChatTurn flags an uncited answer as metadata, label not in content (#235)'
+  )
+  // Round-trip: the flag survives persistence, the text stays clean.
+  const reread = listMessages(session.id).find((m) => m.id === uncited.assistant.id)
+  assert(
+    !!reread && reread.uncited === true && !reread.content.includes(UNCITED_LABEL),
+    'uncited flag persists and the stored content never carries the label (#235)'
+  )
+  // Legacy rows: text written before #235 still embeds the label; reads strip it.
+  const legacyRowId = 'msg_legacy_235'
+  getDb()
+    .prepare(
+      `INSERT INTO chat_messages (id, session_id, role, content, citations_json, hits_json, provider_json, uncited, created_at)
+       VALUES (?, ?, 'assistant', ?, NULL, NULL, NULL, 1, ?)`
+    )
+    .run(
+      legacyRowId,
+      session.id,
+      `${UNCITED_LABEL}\n\nI'm sorry, but none of the passages contain information about that.`,
+      new Date().toISOString()
+    )
+  const legacy = listMessages(session.id).find((m) => m.id === legacyRowId)
+  assert(
+    !!legacy && !legacy.content.includes(UNCITED_LABEL) && legacy.content.startsWith("I'm sorry"),
+    'legacy rows with the embedded label are cleaned on read (#235)'
+  )
 
   // --- sendChatTurn: hallucinated marker stripped from persisted content (#38) ---
   setMockLlmGenerate({ ok: true, text: 'Answer [itm_zzz999] only' })

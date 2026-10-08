@@ -97,6 +97,7 @@ export function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
     citations_json: JSON.stringify([{ id: 'itm_1', title: 'Note title' }]),
     provider_json: null,
     hits_json: null,
+    uncited: false,
     created_at: '2026-09-28T00:00:00.000Z',
     ...overrides,
   }

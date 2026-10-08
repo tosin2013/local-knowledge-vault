@@ -304,6 +304,7 @@ export function useChat(deps: UseChatDeps) {
         session_id: sessionId,
         role: 'user',
         content: text,
+        uncited: false,
         citations_json: null,
         hits_json: null,
         provider_json: null,

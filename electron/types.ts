@@ -100,6 +100,8 @@ export interface AskGroundedResult {
   answer: string
   citations: Citation[]
   hits: SearchHit[]
+  /** True when the answer has substance but cites nothing (#235): a UI warning, never stored text. */
+  uncited?: boolean
   /** Set when a model produced the answer. */
   provider?: AnswerProvider
   offline?: boolean
@@ -141,6 +143,8 @@ export interface ChatMessage {
   hits_json: string | null
   /** JSON AnswerProvider for model-written assistant messages (#45). */
   provider_json: string | null
+  /** True when the answer had substance but cited nothing (#235). Metadata only; never in `content`. */
+  uncited: boolean
   created_at: string
 }
 
@@ -784,6 +788,8 @@ export interface TestToNotesSuggestion {
   title: string
   body: string
   citations: Citation[]
+  /** True when the corrective note has substance but cites nothing (#235). */
+  uncited?: boolean
   /** True when no model could be reached (body is friendly fallback copy). */
   offline?: boolean
   error?: string
