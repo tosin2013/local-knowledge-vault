@@ -31,6 +31,14 @@ export interface ItemFilters {
 export interface ProjectSummary {
   name: string
   count: number
+  /** Saved exam date (`YYYY-MM-DD`) for this project, or null (#261). */
+  examDate?: string | null
+}
+
+/** Per-project settings (#261). Keyed by project name; follows renames. */
+export interface ProjectSettings {
+  name: string
+  examDate: string | null
 }
 
 /** Result of a project rename/merge/delete (count of notes affected). */
@@ -910,14 +918,10 @@ export interface ReviewRateInput {
   /** Legacy: grade the note's first card when no cardId is given. */
   itemId?: string
   grade: ReviewGrade
-  /** Optional exam date; anchors the first Good interval (Cepeda-style). */
-  targetDate?: string
 }
 
 export interface ReviewEnqueueInput {
   itemId: string
-  /** Optional exam date; anchors the first Good interval (Cepeda-style). */
-  targetDate?: string
 }
 
 /** What enrolling a note produced. */

@@ -480,6 +480,14 @@ export function createLkvMock(): LkvMock {
       rename: vi.fn().mockResolvedValue({ count: 0 }),
       merge: vi.fn().mockResolvedValue({ count: 0 }),
       delete: vi.fn().mockResolvedValue({ count: 0 }),
+      getSettings: vi
+        .fn()
+        .mockImplementation((name: string) => Promise.resolve({ name, examDate: null })),
+      setExamDate: vi
+        .fn()
+        .mockImplementation((name: string, examDate: string | null) =>
+          Promise.resolve({ name, examDate: examDate || null }),
+        ),
     },
     citationPack: {
       export: vi.fn().mockResolvedValue(makeCitationPackResult()),

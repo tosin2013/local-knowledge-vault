@@ -33,6 +33,8 @@ import {
   renameProject,
   mergeProject,
   deleteProject,
+  getProjectSettings,
+  setProjectExamDate,
   restoreItem,
   removeSampleNotes,
   trashItem,
@@ -494,11 +496,10 @@ function registerIpc(): void {
     countDueReviews(input?.before, input?.project)
   )
   ipcMain.handle('review:rate', (_e, input: ReviewRateInput) =>
-    rateReview(String(input.cardId ?? input.itemId ?? ''), input.grade, { targetDate: input.targetDate })
+    // The exam date comes from the card's project (#261), not from the caller.
+    rateReview(String(input.cardId ?? input.itemId ?? ''), input.grade)
   )
-  ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) =>
-    enqueueReview(input.itemId, { targetDate: input.targetDate })
-  )
+  ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) => enqueueReview(input.itemId))
   ipcMain.handle('review:remove', (_e, itemId: string) => removeReview(itemId))
 
   // Study mode (#215): recall-before-reveal attempts + calibration.
@@ -762,6 +763,11 @@ function registerIpc(): void {
   ipcMain.handle('projects:rename', (_e, from: string, to: string) => renameProject(from, to))
   ipcMain.handle('projects:merge', (_e, from: string, into: string) => mergeProject(from, into))
   ipcMain.handle('projects:delete', (_e, name: string) => deleteProject(name))
+  // Per-project settings (#261): the exam date drives exam-aware spacing.
+  ipcMain.handle('projects:getSettings', (_e, name: string) => getProjectSettings(String(name ?? '')))
+  ipcMain.handle('projects:setExamDate', (_e, name: string, examDate: string | null) =>
+    setProjectExamDate(String(name ?? ''), examDate ?? null)
+  )
 
   // Citation pack export (Ask session → portable evidence bundle)
   ipcMain.handle('citationPack:export', async (_e, input: CitationPackExportInput) => {

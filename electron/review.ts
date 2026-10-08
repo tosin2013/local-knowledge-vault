@@ -267,7 +267,7 @@ export function countDueReviews(before?: string, project?: string): number {
  * chunk for a long note), each due now. Re-enqueuing a note that already has
  * cards leaves them untouched (never resurrects a schedule).
  */
-export function enqueueReview(itemId: string, _opts: { targetDate?: string } = {}): ReviewEnqueueResult {
+export function enqueueReview(itemId: string): ReviewEnqueueResult {
   const { created, alreadyEnrolled } = createNoteCards(itemId)
   const total = getDb()
     .prepare('SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ?')
@@ -282,6 +282,24 @@ export function removeReview(itemId: string): boolean {
 }
 
 /**
+ * The exam date that applies to a card: its note's *current* project's saved
+ * exam date (#261). Notes with no project, or a project with no date, have
+ * none, so they get plain spacing with no exam anchor or cap.
+ */
+export function examDateForCard(cardId: string): string | null {
+  const row = getDb()
+    .prepare(
+      `SELECT ps.exam_date AS exam_date
+       FROM study_cards c
+       JOIN items i ON i.id = c.item_id
+       LEFT JOIN project_settings ps ON ps.name = i.project
+       WHERE c.id = ?`,
+    )
+    .get(cardId) as { exam_date: string | null } | undefined
+  return row?.exam_date ? String(row.exam_date) : null
+}
+
+/**
  * Record a grade for a card, persist the next schedule and log the review.
  * Pass a card id; a note id (legacy callers) grades that note's first card.
  * Missing state is treated as a fresh card (interval 0, ease 2.5).
@@ -289,7 +307,7 @@ export function removeReview(itemId: string): boolean {
 export function rateReview(
   cardOrItemId: string,
   grade: ReviewGrade,
-  opts: { targetDate?: string } = {},
+  opts: { targetDate?: string | null } = {},
 ): ReviewState {
   const database = getDb()
   const isCard = !!database.prepare('SELECT 1 FROM study_cards WHERE id = ?').get(cardOrItemId)
@@ -302,7 +320,9 @@ export function rateReview(
     reps: 0,
     lapses: 0,
   }
-  const { state, dueAt } = scheduleReview(prev, grade, { targetDate: opts.targetDate })
+  // `opts.targetDate` overrides the project's date (tests); `null` means none.
+  const examDate = opts.targetDate !== undefined ? opts.targetDate : examDateForCard(cardId)
+  const { state, dueAt } = scheduleReview(prev, grade, { targetDate: examDate ?? undefined })
   const ts = nowIso()
 
   database.transaction(() => {

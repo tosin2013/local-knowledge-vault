@@ -260,6 +260,9 @@ async function main(): Promise<void> {
     'testToNotes:analyze', 'testToNotes:parse',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
+    // projects + per-project settings (#261)
+    'projects:list', 'projects:rename', 'projects:merge', 'projects:delete',
+    'projects:getSettings', 'projects:setExamDate',
     // study (#215)
     'study:record', 'study:listRecent', 'study:calibration', 'study:questions',
     // ollama
@@ -328,6 +331,33 @@ async function main(): Promise<void> {
 
   const dueCount = await ipcRendererMock.invoke('review:count') as number
   assert(typeof dueCount === 'number', 'review:count returns a number')
+
+  // Exam date per project (#261): set, read back, listed, validated, and used by review:rate.
+  const examNote = await ipcRendererMock.invoke('items:create', {
+    title: 'Exam note', body: 'Mitosis has four phases.', kind: 'note', project: 'IPC Exam',
+  }) as { id: string }
+  const examDay = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10)
+  const setRes = await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', examDay) as { examDate: string | null }
+  assert(setRes.examDate === examDay, 'projects:setExamDate saves the date')
+  const gotRes = await ipcRendererMock.invoke('projects:getSettings', 'IPC Exam') as { examDate: string | null }
+  assert(gotRes.examDate === examDay, 'projects:getSettings reads it back')
+  const projList = await ipcRendererMock.invoke('projects:list') as Array<{ name: string; examDate?: string | null }>
+  assert(projList.some((p) => p.name === 'IPC Exam' && p.examDate === examDay), 'projects:list includes examDate')
+  let badDate = false
+  try {
+    await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', '2026-02-30')
+  } catch {
+    badDate = true
+  }
+  assert(badDate, 'projects:setExamDate rejects an impossible date')
+  const enq = await ipcRendererMock.invoke('review:enqueue', { itemId: examNote.id }) as { created: number }
+  assert(enq.created === 1, 'review:enqueue creates a card')
+  const dueCards = await ipcRendererMock.invoke('review:listDue', { project: 'IPC Exam' }) as Array<{ card_id: string }>
+  const examRated = await ipcRendererMock.invoke('review:rate', { cardId: dueCards[0].card_id, grade: 'good' }) as { intervalDays: number }
+  // 20 days out → the Cepeda anchor gives 3 days (15%), not the plain 1-day first interval.
+  assert(examRated.intervalDays === 3, 'review:rate anchors the first interval to the project exam date')
+  const cleared = await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', null) as { examDate: string | null }
+  assert(cleared.examDate === null, 'projects:setExamDate clears with null')
 
   const studyRecent = await ipcRendererMock.invoke('study:listRecent') as unknown[]
   assert(Array.isArray(studyRecent), 'study:listRecent returns an array')

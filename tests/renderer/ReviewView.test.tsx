@@ -33,7 +33,6 @@ describe('ReviewView', () => {
       expect(lkv.review.rate).toHaveBeenCalledWith({
         cardId: 'crd_itm_1',
         grade: 'good',
-        targetDate: undefined,
       }),
     )
 
@@ -76,24 +75,64 @@ describe('ReviewView', () => {
     expect(screen.queryByText('Bio · p.4')).not.toBeInTheDocument()
   })
 
-  it('passes the target exam date through to grading', async () => {
+  it('shows the project exam date and grades without sending a date', async () => {
     const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 2, examDate: '2099-06-01' }])
+    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01' })
     lkv.review.listDue.mockResolvedValue([NOTE])
     render(<ReviewView />)
 
-    fireEvent.change(await screen.findByLabelText(/Target exam date/i), {
-      target: { value: '2026-06-01' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Easy' }))
+    // All projects has no exam date.
+    expect(await screen.findByTestId('exam-date-none')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Target exam date/i)).not.toBeInTheDocument()
 
-    await waitFor(() =>
-      expect(lkv.review.rate).toHaveBeenCalledWith({
-        cardId: 'crd_itm_1',
-        grade: 'easy',
-        targetDate: '2026-06-01',
-      }),
-    )
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Biology' }))
+    expect(await screen.findByText('Jun 1, 2099')).toBeInTheDocument()
+    expect(lkv.projects.getSettings).toHaveBeenCalledWith('Biology')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Easy' }))
+    // The main process reads the date from the card's project.
+    await waitFor(() => expect(lkv.review.rate).toHaveBeenCalledWith({ cardId: 'crd_itm_1', grade: 'easy' }))
+  })
+
+  it('sets the project exam date from Study', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 2 }])
+    render(<ReviewView />)
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Biology' }))
+    expect(await screen.findByText('No exam date for Biology')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Set exam date' }))
+    fireEvent.change(screen.getByLabelText('Exam date'), { target: { value: '2099-06-01' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(lkv.projects.setExamDate).toHaveBeenCalledWith('Biology', '2099-06-01'))
+    expect(await screen.findByText('Jun 1, 2099')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+  })
+
+  it('shows a validation error from the main process', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 2, examDate: '2099-06-01' }])
+    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01' })
+    lkv.projects.setExamDate.mockRejectedValue(new Error('2026-02-30 is not a real date'))
+    render(<ReviewView />)
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Biology' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Exam date'), { target: { value: '2026-02-28' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('2026-02-30 is not a real date')).toBeInTheDocument()
+
+    // Clear removes the date.
+    lkv.projects.setExamDate.mockResolvedValue({ name: 'Biology', examDate: null })
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    await waitFor(() => expect(lkv.projects.setExamDate).toHaveBeenLastCalledWith('Biology', null))
+    expect(await screen.findByText('No exam date for Biology')).toBeInTheDocument()
   })
 
   it('searches notes and enqueues one for review', async () => {
@@ -110,10 +149,7 @@ describe('ReviewView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add to review' }))
 
     await waitFor(() =>
-      expect(lkv.review.enqueue).toHaveBeenCalledWith({
-        itemId: 'itm_9',
-        targetDate: undefined,
-      }),
+      expect(lkv.review.enqueue).toHaveBeenCalledWith({ itemId: 'itm_9' }),
     )
     expect(await screen.findByText('Added “Cell biology” to review.')).toBeInTheDocument()
   })
