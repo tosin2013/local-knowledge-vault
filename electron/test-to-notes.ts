@@ -15,6 +15,7 @@ import type {
 } from './types'
 import { searchQuery } from './search'
 import { llmGenerate } from './llm'
+import { isRateLimited, retryAfterMs } from './providers/http'
 import {
   buildGroundedMessages,
   citationsFromIds,
@@ -94,7 +95,14 @@ export async function parseTestResultsWithAi(
 
   const gen = await llmGenerate({ system: TEST_TO_NOTES_PARSE_SYSTEM, prompt: `Test results:\n${raw}` })
   if (!gen.ok) {
-    return { items: parseTestResults(raw), offline: true, error: gen.error }
+    const rateLimited = isRateLimited(gen.error)
+    return {
+      items: parseTestResults(raw),
+      offline: !rateLimited,
+      rateLimited,
+      retryAfterMs: rateLimited ? retryAfterMs(gen.error) : undefined,
+      error: gen.error,
+    }
   }
   const parsed = parseAiJson(gen.text)
   if (parsed && parsed.length > 0) return { items: parsed }
@@ -160,13 +168,16 @@ export async function analyzeTestResults(
     })
     const gen = await llmGenerate(messages)
     if (!gen.ok) {
+      const rateLimited = isRateLimited(gen.error)
       suggestions.push({
         question,
         yourAnswer,
         title,
         body: offlineCopy(gen, 'Showing no corrective note — check your notes directly'),
         citations: [],
-        offline: true,
+        offline: !rateLimited,
+        rateLimited,
+        retryAfterMs: rateLimited ? retryAfterMs(gen.error) : undefined,
         error: gen.error,
       })
       continue

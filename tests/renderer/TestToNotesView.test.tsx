@@ -126,4 +126,42 @@ describe('TestToNotesView', () => {
     expect(screen.queryByRole('button', { name: 'Suggest fixes' })).not.toBeInTheDocument()
     expect(lkv.testToNotes.analyze).not.toHaveBeenCalled()
   })
+
+  it('shows a rate-limited banner and Retry for a 429 parse, never the raw error', async () => {
+    const lkv = lkvMock()
+    lkv.testToNotes.parse.mockResolvedValue({
+      items: ITEMS,
+      rateLimited: true,
+      retryAfterMs: 12000,
+      error: 'Groq HTTP 429: rate limit reached for org_abc123',
+    })
+    render(<TestToNotesView />)
+    paste(PASTE)
+
+    expect(await screen.findByText(/Rate limited/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry with AI' })).toBeInTheDocument()
+    expect(screen.queryByText(/org_abc123/)).not.toBeInTheDocument()
+  })
+
+  it('does not offer to save a rate-limited draft', async () => {
+    const lkv = lkvMock()
+    lkv.testToNotes.parse.mockResolvedValue({ items: ITEMS })
+    lkv.testToNotes.analyze.mockResolvedValue([
+      {
+        question: 'What is 2 + 2?',
+        yourAnswer: '5',
+        title: 'Fix: What is 2 + 2?',
+        body: 'Rate limited by Groq — try again in 12 s.',
+        citations: [],
+        rateLimited: true,
+        retryAfterMs: 12000,
+      },
+    ])
+    render(<TestToNotesView />)
+    paste(PASTE)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Suggest fixes' }))
+    expect(await screen.findByText(/Rate limited by Groq/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save as draft note' })).not.toBeInTheDocument()
+  })
 })
