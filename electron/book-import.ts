@@ -201,9 +201,26 @@ export function groupPages(pages: string[], opts?: { maxChars?: number }): PageG
   const flush = (): void => {
     if (buf.length === 0) return
     const text = buf.join('\n\n').replace(/\s+/g, ' ').trim()
-    if (text) groups.push({ text, startPage, endPage })
-    buf = []
-    bufChars = 0
+    if (!text) {
+      buf = []
+      bufChars = 0
+      return
+    }
+    // Carry a trailing sentence fragment (no terminal punctuation) into the
+    // next note, so a sentence split across a page boundary is joined instead
+    // of being cut mid-idea (#272).
+    const m = text.match(/([.!?])\s+([^.!?]+)$/)
+    if (m && m[2].length <= maxChars) {
+      const complete = text.slice(0, m.index! + 1).trim()
+      if (complete) groups.push({ text: complete, startPage, endPage })
+      buf = [m[2]]
+      bufChars = m[2].length
+      startPage = endPage
+    } else {
+      groups.push({ text, startPage, endPage })
+      buf = []
+      bufChars = 0
+    }
   }
 
   for (let i = 0; i < pages.length; i++) {
