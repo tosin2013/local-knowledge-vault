@@ -17,8 +17,8 @@ import {
   listRecentAttempts,
   studyCalibration,
 } from '../electron/study'
-import { parseQuestions } from '../electron/study-questions'
-import { initDb, closeDb } from '../electron/db'
+import { parseQuestions, listEligibleChunks, sampleStudyPassages, MAX_SOURCE_NOTES } from '../electron/study-questions'
+import { initDb, closeDb, createItem } from '../electron/db'
 import type { StudyAttempt, StudySelfGrade } from '../electron/types'
 
 let passed = 0
@@ -82,6 +82,34 @@ async function main(): Promise<void> {
   assert(questions[2] === 'What is an Area?', 'dash bullets are stripped')
   assert(questions[3] === 'What is a Resource?', 'star bullets are stripped')
   assert(questions[4] === 'What is a Project?', 'Q3: prefixes are stripped')
+
+  // --- #271: sample questions draw from every kind, spread across the scope ---
+  console.log('\n#271 sample-question sources')
+  const book = createItem({ title: 'Book page', body: 'Photosynthesis turns light into chemical energy.', kind: 'book', para: 'resources', project: 'Biology' })
+  const article = createItem({ title: 'Web article', body: 'The mitochondria is the powerhouse of the cell.', kind: 'article', para: 'resources', project: 'Biology' })
+  const plain = createItem({ title: 'Plain note', body: 'PARA is Projects, Areas, Resources, Archives.', kind: 'note', para: 'resources', project: 'Biology' })
+
+  const bioChunks = listEligibleChunks('Biology')
+  assert(
+    bioChunks.some((c) => c.itemId === book.id) &&
+      bioChunks.some((c) => c.itemId === article.id) &&
+      bioChunks.some((c) => c.itemId === plain.id),
+    'eligible chunks include book, article and note kinds',
+  )
+  assert(listEligibleChunks('Biology').length >= 3, 'a book/article-only project yields eligible chunks')
+
+  // sampleStudyPassages returns one passage per distinct note.
+  const crafted = [
+    ...Array.from({ length: 7 }, (_, i) => ({ itemId: `a-${i}`, title: 'Alpha', body: `Alpha ${i}` })),
+    ...Array.from({ length: 7 }, (_, i) => ({ itemId: `b-${i}`, title: 'Beta', body: `Beta ${i}` })),
+  ]
+  const spread = sampleStudyPassages(crafted, MAX_SOURCE_NOTES)
+  assert(spread.length === MAX_SOURCE_NOTES, 'sampleStudyPassages honors maxNotes')
+  assert(new Set(spread.map((p) => p.itemId)).size === spread.length, 'sampleStudyPassages draws distinct notes')
+  assert(
+    spread.some((p) => p.itemId.startsWith('a-')) && spread.some((p) => p.itemId.startsWith('b-')),
+    'a 12-of-14 sample necessarily spans both groups',
+  )
 
   // --- calibrationSummary: empty ---
   console.log('\ncalibrationSummary — empty')
