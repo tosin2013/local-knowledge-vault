@@ -16,9 +16,18 @@ import {
 
 const HEALTH_TIMEOUT_MS = 4000
 
-export async function ollamaHealth(baseUrl: string = ollamaBaseUrl()): Promise<OllamaHealth> {
+export async function ollamaHealth(
+  baseUrl: string = ollamaBaseUrl(),
+  apiKey?: string | null
+): Promise<OllamaHealth> {
   try {
-    const res = await fetchWithTimeout(joinUrl(baseUrl, '/api/tags'), undefined, HEALTH_TIMEOUT_MS)
+    const headers: Record<string, string> = {}
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+    const res = await fetchWithTimeout(
+      joinUrl(baseUrl, '/api/tags'),
+      Object.keys(headers).length ? { headers } : undefined,
+      HEALTH_TIMEOUT_MS
+    )
     if (!res.ok) {
       return { ok: false, error: `Ollama HTTP ${res.status}` }
     }
@@ -128,15 +137,18 @@ export async function readOllamaStream(res: Response): Promise<string> {
 export async function ollamaGenerate(
   model: string,
   input: GenerateInput | string,
-  baseUrl: string = ollamaBaseUrl()
+  baseUrl: string = ollamaBaseUrl(),
+  apiKey?: string | null
 ): Promise<GenerateResult> {
   const req = typeof input === 'string' ? { prompt: input } : input
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
     const res = await fetchWithTimeout(
       joinUrl(baseUrl, '/api/generate'),
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           model,
           prompt: req.prompt,

@@ -154,7 +154,7 @@ export async function probeHealth(p: ProviderConfig, keyOverride?: string | null
   }
   if (!p.enabled) return { ok: false, skipped: true, error: 'disabled' }
   if (p.kind === 'ollama') {
-    const h = await ollamaHealth(p.baseUrl)
+    const h = await ollamaHealth(p.baseUrl, keyOverride ?? keyFor(p))
     return { ok: h.ok, models: h.models, modelSizes: h.modelSizes, error: h.error }
   }
   const r = await openAiListModels(
@@ -182,7 +182,7 @@ export async function generateWith(
   const apiKey = keyOverride !== undefined ? keyOverride : keyFor(p)
   switch (p.kind) {
     case 'ollama':
-      return ollamaGenerate(model, input, p.baseUrl)
+      return ollamaGenerate(model, input, p.baseUrl, apiKey)
     case 'anthropic':
       return anthropicChat({ baseUrl: p.baseUrl, apiKey }, model, input)
     case 'gemini':
@@ -278,7 +278,7 @@ export async function fetchProviderModels(d: ProviderDraft): Promise<ProviderMod
   const cfg = draftToConfig(d)
   const key = draftKey(d, cfg)
   if (cfg.kind === 'ollama') {
-    const h = await ollamaHealth(cfg.baseUrl)
+    const h = await ollamaHealth(cfg.baseUrl, key)
     return h.ok ? { ok: true, models: h.models ?? [] } : { ok: false, models: [], error: h.error }
   }
   if (cfg.kind === 'anthropic') {

@@ -125,6 +125,15 @@ async function main(): Promise<void> {
       if (p === '/ollama-tags/api/tags' && q.method === 'GET') {
         return json(res, 200, { models: [{ name: 'qwen3:7b', details: { parameter_size: '7B' } }] })
       }
+      // --- ollama keyed (Ollama Cloud: 401 without bearer) ---
+      if (p === '/ollama-keyed/api/generate' && q.method === 'POST') {
+        if (q.headers.authorization === 'Bearer secret') return json(res, 200, { response: 'hello keyed' })
+        return json(res, 401, { error: 'unauthorized' })
+      }
+      if (p === '/ollama-keyed/api/tags' && q.method === 'GET') {
+        if (q.headers.authorization === 'Bearer secret') return json(res, 200, { models: [{ name: 'cloud-m1' }] })
+        return json(res, 401, { error: 'unauthorized' })
+      }
       if (p === '/hang' || p.startsWith('/hang/')) return // never respond -> client timeout
       r.writeHead(404)
       r.end('nope')
@@ -208,6 +217,21 @@ async function main(): Promise<void> {
       'P'
     )
     assert(strShape.includes('flat boom'), 'readErrorDetail string-error shape')
+
+    console.log('ollama adapter (key handling)')
+    const { ollamaGenerate, ollamaHealth } = require('../electron/ollama')
+    const okKeyed = await ollamaGenerate('m', { prompt: 'hi' }, `${base}/ollama-keyed`, 'secret')
+    assert(okKeyed.ok === true && okKeyed.text === 'hello keyed', 'ollamaGenerate sends Authorization when a key is present')
+    const noKey = await ollamaGenerate('m', { prompt: 'hi' }, `${base}/ollama-keyed`)
+    assert(noKey.ok === false && /401/.test(noKey.error), `ollamaGenerate without a key surfaces 401 (${String(noKey.error).slice(0, 60)})`)
+    const hKeyed = await ollamaHealth(`${base}/ollama-keyed`, 'secret')
+    assert(hKeyed.ok === true && hKeyed.models?.includes('cloud-m1'), 'ollamaHealth sends Authorization when a key is present')
+    const hNoKey = await ollamaHealth(`${base}/ollama-keyed`)
+    assert(hNoKey.ok === false && /401/.test(hNoKey.error ?? ''), 'ollamaHealth without a key surfaces 401')
+    const gwKeyed = await llm.generateWith({ id: 'x', kind: 'ollama', baseUrl: `${base}/ollama-keyed`, label: 'O' }, 'm', { prompt: 'hi' }, 'secret')
+    assert(gwKeyed.ok === true && gwKeyed.text === 'hello keyed', 'generateWith passes the key for ollama kind')
+    const fKeyed = await llm.fetchProviderModels({ kind: 'ollama', label: 'O', baseUrl: `${base}/ollama-keyed`, model: '', apiKey: 'secret' })
+    assert(fKeyed.ok === true && fKeyed.models.includes('cloud-m1'), 'fetchProviderModels passes the key to ollama health')
 
     console.log('llm resolution + generation')
     const missing = llm.resolveFromProviders('zzz' as never, [])

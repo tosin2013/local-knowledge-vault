@@ -59,6 +59,19 @@ export const BUILTIN_PRESETS: ProviderPresetInfo[] = [
     notes: 'Local. Start the server in LM Studio (Developer → Start server).',
   },
   {
+    id: 'ollama-cloud',
+    kind: 'openai-compatible',
+    label: 'Ollama Cloud',
+    baseUrl: 'https://ollama.com/v1',
+    defaultModel: '',
+    local: false,
+    requiresKey: true,
+    supportsModelList: true,
+    docsUrl: 'https://docs.ollama.com/cloud',
+    keyUrl: 'https://ollama.com/dashboard/api-keys',
+    notes: "Ollama's hosted service. Leave model empty and use Fetch models — cloud model ids come from https://ollama.com/api/tags (e.g. gpt-oss:120b, no :cloud suffix).",
+  },
+  {
     id: 'openai',
     kind: 'openai-compatible',
     label: 'OpenAI',
@@ -188,6 +201,7 @@ export function getBuiltinPreset(id: string): ProviderPresetInfo | undefined {
 
 /** Env vars checked (in order) for a preset's key. Env keys never auto-enable a provider. */
 export const PRESET_ENV_KEYS: Record<string, string[]> = {
+  'ollama-cloud': ['LKV_OLLAMA_CLOUD_API_KEY', 'OLLAMA_API_KEY'],
   openai: ['LKV_OPENAI_API_KEY', 'OPENAI_API_KEY'],
   anthropic: ['LKV_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'],
   gemini: ['LKV_GEMINI_API_KEY', 'GEMINI_API_KEY'],

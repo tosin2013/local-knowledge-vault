@@ -42,6 +42,7 @@ Vault shows a gentle hint that bigger models follow the citation rules more reli
 | Preset | Base URL | Default model | Key |
 |---|---|---|---|
 | Ollama (local) | `http://127.0.0.1:11434` | auto-pick installed | none |
+| Ollama Cloud | `https://ollama.com/v1` | you choose (Fetch models) | required |
 | LM Studio (local) | `http://127.0.0.1:1234/v1` | loaded model | none |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` | required |
 | Anthropic | `https://api.anthropic.com/v1` | `claude-haiku-4-5` | required |
