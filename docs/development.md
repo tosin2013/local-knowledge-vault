@@ -23,6 +23,7 @@ local-knowledge-vault/
     db.ts               # schema, FTS5 triggers, CRUD, first-launch seed notes
     search.ts           # metadata filters + FTS5 (BM25) query
     generate.ts         # grounded Ask + citation validation (drops unknown itm_ ids)
+    answer-flags.ts     # "No notes cited" label + strip it from rows saved before it became metadata
     chat.ts             # chat sessions (grounded, with recent history)
     llm.ts              # provider resolution (local first) + generate
     providers/          # presets, OpenAI-compatible + Anthropic adapters
@@ -120,7 +121,7 @@ Main-process suites in `test:ci`:
 | `test:mvp` | DB seed, filters, FTS hits, citation-hallucination rejection, `ollama.health()` survives Ollama being down |
 | `test:providers` | provider registry, adapters (mock servers), settings migration and plugin loader |
 | `test:provider-errors` | adapter error paths (HTTP errors, timeouts, bad JSON, missing keys) |
-| `test:grounding-routing` | grounded Ask and chat routing, citation clean-up, personality fencing |
+| `test:grounding-routing` | grounded Ask and chat routing, citation clean-up, the uncited-answer flag (honest "not in your notes" answers exempt), personality fencing |
 | `test:notes-vs-transcripts` | your notes rank before transcript chunks in Ask; Media chat stays transcript-first |
 | `test:citation-pack` | citation pack export |
 | `test:media` | SRT caption parsing and chunking into timed notes |
@@ -178,6 +179,12 @@ Chat sessions, profiles, prompts, Media chat, MCP and citation-pack calls are al
   (up to ~1,200 characters of each note) and fixed rules: answer only from the passages, cite
   `[itm_…]`, say so when the passages don't cover the question.
 - Citations in the answer are checked against the retrieved ids. Unknown ids are dropped.
+- An answer that has substance but cites none of the retrieved notes is flagged `uncited`. The
+  flag is metadata on the message (`chat_messages.uncited`), never part of the answer text, so it
+  stays out of history, exports and saved notes. Ask shows it as a **No notes cited** chip
+  (`src/components/ai/UncitedAnswerChip.tsx`). An honest "not in your notes" answer is correct
+  behaviour and is not flagged (`isHonestRefusal` in `electron/generate.ts`). Rows saved before the
+  flag existed have the old label stripped when they are read (`electron/answer-flags.ts`).
 - If search finds nothing, Vault answers "I couldn't find that in your notes" without calling a
   model.
 - Personalities and voices change style only. A personality is fenced in the system prompt as

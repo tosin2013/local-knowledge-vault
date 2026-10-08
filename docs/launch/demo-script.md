@@ -103,7 +103,7 @@ the first 12,000 characters, and a Gutenberg book starts with license boilerplat
 | Cited answer (main shot) | `What did Franklin mean by Order, and how did he plan his day?` | Order precept + the 5 a.m. schedule, with numbered citations ([1], [2]) for Note A and Note C |
 | Backup cited answer | `What question did Franklin ask himself every morning and evening?` | "What good shall I do this day?" / "What good have I done to-day?" cited to Note C |
 | Backup cited answer | `How did Franklin track his faults?` | The little book, red-ink columns, black spots, cited to Note B |
-| Honest "I don't know" | `What is the recommended daily dose of vitamin D?` | A plain statement that the notes don't cover it, with no citations |
+| Honest "I don't know" | `What is the recommended daily dose of vitamin D?` | A plain statement that the notes don't cover it, with no citations and no "No notes cited" chip |
 
 Keyword search matches common words too, so the "I don't know" question still reaches the model
 with some Franklin passages; the grounding rules tell it to say the notes don't cover the question.
@@ -123,7 +123,7 @@ Do a full dry run, then click **New chat** so the recorded session starts empty.
 | 0:04–0:10 | Ask | Click the Ask box and type `What did Franklin mean by Order, and how did he plan his day?` at a steady pace. Press Enter. | Type slowly; viewers read along. |
 | 0:10–0:17 | Cited answer | The answer appears with numbered citations (**[1]**, **[2]**) in the text and matching source chips under it. Hover over one. | If generation takes long, keep it or cut the wait in editing; don't speed it up. |
 | 0:17–0:22 | Source | Click a citation. The **note peek** opens beside the chat with Franklin's text. Pause 2 s, then close it. | Proves the answer came from your note. |
-| 0:22–0:31 | Honest IDK | Type `What is the recommended daily dose of vitamin D?` and press Enter. The answer says the notes don't cover it. No citations. | Let it sit for 2 s. |
+| 0:22–0:31 | Honest IDK | Type `What is the recommended daily dose of vitamin D?` and press Enter. The answer says the notes don't cover it. No citations, no "No notes cited" chip. | Let it sit for 2 s. |
 | 0:31–0:34 | Optional flash | Click the AI chip → **Add provider** → open the preset list (OpenAI, Anthropic, Gemini, …) → **Cancel**. Or **Plugins → Add-ons…** for 2 s. | Choose one. Never show a key field with a real key in it. |
 | 0:34–0:36 | End | Back on the answer. Hold still. | Leave a clean last frame; the GIF loops. |
 

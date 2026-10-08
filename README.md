@@ -59,7 +59,8 @@ Prefer a cloud model? Click the AI chip → **Add provider**, pick a preset, pas
 
 - **Answers you can check.** Answers cite the notes they came from as numbered citations, **[1]**,
   **[2]**, with a matching list of sources. Citations to notes that weren't retrieved are dropped
-  before you see them, and when your notes don't cover a question, Vault says so.
+  before you see them, and when your notes don't cover a question, Vault says so. An answer that
+  cites none of your notes gets a **No notes cited** chip; an honest "not in your notes" doesn't.
 - **Local by default.** Notes live in SQLite on your machine. With Ollama or LM Studio, your notes
   and questions stay on your computer (the only other request is an update check you can turn off;
   see [Privacy](#privacy)). Search works with no model and no network at all.
