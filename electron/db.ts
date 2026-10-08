@@ -24,6 +24,7 @@ import type {
   UpdateItemPatch,
   UpdatePromptPatch,
 } from './types'
+import { splitIntoChunks } from './chunking'
 
 let db: Database.Database | null = null
 
@@ -60,7 +61,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -78,6 +79,11 @@ function migrate(database: Database.Database): void {
   }
   if (version < 5) {
     migrateV5(database)
+  }
+  if (version < 6) {
+    migrateV6(database)
+    // Backfill chunks for notes that predate the chunk table (one-time).
+    backfillChunks(database)
   }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
@@ -137,6 +143,78 @@ function migrateV5(database: Database.Database): void {
   const cols = database.prepare(`PRAGMA table_info(chat_messages)`).all() as { name: string }[]
   if (!cols.some((c) => c.name === 'uncited')) {
     database.exec(`ALTER TABLE chat_messages ADD COLUMN uncited INTEGER NOT NULL DEFAULT 0`)
+  }
+}
+
+/**
+ * v6 (#219): per-note retrieval chunks for long notes. Each note's body is
+ * split into sentence-aware chunks, kept in sync on write and indexed by an
+ * FTS5 table so search can match at section granularity.
+ */
+function migrateV6(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS note_chunks (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      chunk_index INTEGER NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_note_chunks_item ON note_chunks(item_id, chunk_index);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS note_chunks_fts USING fts5(
+      body,
+      tokenize='trigram',
+      content='note_chunks',
+      content_rowid='rowid'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS note_chunks_ai AFTER INSERT ON note_chunks BEGIN
+      INSERT INTO note_chunks_fts(rowid, body) VALUES (new.rowid, new.body);
+    END;
+    CREATE TRIGGER IF NOT EXISTS note_chunks_ad AFTER DELETE ON note_chunks BEGIN
+      INSERT INTO note_chunks_fts(note_chunks_fts, rowid, body)
+      VALUES ('delete', old.rowid, old.body);
+    END;
+    CREATE TRIGGER IF NOT EXISTS note_chunks_au AFTER UPDATE ON note_chunks BEGIN
+      INSERT INTO note_chunks_fts(note_chunks_fts, rowid, body)
+      VALUES ('delete', old.rowid, old.body);
+      INSERT INTO note_chunks_fts(rowid, body) VALUES (new.rowid, new.body);
+    END;
+  `)
+}
+
+/** Re-derive one note's chunks from its body (delete + reinsert). */
+function syncItemChunks(database: Database.Database, itemId: string, body: string): void {
+  database.prepare('DELETE FROM note_chunks WHERE item_id = ?').run(itemId)
+  const chunks = splitIntoChunks(body)
+  if (chunks.length === 0) return
+  const ts = nowIso()
+  const insert = database.prepare(
+    `INSERT INTO note_chunks (id, item_id, chunk_index, body, created_at, updated_at)
+     VALUES (@id, @item_id, @chunk_index, @body, @created_at, @updated_at)`,
+  )
+  chunks.forEach((chunk, i) => {
+    insert.run({
+      id: newId('chk'),
+      item_id: itemId,
+      chunk_index: i,
+      body: chunk,
+      created_at: ts,
+      updated_at: ts,
+    })
+  })
+}
+
+/** One-time chunk backfill for notes that predate the chunk table (v6). */
+function backfillChunks(database: Database.Database): void {
+  const rows = database
+    .prepare(`SELECT id, body FROM items WHERE body != '' AND status != 'trashed'`)
+    .all() as Array<{ id: string; body: string }>
+  for (const row of rows) {
+    syncItemChunks(database, row.id, row.body)
   }
 }
 
@@ -482,6 +560,7 @@ export function createItem(input: CreateItemInput): Item {
        VALUES (@id, @title, @summary, @body, @para, @kind, @status, @project, @created_at, @updated_at)`
     )
     .run(item)
+  syncItemChunks(database, id, item.body)
   return item
 }
 
@@ -507,6 +586,9 @@ export function updateItem(id: string, patch: UpdateItemPatch): Item | null {
        kind=@kind, status=@status, project=@project, updated_at=@updated_at WHERE id=@id`
     )
     .run(updated)
+  if (patch.body !== undefined) {
+    syncItemChunks(getDb(), id, updated.body)
+  }
   return updated
 }
 
