@@ -137,8 +137,10 @@ accept it, and explains why a broken pack was rejected.
   Project Gutenberg licence text are skipped.
 - **Study tab.** The toggle at the top reads **Ask · Find · Study**. **Study** gathers exam prep in
   one place, with three sections:
-  - **Review due notes.** Notes come back on a spaced schedule: recall, reveal the note, rate how
-    it went.
+  - **Study session.** Each card asks one question from a section of your notes: answer from
+    memory (or say you don't know), rate your confidence, reveal the answer with a quote and a
+    link to the note, then grade Missed / Partly / Got it. Cards come back on a spaced schedule
+    anchored to your exam date; the summary flags confident misses.
   - **Quiz me on…** Type a question, write what you remember first, then reveal the grounded,
     cited answer as feedback, rate your confidence and grade yourself. A calibration strip shows
     how well your confidence matches your results.

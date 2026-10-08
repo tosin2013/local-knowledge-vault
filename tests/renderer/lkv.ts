@@ -27,6 +27,8 @@ import type {
   StudyAttempt,
   StudyAttemptInput,
   StudyCalibration,
+  StudyCardQuestion,
+  StudySessionReport,
 } from '../../electron/types'
 
 export function makeItem(id: string, overrides: Partial<Item> = {}): Item {
@@ -54,6 +56,44 @@ export function makeHit(id: string, overrides: Partial<SearchHit> = {}): SearchH
     para: 'resources',
     kind: 'note',
     project: null,
+    ...overrides,
+  }
+}
+
+export function makeCardQuestion(cardId: string, overrides: Partial<StudyCardQuestion> = {}): StudyCardQuestion {
+  const itemId = cardId.replace(/^crd_/, '')
+  return {
+    cardId,
+    itemId,
+    title: 'Photosynthesis',
+    project: null,
+    origin: 'note',
+    kind: 'generated',
+    question: 'What does the Calvin cycle use to fix carbon dioxide?',
+    answer: 'ATP and NADPH',
+    quote: 'The Calvin cycle uses ATP and NADPH to fix carbon dioxide into sugar.',
+    sectionText: 'The Calvin cycle uses ATP and NADPH to fix carbon dioxide into sugar. It runs in the stroma.',
+    chunkIndex: null,
+    chunkCount: 1,
+    citations: [{ id: itemId, title: 'Photosynthesis' }],
+    ...overrides,
+  }
+}
+
+export function makeSessionReport(overrides: Partial<StudySessionReport> = {}): StudySessionReport {
+  return {
+    sessionId: 'ses_1',
+    cards: 1,
+    got: 1,
+    partial: 0,
+    missed: 0,
+    retried: 0,
+    accuracy: 1,
+    calibration: { count: 1, meanConfidence: 0.7, meanScore: 1, bias: -0.3, brier: 0.09 },
+    confidentMisses: [],
+    revisit: [],
+    nextDueAt: null,
+    dueByTomorrow: 0,
     ...overrides,
   }
 }
@@ -390,6 +430,7 @@ export function createLkvMock(): LkvMock {
         }),
       ),
       remove: vi.fn().mockResolvedValue(true),
+      enrolled: vi.fn().mockResolvedValue([]),
     },
     study: {
       record: vi.fn().mockImplementation((input: StudyAttemptInput) =>
@@ -408,6 +449,10 @@ export function createLkvMock(): LkvMock {
       listRecent: vi.fn().mockResolvedValue([]),
       calibration: vi.fn().mockResolvedValue(makeStudyCalibration()),
       questions: vi.fn().mockResolvedValue({ questions: [] }),
+      startSession: vi.fn().mockResolvedValue({ sessionId: 'ses_1', cards: [] }),
+      cardQuestion: vi.fn().mockImplementation((cardId: string) => Promise.resolve(makeCardQuestion(cardId))),
+      answer: vi.fn().mockResolvedValue({ state: makeReviewState({ reps: 1 }), dueAt: '2026-10-09T13:00:00.000Z' }),
+      sessionSummary: vi.fn().mockImplementation((sessionId: string) => Promise.resolve(makeSessionReport({ sessionId }))),
     },
     ollama: {
       health: vi.fn().mockResolvedValue({ ok: true, models: [] }),

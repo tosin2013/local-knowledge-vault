@@ -63,7 +63,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 8
+export const SCHEMA_VERSION = 9
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -92,6 +92,9 @@ function migrate(database: Database.Database): void {
   }
   if (version < 8) {
     migrateV8(database)
+  }
+  if (version < 9) {
+    migrateV9(database)
   }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
@@ -210,6 +213,37 @@ function migrateV8(database: Database.Database): void {
       updated_at TEXT NOT NULL
     );
   `)
+}
+
+function addColumnIfMissing(database: Database.Database, table: string, column: string, decl: string): void {
+  const cols = database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  if (!cols.some((c) => c.name === column)) database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`)
+}
+
+/**
+ * v9 (#263): the study session loop.
+ *
+ * - `study_cards` caches each card's generated question: `q_kind`
+ *   (`generated`, `cloze`, `explain`, `test`, `pair`), `q_source_hash` (the hash
+ *   of the section text it was written from, so an edit invalidates it),
+ *   `q_model`, `q_at` and `q_note` (why a fallback was cached, e.g. the drop
+ *   rule a generated card failed).
+ * - `study_attempts` links each attempt to its card, note, session and SM-2
+ *   grade, so a session summary and calibration can be computed per session.
+ *
+ * Additive only: existing cards, schedules and review history are untouched.
+ */
+function migrateV9(database: Database.Database): void {
+  addColumnIfMissing(database, 'study_cards', 'q_kind', 'TEXT')
+  addColumnIfMissing(database, 'study_cards', 'q_source_hash', 'TEXT')
+  addColumnIfMissing(database, 'study_cards', 'q_model', 'TEXT')
+  addColumnIfMissing(database, 'study_cards', 'q_at', 'TEXT')
+  addColumnIfMissing(database, 'study_cards', 'q_note', 'TEXT')
+  addColumnIfMissing(database, 'study_attempts', 'card_id', 'TEXT')
+  addColumnIfMissing(database, 'study_attempts', 'item_id', 'TEXT')
+  addColumnIfMissing(database, 'study_attempts', 'session_id', 'TEXT')
+  addColumnIfMissing(database, 'study_attempts', 'grade', 'TEXT')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_study_attempts_session ON study_attempts(session_id)')
 }
 
 /**

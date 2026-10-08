@@ -63,11 +63,11 @@ Study, Review and Test to notes are no longer plugins. They live in the top-leve
 can't be hidden in **Add-ons…**. Old panel ids (`study`, `review`, `test-to-notes`) open the matching
 Study section; a saved disabled entry for them is ignored.
 
-### Review due notes
+### Study session
 
-- **Was:** the `review` panel.
-- **What:** spaced review of your notes: see what is due, try to recall it, reveal the note as feedback and rate how it went. The schedule is stored in the `review_schedule` table.
-- **How to try:** Study → **Review due notes**.
+- **Was:** the `review` panel (Review due notes).
+- **What:** the session loop (#263): one question per card from a section of your notes, an attempt (or **I don't know**) and a confidence rating before the reveal, then the answer, a quote and a link to the note, and a Missed / Partly / Got it grade. Cards and schedules are stored in `study_cards` and `card_schedule`; attempts in `study_attempts`.
+- **How to try:** Study → **Study session** → **Start session**.
 
 ### Quiz me on…
 

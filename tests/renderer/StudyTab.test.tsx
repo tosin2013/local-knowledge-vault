@@ -16,16 +16,16 @@ describe('StudyTab (#260)', () => {
     const list = screen.getByRole('tablist', { name: 'Study sections' })
     expect(list).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Review due notes', 'Quiz me on…', 'Import practice test'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Study session', 'Quiz me on…', 'Import practice test'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'study-tab-home')
     expect(await screen.findByTestId('study-home')).toBeInTheDocument()
   })
 
-  it('renders Review due notes when given that section', async () => {
+  it('renders the Study session when given that section', async () => {
     render(<Harness />)
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'study-tab-review')
-    expect(await screen.findByText('Nothing due.')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Start session' })).toBeInTheDocument()
   })
 
   it('shares one remembered project across sections (#262)', async () => {
@@ -39,7 +39,7 @@ describe('StudyTab (#260)', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
     fireEvent.click(await screen.findByRole('option', { name: 'Biology' }))
     await waitFor(() =>
-      expect(window.lkv.review.listDue).toHaveBeenLastCalledWith({ limit: 50, project: 'Biology' }),
+      expect(window.lkv.review.count).toHaveBeenLastCalledWith({ project: 'Biology' }),
     )
 
     // Quiz me on… and Import practice test start on the same project.

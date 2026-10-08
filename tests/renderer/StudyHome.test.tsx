@@ -50,7 +50,7 @@ describe('StudyHome (#262)', () => {
     expect(screen.getByLabelText('Last session')).toHaveTextContent('80%')
     expect(screen.getByLabelText('Last session')).toHaveTextContent('8 of 10 recalled')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review 7 due cards' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start session (7 due)' }))
     expect(onStartReview).toHaveBeenCalled()
   })
 

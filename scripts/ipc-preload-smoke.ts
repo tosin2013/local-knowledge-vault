@@ -260,12 +260,14 @@ async function main(): Promise<void> {
     'testToNotes:analyze', 'testToNotes:parse',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
-    'review:enqueueProject', 'review:stats',
+    'review:enqueueProject', 'review:stats', 'review:enrolled',
     // projects + per-project settings (#261)
     'projects:list', 'projects:rename', 'projects:merge', 'projects:delete',
     'projects:getSettings', 'projects:setExamDate',
     // study (#215)
     'study:record', 'study:listRecent', 'study:calibration', 'study:questions',
+    // study session (#263)
+    'study:startSession', 'study:cardQuestion', 'study:answer', 'study:sessionSummary',
     // ollama
     'ollama:health',
     // llm
@@ -361,6 +363,25 @@ async function main(): Promise<void> {
   assert(bulk.notes === 0 && bulk.alreadyScheduled === 1 && Array.isArray(bulk.skipped), 'review:enqueueProject is idempotent over enrolled notes')
   const ipcStats = await ipcRendererMock.invoke('review:stats', 'IPC Exam') as { totalCards: number; examDate: string | null; lastSession: { reviewed: number } | null }
   assert(ipcStats.totalCards === 1 && ipcStats.examDate === examDay && ipcStats.lastSession?.reviewed === 1, 'review:stats returns the project numbers')
+  const enrolledIds = await ipcRendererMock.invoke('review:enrolled', [examNote.id, 'itm_missing']) as string[]
+  assert(enrolledIds.length === 1 && enrolledIds[0] === examNote.id, 'review:enrolled lists notes that already have cards')
+  const session = await ipcRendererMock.invoke('study:startSession', { project: 'IPC Exam' }) as { sessionId: string; cards: unknown[] }
+  assert(typeof session.sessionId === 'string' && session.cards.length === 0, 'study:startSession returns a session (nothing due after grading)')
+  const answered = await ipcRendererMock.invoke('study:answer', {
+    sessionId: session.sessionId, cardId: dueCards[0].card_id, question: 'Q?', attempt: 'A', confidence: 80, grade: 'got',
+  }) as { dueAt: string }
+  assert(typeof answered.dueAt === 'string', 'study:answer grades the card and returns its next due date')
+  const report = await ipcRendererMock.invoke('study:sessionSummary', session.sessionId, 'IPC Exam') as { cards: number; got: number }
+  assert(report.cards === 1 && report.got === 1, 'study:sessionSummary counts the session')
+  // #263: exercise the session-loop handler edges (question fetch, defaults, non-array input).
+  const cardQ = await ipcRendererMock.invoke('study:cardQuestion', dueCards[0].card_id) as { question: string; kind: string }
+  assert(typeof cardQ.question === 'string', 'study:cardQuestion returns a prompt for a card')
+  const noInput = await ipcRendererMock.invoke('study:startSession') as { sessionId: string }
+  assert(typeof noInput.sessionId === 'string', 'study:startSession defaults when called with no input')
+  const notArray = await ipcRendererMock.invoke('review:enrolled', 'not-an-array') as string[]
+  assert(Array.isArray(notArray) && notArray.length === 0, 'review:enrolled tolerates a non-array input')
+  const noProj = await ipcRendererMock.invoke('study:sessionSummary', session.sessionId) as { cards: number }
+  assert(typeof noProj.cards === 'number', 'study:sessionSummary defaults the project')
   const cleared = await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', null) as { examDate: string | null }
   assert(cleared.examDate === null, 'projects:setExamDate clears with null')
 
@@ -496,6 +517,24 @@ async function main(): Promise<void> {
     api.study as { listRecent: (limit?: number) => Promise<unknown[]> }
   ).listRecent(5)
   assert(Array.isArray(studyViaPreload), 'preload study.listRecent reaches main')
+  // Session-loop methods reach main through the preload surface (#263).
+  const studySessionApi = api.study as {
+    cardQuestion: (id: string) => Promise<{ question: string }>
+    answer: (i: unknown) => Promise<unknown>
+    sessionSummary: (s: string) => Promise<unknown>
+    startSession: (i?: unknown) => Promise<{ sessionId: string }>
+  }
+  assert(typeof studySessionApi.cardQuestion === 'function', 'study.cardQuestion is function')
+  assert(typeof (await studySessionApi.cardQuestion(dueCards[0].card_id)).question === 'string', 'preload study.cardQuestion reaches main')
+  assert(typeof studySessionApi.answer === 'function', 'study.answer is function')
+  assert(typeof studySessionApi.sessionSummary === 'function', 'study.sessionSummary is function')
+  assert(typeof studySessionApi.startSession === 'function', 'study.startSession is function')
+  await studySessionApi.startSession()
+  await studySessionApi.sessionSummary(session.sessionId)
+
+  const reviewEnrolledApi = api.review as { enrolled: (ids: unknown) => Promise<string[]> }
+  assert(typeof reviewEnrolledApi.enrolled === 'function', 'review.enrolled is function')
+  assert(Array.isArray(await reviewEnrolledApi.enrolled([])), 'preload review.enrolled reaches main')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
 
   // Update notice through the preload API (#42)

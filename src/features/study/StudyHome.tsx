@@ -21,7 +21,7 @@ import { NEW_CARDS_PER_DAY_MAX, daysToExam, daysToGoLabel, formatExamDate } from
 export interface StudyHomeProps {
   project: string
   onProjectChange: (project: string) => void
-  /** Switch to the Review section. */
+  /** Switch to the Study session section. */
   onStartReview: () => void
 }
 
@@ -198,7 +198,7 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
           disabled={!stats || stats.due === 0}
           onClick={onStartReview}
         >
-          {stats && stats.due > 0 ? `Review ${plural(stats.due, 'due card')}` : 'Nothing due'}
+          {stats && stats.due > 0 ? `Start session (${stats.due} due)` : 'Nothing due'}
         </Button>
       </Stack>
       {!project && !noProjects && (
@@ -246,8 +246,9 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
       )}
 
       <Typography variant="caption" color="text.secondary">
-        Each short note becomes one card; a long note or imported page becomes one card per section. Until
-        questions are generated, Review prompts with each note&apos;s summary.
+        Each short note becomes one card; a long note or imported page becomes one card per section. A session
+        asks one question per card, written from that section when the card first comes up, and you answer from
+        memory before you see your note.
       </Typography>
     </Box>
   )

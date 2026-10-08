@@ -83,6 +83,12 @@ import type {
   StudyCalibration,
   StudyQuestionsInput,
   StudyQuestionsResult,
+  StudyAnswerInput,
+  StudyAnswerResult,
+  StudyCardQuestion,
+  StudySessionReport,
+  StudySessionStart,
+  StudySessionStartInput,
   TestToNotesAnalyzeInput,
   TestToNotesParseInput,
   TestToNotesParseResult,
@@ -139,6 +145,8 @@ const api = {
       ipcRenderer.invoke('review:enqueueProject', project),
     /** Study home numbers for a project ('' = all projects). */
     stats: (project?: string): Promise<StudyStats> => ipcRenderer.invoke('review:stats', project),
+    /** Which of these notes already have cards in Study ("Already in Study"). */
+    enrolled: (itemIds: string[]): Promise<string[]> => ipcRenderer.invoke('review:enrolled', itemIds),
   },
   study: {
     record: (input: StudyAttemptInput): Promise<StudyAttempt> =>
@@ -149,6 +157,15 @@ const api = {
       ipcRenderer.invoke('study:calibration'),
     questions: (input: StudyQuestionsInput): Promise<StudyQuestionsResult> =>
       ipcRenderer.invoke('study:questions', input),
+    /** Session loop (#263): start a session for a project ('' = all). */
+    startSession: (input?: StudySessionStartInput): Promise<StudySessionStart> =>
+      ipcRenderer.invoke('study:startSession', input),
+    /** One card's prompt and answer key (written once per section, then cached). */
+    cardQuestion: (cardId: string): Promise<StudyCardQuestion> => ipcRenderer.invoke('study:cardQuestion', cardId),
+    /** Grade a card after reveal and record the attempt. */
+    answer: (input: StudyAnswerInput): Promise<StudyAnswerResult> => ipcRenderer.invoke('study:answer', input),
+    sessionSummary: (sessionId: string, project?: string): Promise<StudySessionReport> =>
+      ipcRenderer.invoke('study:sessionSummary', sessionId, project),
   },
   ollama: {
     health: (): Promise<OllamaHealth> => ipcRenderer.invoke('ollama:health'),
