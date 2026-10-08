@@ -176,6 +176,7 @@ import type {
   ProviderDraft,
   ProviderSelection,
   UpdateSettings,
+  StudyEnrollOptions,
 } from './types'
 
 // Optional isolated profile (fresh-install demos, tests): LKV_USER_DATA_DIR=/tmp/vault-fresh
@@ -533,10 +534,14 @@ function registerIpc(): void {
     // The exam date comes from the card's project (#261), not from the caller.
     rateReview(String(input.cardId ?? input.itemId ?? ''), toReviewGrade(String(input.grade)))
   )
-  ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) => enqueueReview(input.itemId))
+  ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) =>
+    enqueueReview(input.itemId, { pairs: input?.pairs !== false }),
+  )
   ipcMain.handle('review:remove', (_e, itemId: string) => removeReview(itemId))
   // Study home (#262): bulk "Study this project" and the project's numbers.
-  ipcMain.handle('review:enqueueProject', (_e, project: string) => enrollProject(String(project ?? '')))
+  ipcMain.handle('review:enqueueProject', (_e, project: string, options?: StudyEnrollOptions) =>
+    enrollProject(String(project ?? ''), { pairs: options?.pairs !== false }),
+  )
   ipcMain.handle('review:stats', (_e, project?: string) => getStudyStats(project ?? undefined))
 
   // Study mode (#215): recall-before-reveal attempts + calibration.

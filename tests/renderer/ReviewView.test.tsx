@@ -99,7 +99,7 @@ describe('ReviewView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add to review' }))
 
     await waitFor(() =>
-      expect(lkv.review.enqueue).toHaveBeenCalledWith({ itemId: 'itm_9' }),
+      expect(lkv.review.enqueue).toHaveBeenCalledWith({ itemId: 'itm_9', pairs: true }),
     )
     expect(await screen.findByText('Added “Cell biology” to Study.')).toBeInTheDocument()
   })

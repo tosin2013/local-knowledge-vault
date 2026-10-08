@@ -254,6 +254,36 @@ Butler & Roediger 2008), so a missed question should be studied as a question, s
 - **Migration v10** adds the nullable columns `study_cards.explanation` and `study_cards.link_item_id`; nothing else
   changes.
 
+### Two-way list cards (#273)
+
+Lists are already sets of cards: acronyms, port tables, command lists and term definitions. Asking a model to write
+questions about them is slow and can drift, so `electron/study-pairs.ts` extracts pairs with patterns and no model.
+
+- **Extraction:** a Markdown table row becomes `first cell → the other cells`, labelled with the header row. A line
+  `TERM - def`, `TERM: def`, `TERM = def` or `TERM — def` (bullets, numbering and bold allowed) is a pair when TERM
+  is at most 5 words. Headings, URLs, frontmatter, import header lines and blank lines are ignored. Label words
+  ("Example:", "Tip:", "Evidence:", "tricks:"…) are not terms.
+- **List-like:** at least 60% of the content lines are pairs, and at least 3 pairs. On the evaluation notes this gives
+  the acronym list 40/40, the ports table 15/15 rows, Windows commands 10 and cell structure 11. Evolution, homeostasis
+  and the messy pasted page stay under the threshold.
+- **Cards:** `origin = 'reverse'` (the existing CHECK value; the issue calls it `pairs`), `q_kind = 'pair'`,
+  `chunk_index = NULL`, `quote` = the source line, `source_key = pair:<item>:<hash(term)>:f|r`. Forward: "What does
+  AES stand for?" for acronyms, "Port 443 → ?" for table rows, "Nucleus → ?" otherwise. Reverse: "What is the acronym
+  for Advanced Encryption Standard?", "HTTPS uses which port?", "Which term goes with Meaning “…”?", "Name the term:
+  “…”". A reverse card is left out when its back is shared by another pair (two right answers) or when the
+  definition gives the term away. Forward cards are inserted first and the queue breaks ties by row order, so a
+  list's forward cards are studied before its reverse cards, inside the daily new-card budget.
+- **Enrolling:** "Study this project" and "Add to review" make list cards for list-like notes (opt out with
+  **Two-way cards for lists** on Study home; the choice is remembered on the device). A list-like note gets list
+  cards *instead of* section cards, unless it has at least 30 words of prose outside the list, in which case it gets
+  both. Running "Study this project" again adds list cards to list notes that were enrolled before #273, and leaves
+  their section cards alone.
+- **Edits:** the body-change hook re-extracts. An unchanged pair keeps its card and schedule; a pair whose definition
+  changed keeps its schedule and gets the new question and answer; a removed line retires both its cards (history
+  kept, and putting the line back revives them); new lines get cards while the note is still list-like. If every
+  pair is gone and the note has no section cards, it gets section cards so it stays in Study.
+- No schema change.
+
 ## Consequences
 
 - One schedule per card: a 30-page book can be enrolled at page or chunk level and each part is graded on its own.

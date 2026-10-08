@@ -66,7 +66,7 @@ Study section; a saved disabled entry for them is ignored.
 ### Study session
 
 - **Was:** the `review` panel (Review due notes).
-- **What:** the session loop (#263): one question per card from a section of your notes, an attempt (or **I don't know**) and a confidence rating before the reveal, then the answer, a quote and a link to the note, and a Missed / Partly / Got it grade. Cards and schedules are stored in `study_cards` and `card_schedule`; attempts in `study_attempts`.
+- **What:** the session loop (#263): one question per card from a section of your notes, an attempt (or **I don't know**) and a confidence rating before the reveal, then the answer, a quote and a link to the note, and a Missed / Partly / Got it grade. Cards and schedules are stored in `study_cards` and `card_schedule`; attempts in `study_attempts`. List-like notes (acronyms, port tables, term definitions) get two-way list cards with no model (#273, `electron/study-pairs.ts`); `review:enqueue` and `review:enqueueProject` take `pairs: false` to opt out.
 - **How to try:** Study → **Study session** → **Start session**.
 
 ### Quiz me on…

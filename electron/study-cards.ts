@@ -18,6 +18,7 @@
  */
 import { getDb, newId, nowIso, onNoteBodyChanged, type NoteBodyBefore } from './db'
 import { hashText } from './text-hash'
+import { PROSE_SECTION_MIN_WORDS, createPairCards, syncPairCards } from './study-pairs'
 import type { StudyCard, StudyCardOrigin, StudyCardStatus, StudyEnrollResult } from './types'
 
 /** Notes at or under this many characters are studied as one card (#263). */
@@ -82,7 +83,7 @@ export function listCardsForItem(itemId: string): StudyCard[] {
   const rows = getDb()
     .prepare(
       `SELECT * FROM study_cards WHERE item_id = ?
-       ORDER BY chunk_index IS NOT NULL, chunk_index, created_at`,
+       ORDER BY chunk_index IS NOT NULL, chunk_index, created_at, rowid`,
     )
     .all(itemId) as Record<string, unknown>[]
   return rows.map(rowToCard)
@@ -98,27 +99,22 @@ function chunkBodies(itemId: string): string[] {
 export interface CreateNoteCardsResult {
   /** Cards created by this call (each with a fresh schedule, due now). */
   created: StudyCard[]
-  /** True when the note already had note-origin cards (nothing was added). */
+  /** True when the note already had cards (nothing was added). */
   alreadyEnrolled: boolean
+  /** Two-way list cards among `created` (#273). */
+  pairCards: number
 }
 
-/**
- * Enroll a note: create its note-origin cards and their schedules. Idempotent
- * — a note that already has any note-origin card is left untouched, so
- * re-enrolling never resets a schedule or adds a second set of cards.
- */
-export function createNoteCards(itemId: string): CreateNoteCardsResult {
+export interface CreateNoteCardsOptions {
+  /** Make two-way cards for a list-like note (#273). Default true. */
+  pairs?: boolean
+}
+
+/** Insert section cards (and schedules) for every section of a note. Returns the new card ids. */
+function addSectionCards(itemId: string): string[] {
   const database = getDb()
-  const item = database.prepare('SELECT id, body FROM items WHERE id = ?').get(itemId) as
-    | { id: string; body: string }
-    | undefined
-  if (!item) throw new Error(`Note not found: ${itemId}`)
-
-  const existing = database
-    .prepare(`SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ? AND origin = 'note'`)
-    .get(itemId) as { c: number }
-  if (Number(existing.c) > 0) return { created: [], alreadyEnrolled: true }
-
+  const item = database.prepare('SELECT body FROM items WHERE id = ?').get(itemId) as { body: string } | undefined
+  if (!item) return []
   const units = cardUnitsForNote(item.body, chunkBodies(itemId))
   const noteHash = hashText(item.body)
   const ts = nowIso()
@@ -151,9 +147,45 @@ export function createNoteCards(itemId: string): CreateNoteCardsResult {
       }
     }
   })()
+  return createdIds
+}
+
+/**
+ * Enroll a note: create its cards and their schedules. Idempotent — a note
+ * that already has note or list cards is left untouched, so re-enrolling never
+ * resets a schedule or adds a second set of cards.
+ *
+ * A list-like note (acronyms, a port table, term definitions) gets two-way
+ * list cards instead of section cards (#273); it also gets section cards when
+ * it has enough prose outside the list. Pass `{ pairs: false }` to skip list
+ * cards.
+ */
+export function createNoteCards(itemId: string, options: CreateNoteCardsOptions = {}): CreateNoteCardsResult {
+  const database = getDb()
+  const item = database.prepare('SELECT id, body FROM items WHERE id = ?').get(itemId) as
+    | { id: string; body: string }
+    | undefined
+  if (!item) throw new Error(`Note not found: ${itemId}`)
+
+  const existing = database
+    .prepare(`SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ? AND origin IN ('note', 'reverse')`)
+    .get(itemId) as { c: number }
+  if (Number(existing.c) > 0) return { created: [], alreadyEnrolled: true, pairCards: 0 }
+
+  let pairIds: string[] = []
+  if (options.pairs !== false) {
+    const pairs = createPairCards(itemId)
+    pairIds = pairs.created
+    if (pairIds.length > 0 && pairs.proseWords < PROSE_SECTION_MIN_WORDS) {
+      return { created: pairIds.map((id) => getCard(id)).filter((c): c is StudyCard => !!c), alreadyEnrolled: false, pairCards: pairIds.length }
+    }
+  }
+
+  const createdIds = addSectionCards(itemId)
   return {
-    created: createdIds.map((id) => getCard(id)).filter((c): c is StudyCard => !!c),
+    created: [...createdIds, ...pairIds].map((id) => getCard(id)).filter((c): c is StudyCard => !!c),
     alreadyEnrolled: false,
+    pairCards: pairIds.length,
   }
 }
 
@@ -349,9 +381,26 @@ export function syncNoteCards(itemId: string, before: NoteBodyBefore): SectionSy
   return result
 }
 
-// Every body edit that goes through `updateItem` rebuilds the note's cards.
-onNoteBodyChanged((itemId, before) => {
+/**
+ * Every body edit that goes through `updateItem` rebuilds the note's cards:
+ * section cards (#286) and list cards (#273). A list note whose pairs are all
+ * gone, with no section cards, gets section cards so it stays in Study.
+ */
+export function syncCardsAfterEdit(itemId: string, before: NoteBodyBefore): void {
   syncNoteCards(itemId, before)
+  const pairs = syncPairCards(itemId)
+  if (pairs.kept + pairs.updated + pairs.added + pairs.retired === 0) return
+  const live = getDb()
+    .prepare(`SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ? AND origin IN ('note', 'reverse') AND status != 'retired'`)
+    .get(itemId) as { c: number }
+  const notes = getDb()
+    .prepare(`SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ? AND origin = 'note'`)
+    .get(itemId) as { c: number }
+  if (Number(live.c) === 0 && Number(notes.c) === 0) addSectionCards(itemId)
+}
+
+onNoteBodyChanged((itemId, before) => {
+  syncCardsAfterEdit(itemId, before)
 })
 
 /**
@@ -536,21 +585,39 @@ export type EnrollProjectResult = StudyEnrollResult
  * unit. Idempotent: notes that already have cards are counted, not touched.
  * Trashed notes are ignored; skipped notes come back with a reason.
  */
-export function enrollProject(project: string): EnrollProjectResult {
+export function enrollProject(project: string, options: CreateNoteCardsOptions = {}): EnrollProjectResult {
   const name = (project ?? '').trim()
   if (!name) throw new Error('Pick a project to study')
   const database = getDb()
   const rows = database
     .prepare(
       `SELECT i.id, i.title, i.body, i.kind, i.status,
-              EXISTS (SELECT 1 FROM study_cards c WHERE c.item_id = i.id) AS enrolled
+              EXISTS (SELECT 1 FROM study_cards c WHERE c.item_id = i.id) AS enrolled,
+              EXISTS (SELECT 1 FROM study_cards c WHERE c.item_id = i.id AND c.origin = 'reverse') AS has_pairs
        FROM items i
        WHERE i.project = ? AND i.status != 'trashed'
        ORDER BY i.created_at, i.id`,
     )
-    .all(name) as Array<{ id: string; title: string; body: string; kind: string; status: string; enrolled: number }>
+    .all(name) as Array<{
+    id: string
+    title: string
+    body: string
+    kind: string
+    status: string
+    enrolled: number
+    has_pairs: number
+  }>
 
-  const result: EnrollProjectResult = { project: name, notes: 0, cards: 0, alreadyScheduled: 0, skipped: [] }
+  const result: EnrollProjectResult = {
+    project: name,
+    notes: 0,
+    cards: 0,
+    alreadyScheduled: 0,
+    skipped: [],
+    pairNotes: 0,
+    pairCards: 0,
+  }
+  const pairsOn = options.pairs !== false
   database.transaction(() => {
     for (const row of rows) {
       // A practice test's cards are its own; it is never enrolled as a note.
@@ -560,6 +627,16 @@ export function enrollProject(project: string): EnrollProjectResult {
       }
       if (row.enrolled) {
         result.alreadyScheduled++
+        // A list note enrolled before list cards existed gets them now (#273);
+        // its section cards are left as they are.
+        if (pairsOn && !row.has_pairs && row.status !== 'ai-draft' && row.status !== 'archived' && row.kind !== 'transcript') {
+          const added = createPairCards(row.id).created.length
+          if (added > 0) {
+            result.pairNotes++
+            result.pairCards += added
+            result.cards += added
+          }
+        }
         continue
       }
       const reason = enrollSkipReason(row)
@@ -567,10 +644,14 @@ export function enrollProject(project: string): EnrollProjectResult {
         result.skipped.push({ itemId: row.id, title: row.title, reason })
         continue
       }
-      const { created } = createNoteCards(row.id)
+      const { created, pairCards } = createNoteCards(row.id, { pairs: pairsOn })
       if (created.length > 0) {
         result.notes++
         result.cards += created.length
+      }
+      if (pairCards > 0) {
+        result.pairNotes++
+        result.pairCards += pairCards
       }
     }
   })()

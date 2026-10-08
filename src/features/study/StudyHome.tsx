@@ -3,7 +3,9 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Collapse,
+  FormControlLabel,
   List,
   ListItem,
   ListItemText,
@@ -17,6 +19,7 @@ import type { ProjectSummary, StudyEnrollResult, StudyStats } from '../../../ele
 import { ProjectSelect } from '../ProjectSelect'
 import { ExamDateControl } from './ExamDateControl'
 import { NEW_CARDS_PER_DAY_MAX, daysToExam, daysToGoLabel, formatExamDate } from './examDate'
+import { readPairsPref, writePairsPref } from './pairsPref'
 
 export interface StudyHomeProps {
   project: string
@@ -32,6 +35,12 @@ function plural(n: number, one: string, many = `${one}s`): string {
 /** "12 notes → 30 cards, 3 skipped" (#262). */
 export function enrollSummary(r: StudyEnrollResult): string {
   return `${plural(r.notes, 'note')} → ${plural(r.cards, 'card')}, ${r.skipped.length} skipped`
+}
+
+/** "80 two-way list cards from 1 list (acronyms, ports, terms)" (#273), or '' when none. */
+export function pairSummary(r: Pick<StudyEnrollResult, 'pairCards' | 'pairNotes'>): string {
+  if (!r.pairCards) return ''
+  return `${plural(r.pairCards, 'two-way list card')} from ${plural(r.pairNotes, 'list')} (acronyms, ports, terms): each item is asked both ways.`
 }
 
 function Stat({ label, value, detail }: { label: string; value: string; detail?: string }) {
@@ -64,6 +73,7 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
   const [result, setResult] = useState<StudyEnrollResult | null>(null)
   const [showSkipped, setShowSkipped] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pairs, setPairs] = useState(readPairsPref)
 
   const refresh = useCallback(async () => {
     const get = window.lkv?.review?.stats
@@ -87,7 +97,7 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
     setEnrolling(true)
     setError(null)
     try {
-      setResult(await enqueue(project))
+      setResult(await enqueue(project, { pairs }))
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -200,6 +210,19 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
         >
           {stats && stats.due > 0 ? `Start session (${stats.due} due)` : 'Nothing due'}
         </Button>
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={pairs}
+              onChange={(e) => {
+                setPairs(e.target.checked)
+                writePairsPref(e.target.checked)
+              }}
+            />
+          }
+          label={<Typography variant="body2">Two-way cards for lists (acronyms, ports, terms)</Typography>}
+        />
       </Stack>
       {!project && !noProjects && (
         <Typography variant="caption" color="text.secondary">
@@ -213,10 +236,11 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
       )}
 
       {result && (
-        <Alert severity={result.notes > 0 ? 'success' : 'info'} onClose={() => setResult(null)}>
+        <Alert severity={result.notes > 0 || result.pairCards > 0 ? 'success' : 'info'} onClose={() => setResult(null)}>
           <Typography variant="body2" fontWeight={600}>
             {enrollSummary(result)}
           </Typography>
+          {result.pairCards > 0 && <Typography variant="body2">{pairSummary(result)}</Typography>}
           {result.alreadyScheduled > 0 && (
             <Typography variant="body2">
               {plural(result.alreadyScheduled, 'note')} {result.alreadyScheduled === 1 ? 'was' : 'were'} already
@@ -248,7 +272,8 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
       <Typography variant="caption" color="text.secondary">
         Each short note becomes one card; a long note or imported page becomes one card per section. A session
         asks one question per card, written from that section when the card first comes up, and you answer from
-        memory before you see your note.
+        memory before you see your note. A list of acronyms, ports or terms becomes two-way cards instead, one per
+        item and direction, with no AI needed.
       </Typography>
     </Box>
   )

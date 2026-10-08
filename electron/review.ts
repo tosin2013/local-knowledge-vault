@@ -10,7 +10,7 @@
  * FSRS is deliberately out of scope — this is a first, explainable pass.
  */
 import { getDb, newId } from './db'
-import { createNoteCards } from './study-cards'
+import { createNoteCards, type CreateNoteCardsOptions } from './study-cards'
 import type {
   ReviewEnqueueResult,
   ReviewGrade,
@@ -470,7 +470,7 @@ function dueQueue(before: string, project: string | undefined, now: Date): Revie
        JOIN items ON items.id = c.item_id
        LEFT JOIN note_chunks nc ON nc.item_id = c.item_id AND nc.chunk_index = c.chunk_index
        WHERE ${where.sql}
-       ORDER BY c.priority DESC, items.created_at ASC, items.rowid, c.chunk_index`,
+       ORDER BY c.priority DESC, items.created_at ASC, items.rowid, c.chunk_index, c.rowid`,
     )
     .all(before, ...where.params) as Record<string, unknown>[]
   const items = rows.map(rowToQueueItem)
@@ -505,18 +505,18 @@ export function countDueReviews(before?: string, project?: string): number {
  * chunk for a long note), each due now. Re-enqueuing a note that already has
  * cards leaves them untouched (never resurrects a schedule).
  */
-export function enqueueReview(itemId: string): ReviewEnqueueResult {
+export function enqueueReview(itemId: string, options: CreateNoteCardsOptions = {}): ReviewEnqueueResult {
   const kind = getDb().prepare('SELECT kind FROM items WHERE id = ?').get(itemId) as { kind: string } | undefined
   if (kind?.kind === 'practice-test') {
     // Its questions are already cards (#265); never add note cards on top.
     const n = getDb().prepare('SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ?').get(itemId) as { c: number }
     return { created: 0, cards: Number(n.c), alreadyEnrolled: true }
   }
-  const { created, alreadyEnrolled } = createNoteCards(itemId)
+  const { created, alreadyEnrolled, pairCards } = createNoteCards(itemId, options)
   const total = getDb()
     .prepare('SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ?')
     .get(itemId) as { c: number }
-  return { created: created.length, cards: Number(total.c), alreadyEnrolled }
+  return { created: created.length, cards: Number(total.c), alreadyEnrolled, pairCards }
 }
 
 /** Remove a note from review (all of its cards and their history). Returns true when any existed. */

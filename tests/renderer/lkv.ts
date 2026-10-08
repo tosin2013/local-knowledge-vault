@@ -430,7 +430,7 @@ export function createLkvMock(): LkvMock {
       rate: vi.fn().mockImplementation(() => Promise.resolve(makeReviewState({ reps: 1 }))),
       enqueue: vi.fn().mockResolvedValue({ created: 1, cards: 1, alreadyEnrolled: false }),
       enqueueProject: vi.fn().mockImplementation((project: string) =>
-        Promise.resolve({ project, notes: 0, cards: 0, alreadyScheduled: 0, skipped: [] }),
+        Promise.resolve({ project, notes: 0, cards: 0, alreadyScheduled: 0, skipped: [], pairNotes: 0, pairCards: 0 }),
       ),
       stats: vi.fn().mockImplementation((project?: string) =>
         Promise.resolve({
