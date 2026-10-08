@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { StudyView } from '../../src/plugins/study/StudyView'
+import { StudyView } from '../../src/features/study/StudyView'
 import { lkvMock, makeAskResult, makeStudyCalibration } from './lkv'
 
 const ASK = makeAskResult({

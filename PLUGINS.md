@@ -9,6 +9,9 @@ There are two kinds of plugins:
 2. **Built-in panels**: React views compiled into the app (below). They can be hidden in
    **Add-ons…**.
 
+Study, Review and Test to notes used to be built-in panels. They now live in the top-level
+**Study** tab (see [Study tab (not an add-on)](#study-tab-not-an-add-on)).
+
 ## Built-in panels
 
 Built-in panels are optional full-panel views registered in a lightweight in-app registry. They do **not** replace Ask-home for notes: opening a plugin switches the center panel; the notes rail and note peek stay available.
@@ -25,7 +28,7 @@ Example:
 ```ts
 // src/plugins/registry.ts
 import { myPlugin } from './my-plugin'
-export const plugins: VaultPlugin[] = [mediaChatPlugin, mediaPersonasPlugin, mcpConnectionsPlugin, testToNotesPlugin, reviewPlugin, studyPlugin, myPlugin]
+export const plugins: VaultPlugin[] = [mediaChatPlugin, mediaPersonasPlugin, mcpConnectionsPlugin, myPlugin]
 ```
 
 Backend work (IPC, ingest, DB) lives under `electron/` and is exposed via `preload.ts` → `window.lkv.*`, same as core features.
@@ -53,23 +56,30 @@ Backend work (IPC, ingest, DB) lives under `electron/` and is exposed via `prelo
 
 Vault supports grounded “voice pack” personas for Media chat. A Soul-like speaking style maps to the Easy Add **speaking style** field (and thus a Vault **Personality** prompt). Personas are reusable across media projects; optional project-bound **Profiles** (`applyMediaPersona`) are advanced/Ask-only, not required for Media chat. Vault does **not** run OpenPersona evolution/memory as the knowledge store — vault notes remain canonical, and personalities never invent outside those notes or override citation / I-don’t-know rules. This is what you can tell OpenPersona you support.
 
-## Test to notes
+## Study tab (not an add-on)
 
-- **Id:** `test-to-notes`
-- **What:** paste practice-test results (numbered plain text with ✓/✗ marks, or CSV `question,answer,correct`), see a correct/wrong summary, and turn each wrong answer into a short corrective note grounded in your notes. Suggestions are saved with status **AI draft**; correct answers can be saved as flash cards.
-- **How to try:** Plugins → Test to notes → paste results → **Suggest fixes** → **Save as draft note**.
+Study, Review and Test to notes are no longer plugins. They live in the top-level **Study** tab
+(**Ask · Find · Study**), in `src/features/study/`. Study is visible in Simple and Advanced mode and
+can't be hidden in **Add-ons…**. Old panel ids (`study`, `review`, `test-to-notes`) open the matching
+Study section; a saved disabled entry for them is ignored.
 
-## Review
+### Review due notes
 
-- **Id:** `review`
+- **Was:** the `review` panel.
 - **What:** spaced review of your notes: see what is due, try to recall it, reveal the note as feedback and rate how it went. The schedule is stored in the `review_schedule` table.
-- **How to try:** Plugins → Review.
+- **How to try:** Study → **Review due notes**.
 
-## Study
+### Quiz me on…
 
-- **Id:** `study`
+- **Was:** the `study` panel.
 - **What:** recall first, then reveal the grounded, cited answer as feedback. Rate your confidence and grade yourself (**Missed**, **Partial**, **Got it**); a calibration strip compares confidence with results. Attempts are stored in the `study_attempts` table. The revealed answer uses the same renderer as chat (numbered citations, simple formatting).
-- **How to try:** Plugins → Study → ask a question → write your recall or **I don't know** → **Reveal answer**.
+- **How to try:** Study → **Quiz me on…** → ask a question → write your recall or **I don't know** → **Reveal answer**.
+
+### Import practice test
+
+- **Was:** the `test-to-notes` panel.
+- **What:** paste practice-test results (numbered plain text with ✓/✗ marks, or CSV `question,answer,correct`), see a correct/wrong summary, and turn each wrong answer into a short corrective note grounded in your notes. Suggestions are saved with status **AI draft**; correct answers can be saved as flash cards.
+- **How to try:** Study → **Import practice test** → paste results → **Suggest fixes** → **Save as draft note**.
 
 ## MCP connections
 

@@ -43,7 +43,7 @@ local-knowledge-vault/
     secret-files.ts     # where secrets live; encrypts old plaintext ones at startup
     update-check.ts     # launch-time GitHub release check (can be turned off)
     user-data.ts        # userData resolution (LKV_USER_DATA_DIR override)
-  src/                  # React UI; built-in panels in src/plugins/
+  src/                  # React UI; built-in panels in src/plugins/, Study tab in src/features/study/
   tests/renderer/       # Vitest + jsdom tests for the React UI
   bridges/              # Obsidian plugin scaffold, Notion notes / CLI stub
   examples/plugins/     # sample plugin.json packs

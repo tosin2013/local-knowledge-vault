@@ -106,14 +106,14 @@ export function TopBar(props: TopBarProps) {
           <TextField
             fullWidth
             size="small"
-            placeholder="Search your notes…"
+            placeholder="Find your notes…"
             value={searchText}
             inputRef={searchInputRef}
             onChange={(e) => onSearchText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) onRunSearch()
             }}
-            aria-label="Search notes"
+            aria-label="Find notes"
             sx={{ maxWidth: 560, '& .MuiOutlinedInput-root': { borderRadius: 999 } }}
             InputProps={{
               startAdornment: (

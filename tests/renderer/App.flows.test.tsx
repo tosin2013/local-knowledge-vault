@@ -117,7 +117,7 @@ describe('App flows — Ask', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Find' }))
     await waitFor(() => expect(screen.getByText('Ask instead')).toBeInTheDocument())
-    fireEvent.change(screen.getByPlaceholderText('Search your notes…'), {
+    fireEvent.change(screen.getByPlaceholderText('Find your notes…'), {
       target: { value: 'habits' },
     })
     fireEvent.click(screen.getByText('Ask instead'))

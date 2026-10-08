@@ -17,6 +17,8 @@ import { PromptsView } from './features/PromptsView'
 import { NotePeek } from './features/NotePeek'
 import { AiSettingsDialog } from './features/AiSettingsDialog'
 import { ContentChrome } from './features/ContentChrome'
+import { StudyTab } from './features/study/StudyTab'
+import { legacyStudySection, type StudySection } from './features/study/sections'
 import { ManageProjectsDialog } from './features/ManageProjectsDialog'
 import { TrashDialog } from './features/TrashDialog'
 import { UpdateNotice } from './components/updates/UpdateNotice'
@@ -25,6 +27,7 @@ export default function App() {
   // Cross-cutting navigation / notification state.
   const [mode, setMode] = useState<Mode>('chat')
   const [activePluginId, setActivePluginId] = useState<string | null>(null)
+  const [studySection, setStudySection] = useState<StudySection>('review')
   const [pluginsMenuAnchor, setPluginsMenuAnchor] = useState<null | HTMLElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -148,6 +151,25 @@ export default function App() {
   const showFirstRun = !!providers.llmStatus?.needsSetup
   const showSmallHint = !!providers.llmStatus?.active?.smallModel && !providers.smallHintDismissed
   const visiblePlugins = listPlugins().filter((p) => !providers.disabledPlugins.includes(p.id))
+
+  /**
+   * Open a built-in panel. Study, Review and Test to notes are no longer add-ons
+   * (#260): their old ids open the matching Study tab section instead, so a stale
+   * id can never land on "Unknown plugin". The Study tab never consults the
+   * disabled-plugin list, so a saved `study`/`review`/`test-to-notes` entry there
+   * is simply ignored.
+   */
+  const openPlugin = (id: string) => {
+    const section = legacyStudySection(id)
+    if (section) {
+      setActivePluginId(null)
+      setStudySection(section)
+      setMode('study')
+      return
+    }
+    setActivePluginId(id)
+    setMode('chat')
+  }
   const quickAsks = providers.pluginContribs.promptPacks.flatMap((pack) =>
     pack.prompts.slice(0, 6).map((q) => ({ q, pack: pack.name })),
   ).slice(0, 8)
@@ -207,8 +229,7 @@ export default function App() {
           onPluginsMenu={setPluginsMenuAnchor}
           onSelectPlugin={(id) => {
             setPluginsMenuAnchor(null)
-            setActivePluginId(id)
-            setMode('chat')
+            openPlugin(id)
           }}
           onAdvanced={(v) => ui.setUiModePersist(v ? 'advanced' : 'simple')}
           onTheme={() => ui.setThemePersist(ui.theme === 'blink' ? 'blink-light' : 'blink')}
@@ -292,6 +313,15 @@ export default function App() {
                 onSelect={notes.selectItem}
                 onAskInstead={goAskAi}
                 onShowMore={notes.loadMoreHits}
+              />
+            )}
+
+            {!activePluginId && mode === 'study' && (
+              <StudyTab
+                section={studySection}
+                onSection={setStudySection}
+                onOpenNote={(id) => notes.selectItem(id)}
+                onNewDraft={notes.openPrefilledDraft}
               />
             )}
 

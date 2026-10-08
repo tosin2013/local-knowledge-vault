@@ -13,8 +13,8 @@ import {
 } from '@mui/material'
 import EventRepeatIcon from '@mui/icons-material/EventRepeat'
 import AddIcon from '@mui/icons-material/Add'
-import type { VaultPluginRenderProps } from '../types'
-import { ProjectSelect } from '../../features/ProjectSelect'
+import type { VaultPluginRenderProps } from '../../plugins/types'
+import { ProjectSelect } from '../ProjectSelect'
 import type { ReviewGrade, ReviewQueueItem, SearchHit } from '../../../electron/types'
 
 /** The SM-2-style four-button scale; `again` is the leftmost (worst) grade. */

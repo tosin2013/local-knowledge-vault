@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { TestToNotesView } from '../../src/plugins/test-to-notes/TestToNotesView'
+import { TestToNotesView } from '../../src/features/study/TestToNotesView'
 import { lkvMock } from './lkv'
 
 /** One correct item and one incorrect item, split by a blank line. */
