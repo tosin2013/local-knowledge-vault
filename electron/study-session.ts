@@ -26,7 +26,7 @@ import { llmGenerate } from './llm'
 import { isRateLimited, retryAfterMs, formatWait } from './providers/http'
 import { buildGroundedMessages, citationsFromIds, extractCitedIds, validateCitations } from './generate'
 import { hashText } from './text-hash'
-import { getCardState, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
+import { getCardState, getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
 import { calibrationSummary, clampConfidence, recordStudyAttempt } from './study'
 import type {
   SearchHit,
@@ -569,12 +569,19 @@ export function studySessionSummary(sessionId: string, project?: string, now: Da
        JOIN items i ON i.id = c.item_id WHERE ${live} AND cs.due_at > @now${scope}`,
     )
     .get({ now: now.toISOString(), project: p ?? '' }) as { next: string | null }
+  // Reviewed cards due by the end of tomorrow, plus the new cards the daily
+  // budget will actually bring in today and tomorrow (#264): a freshly enrolled
+  // 140-card list is not "140 cards due by tomorrow".
   const soon = database
     .prepare(
-      `SELECT COUNT(*) AS n FROM card_schedule cs JOIN study_cards c ON c.id = cs.card_id
+      `SELECT COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 0 ELSE 1 END), 0) AS reviewed,
+              COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 1 ELSE 0 END), 0) AS fresh
+       FROM card_schedule cs JOIN study_cards c ON c.id = cs.card_id
        JOIN items i ON i.id = c.item_id WHERE ${live} AND cs.due_at <= @until${scope}`,
     )
-    .get({ until: endOfTomorrow(now).toISOString(), project: p ?? '' }) as { n: number }
+    .get({ until: endOfTomorrow(now).toISOString(), project: p ?? '' }) as { reviewed: number; fresh: number }
+  const budget = getStudyStats(p || undefined, now)
+  const freshSoon = Math.min(Number(soon?.fresh ?? 0), budget.newLeftToday + budget.newPerDay)
 
   const cards = firsts.length
   return {
@@ -591,6 +598,6 @@ export function studySessionSummary(sessionId: string, project?: string, now: Da
       .map(result),
     revisit: [...revisit.entries()].map(([itemId, title]) => ({ itemId, title })),
     nextDueAt: next?.next ? String(next.next) : null,
-    dueByTomorrow: Number(soon?.n ?? 0),
+    dueByTomorrow: Number(soon?.reviewed ?? 0) + freshSoon,
   }
 }

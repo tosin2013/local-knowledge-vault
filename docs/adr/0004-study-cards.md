@@ -211,7 +211,8 @@ The session loop lives in `electron/study-session.ts` (IPC `study:startSession`,
   `card_id`, `item_id`, `session_id`, `grade`. A missed card goes to the end of the session queue.
 - **Summary** (first try per card): Got it / Partly / Missed counts, retried cards, accuracy (Partly = ½),
   calibration (mean confidence vs mean score), confident misses (confidence ≥ 70, not Got it) listed first, notes
-  to revisit, the next due date and the number of cards due by the end of tomorrow.
+  to revisit, the next due date and the number of cards due by the end of tomorrow (new cards counted only as far
+  as the daily new-card budget lets them in).
 - **Add one note:** the note search in the Study session section asks `review:enrolled` and shows "Already in
   Study" for notes that already have cards.
 - **Migration v9** only adds nullable columns (`study_cards.q_*`, `study_attempts.card_id/item_id/session_id/grade`)

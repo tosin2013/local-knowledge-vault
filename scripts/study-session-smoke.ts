@@ -273,6 +273,13 @@ async function main(): Promise<void> {
   assert(sum.calibration.count === 3 && sum.calibration.bias > 0, 'calibration over first tries (overconfident here)')
   assert(sum.revisit.length === 2, 'notes to revisit: the ones not recalled on the first try')
   assert(!!sum.nextDueAt && sum.dueByTomorrow >= 1, 'what’s next: the next due time and cards due by tomorrow')
+  // A big fresh project: "due by tomorrow" counts only the new cards the daily budget lets in (25 today + 25 tomorrow).
+  for (let n = 0; n < 60; n++) {
+    db.createItem({ title: `Budget ${n}`, body: `Budget card number ${n} covers topic ${n} in a few words.`, kind: 'note', para: 'resources', project: 'Budget' })
+  }
+  cardsMod.enrollProject('Budget')
+  const big = s.studySessionSummary('ses_none', 'Budget')
+  assert(big.dueByTomorrow === 2 * review.NEW_CARDS_PER_DAY_MAX, `due by tomorrow respects the new-card budget (${big.dueByTomorrow} of 60 new)`)
   const empty = s.studySessionSummary('ses_none')
   assert(empty.cards === 0 && empty.accuracy === 0, 'an unknown session summarises to zero')
   let threw2 = false
