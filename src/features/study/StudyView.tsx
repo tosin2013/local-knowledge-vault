@@ -301,7 +301,7 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
       )}
 
       {pending && !feedback && (
-        <Card variant="outlined" data-testid="study-recall">
+        <Card variant="outlined" data-testid="study-recall" sx={{ flexShrink: 0 }}>
           <CardContent>
             <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
               {asked}
@@ -356,7 +356,7 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
 
       {feedback && (
         <Stack spacing={1.5}>
-          <Card variant="outlined">
+          <Card variant="outlined" sx={{ flexShrink: 0 }}>
             <CardContent>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                 Your recall
