@@ -5,7 +5,7 @@ put the repo link in the first comment).
 
 ---
 
-I just shipped the first version of Vault, a desktop app for chatting with your own notes.
+I just released Vault, a desktop app for chatting with your own notes.
 
 The idea is simple. An AI answer about your notes is only useful if you can check it. So in Vault:
 
@@ -39,4 +39,4 @@ If you try it, I'd like to hear where it breaks. Link in the first comment.
 
 **First comment:** Repo and installers: https://github.com/tosin2013/local-knowledge-vault
 
-(Drop `#OpenSource` if the repo is still private or has no license on launch day.)
+(The repo is public under Apache-2.0, so `#OpenSource` applies.)

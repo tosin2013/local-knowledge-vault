@@ -7,7 +7,7 @@ is in the [README](../README.md).
 
 - **Electron 44** main process (`electron/`): SQLite via `better-sqlite3`, IPC, provider registry,
   plugin loader, MCP client, local HTTP bridge.
-- **React 19 + Vite 5 + TypeScript** renderer (`src/`), MUI components.
+- **React 19 + Vite 8 + TypeScript 7** renderer (`src/`), MUI components.
 - **electron-builder** for installers.
 
 ## Layout
@@ -27,15 +27,23 @@ local-knowledge-vault/
     plugin-loader.ts    # declarative plugin.json packs (no code execution)
     import-url.ts       # Add from URL (fetch → extract text → auto-tag → note)
     import-markdown.ts  # Import Markdown/Obsidian notes from a folder
-    media-*.ts          # Media chat ingest (captions → timed notes), personas
+    book-import.ts      # Import book / PDF (EPUB chapters, PDF page groups)
+    personality-pack.ts # personality export/import files
+    test-to-notes*.ts   # Test to notes: parse results, draft corrective notes
+    review.ts / study.ts # spaced review schedule, Study mode attempts + calibration
+    media-*.ts          # Media chat ingest (captions → timed notes), voices (code says "personas")
     mcp-client.ts       # in-app MCP client (Streamable HTTP + OAuth)
-    bridge-server.ts    # loopback HTTP bridge on 127.0.0.1:8765
+    bridge-server.ts    # loopback HTTP bridge on 127.0.0.1:8765 (LKV_BRIDGE_PORT)
     citation-pack.ts    # export an Ask session as an evidence bundle
+    secret-store.ts     # safeStorage encryption for keys and tokens (plaintext fallback)
+    secret-files.ts     # where secrets live; encrypts old plaintext ones at startup
+    update-check.ts     # launch-time GitHub release check (can be turned off)
     user-data.ts        # userData resolution (LKV_USER_DATA_DIR override)
   src/                  # React UI; built-in panels in src/plugins/
+  tests/renderer/       # Vitest + jsdom tests for the React UI
   bridges/              # Obsidian plugin scaffold, Notion notes / CLI stub
   examples/plugins/     # sample plugin.json packs
-  scripts/              # headless smoke tests
+  scripts/              # headless smoke tests for the main process
   build/                # app icons (icon.png 1024×1024, icon.ico)
 ```
 
@@ -87,19 +95,50 @@ Make sure you are on the branch with the change — `main` does not contain unme
 
 ## Checks (headless)
 
+There are two test suites. The main-process suite is a set of smoke scripts in `scripts/` that run
+under Electron-as-Node (`ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/<file>.ts`) so
+`better-sqlite3` matches Electron's ABI; each exits non-zero on failure. The renderer suite uses
+Vitest, jsdom and Testing Library in `tests/renderer/`, with `window.lkv` mocked in
+`tests/renderer/lkv.ts` (see [ADR 0001](./adr/0001-renderer-test-harness.md)).
+
 | Script | What it does |
 |---|---|
 | `npm run typecheck` | `tsc` for the Electron and renderer projects, and the renderer tests (`tsconfig.tests.json`) |
 | `npm run build` | typecheck + Vite build of renderer and main |
-| `npm run test:mvp` | DB seed, filters, FTS hits, citation-hallucination rejection, `ollama.health()` survives Ollama being down |
-| `npm run test:providers` | offline tests of the provider registry, adapters (mock servers), settings migration and plugin loader |
-| `npm run test:providers:live` | live Groq "Test connection" with your saved key (read-only; never prints the key) |
-| `npm run test:citation-pack` | citation pack export |
-| `npm run test:media` | SRT caption parsing and chunking into timed notes (plus an optional temp-DB ingest) |
-| `npm run test:mcp-discovery` | Notion MCP discovery smoke test (uses the network) |
+| `npm run test:ci` | every offline main-process suite below, in sequence (what CI runs) |
+| `npm run test:renderer` | the renderer suite (`vitest run`) |
+| `npm run coverage` | `test:ci` under c8, then the renderer suite with coverage, merged into `coverage/lcov.info` |
+| `npm run coverage:main` | `test:ci` under c8 with the 80% line gate for `electron/` |
 
-The `test:*` scripts that touch SQLite run under `ELECTRON_RUN_AS_NODE=1` so `better-sqlite3`
-matches Electron's ABI.
+Main-process suites in `test:ci`:
+
+| Script | What it does |
+|---|---|
+| `test:mvp` | DB seed, filters, FTS hits, citation-hallucination rejection, `ollama.health()` survives Ollama being down |
+| `test:providers` | provider registry, adapters (mock servers), settings migration and plugin loader |
+| `test:provider-errors` | adapter error paths (HTTP errors, timeouts, bad JSON, missing keys) |
+| `test:grounding-routing` | grounded Ask and chat routing, citation clean-up, personality fencing |
+| `test:notes-vs-transcripts` | your notes rank before transcript chunks in Ask; Media chat stays transcript-first |
+| `test:citation-pack` | citation pack export |
+| `test:media` | SRT caption parsing and chunking into timed notes |
+| `test:media-ingest` | media ingest paths and `yt-dlp` discovery |
+| `test:media-personas` | Media voices: definitions, seeding, Add voice, profiles |
+| `test:mcp` | MCP client against a local mock Streamable HTTP + OAuth server |
+| `test:bridge` | Vault Bridge auth, routes, token storage and port-in-use handling |
+| `test:ipc-preload` | IPC handlers and the preload surface with Electron stubbed |
+| `test:url-import` | Add from URL against a local fixture server |
+| `test:markdown-import` | Markdown / Obsidian folder import |
+| `test:books` | EPUB and PDF import, including Gutenberg clean-up |
+| `test:personalities` | personality export/import files |
+| `test:test-to-notes` | Test to notes parsing and grounded corrective notes |
+| `test:review` | spaced review scheduling |
+| `test:study` | Study mode attempts and calibration |
+| `test:secret-store` | key and token encryption, and the startup encryption of plaintext secrets |
+| `test:store-loader` | user-data and store/loader edge cases |
+| `test:update-check` | update notice: version compare, stubbed GitHub check, setting |
+
+Not in `test:ci` (they use the network): `test:providers:live` (live Groq "Test connection" with your
+saved key; read-only, never prints the key) and `test:mcp-discovery` (Notion MCP discovery).
 
 ## Environment overrides
 
@@ -111,6 +150,7 @@ matches Electron's ABI.
 | `LKV_YTDLP_PATH` | explicit `yt-dlp` binary for Media chat. Otherwise Vault checks `PATH`, `<userData>/bin/`, Homebrew, `~/.local/bin` (pipx/uv), Scoop/winget, then a repo `.venv-ytdlp` |
 | `LKV_YTDLP_EXTRA_ARGS` | extra `yt-dlp` arguments for YouTube caption downloads, whitespace-separated (for example `--cookies-from-browser firefox` when YouTube rate-limits with HTTP 429) |
 | `LKV_USER_DATA_DIR` | use a different settings / keys / plugins / database folder (for example a throwaway demo profile) |
+| `LKV_BRIDGE_PORT` | Vault Bridge port (1024–65535, default `8765`). Use it to run a second profile's bridge alongside the first |
 | `LKV_<PRESET>_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, … | provider keys; env vars win over saved key files (see [providers.md](./providers.md)) |
 
 ## IPC API (`window.lkv`)
@@ -137,11 +177,13 @@ Chat sessions, profiles, prompts, Media chat, MCP and citation-pack calls are al
 - Citations in the answer are checked against the retrieved ids. Unknown ids are dropped.
 - If search finds nothing, Vault answers "I couldn't find that in your notes" without calling a
   model.
-- Personas and personalities change style only; they are wrapped in the same rules.
+- Personalities and voices change style only. A personality is fenced in the system prompt as
+  tone-and-format guidance, and the grounding rules are restated after it so they come last
+  (`composeGroundedSystem` in `electron/generate.ts`).
 
 ## Packaging
 
-Installers for macOS (dmg/zip), Linux (AppImage/deb) and Windows (NSIS) are built with
+Installers for macOS (dmg/zip), Linux (AppImage/deb/rpm/snap) and Windows (NSIS) are built with
 electron-builder:
 
 ```bash

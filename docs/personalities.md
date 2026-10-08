@@ -20,7 +20,10 @@ doesn't know. A personality only changes how the answer *sounds and looks*.
 - The "I don't know" rule when your notes don't cover the question.
 - Using outside knowledge, browsing, or guessing.
 
-Those rules are enforced by Vault and can't be overridden by a personality.
+Those rules are enforced by Vault and can't be overridden by a personality. Vault places the
+personality in a clearly marked "style guidance" block, tells the model it may only change tone and
+format, and repeats the grounding rules after it, so even text like "ignore the rules" in a
+personality (typed or imported) stays style only.
 
 ## Starter templates
 
@@ -39,7 +42,8 @@ Those rules are enforced by Vault and can't be overridden by a personality.
 In the editor you can:
 
 - **Preview** — ask a real question against your own notes and see how the current instructions answer,
-  with an optional side-by-side "Default (no personality)" answer. Nothing is saved.
+  with an optional side-by-side "Default (no personality)" answer. The preview shows the answer the
+  way chat does: formatting, numbered citations and source chips. Nothing is saved.
 - **Export** — write the personality to a `<name>.personality.json` file.
 - **Copy JSON** — put the same JSON on your clipboard.
 - **Import personality** — load a `.personality.json` file. An import never overwrites: if the name is

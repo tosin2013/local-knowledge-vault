@@ -30,7 +30,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
-      # Offline smoke tests under c8. They run under ELECTRON_RUN_AS_NODE=1, so no display is needed.
+      # Both suites, offline: the Electron smoke tests (test:ci, under c8 with ELECTRON_RUN_AS_NODE=1, so no
+      # display is needed), then the renderer Vitest suite; the two lcov reports are merged for Codecov.
       - run: npm run coverage
 
       # Main-process gate (#83): electron/ must stay at or above 80% lines.

@@ -1,7 +1,7 @@
 # Show HN
 
 Post from the account you'll monitor all day. Link: `https://github.com/tosin2013/local-knowledge-vault`
-(the repo must be public and a release published first; see [launch-checklist.md](./launch-checklist.md)).
+(the repo is public and installers are on the Releases page; see [launch-checklist.md](./launch-checklist.md)).
 
 ## Title options
 
@@ -20,20 +20,22 @@ How it works:
 - Notes live in a local SQLite database. Search is SQLite FTS5 (BM25), so it works with no model
   and no network.
 - Ask retrieves matching notes, sends the passages to the model with fixed grounding rules, and
-  checks the answer: any `itm_` citation that wasn't in the retrieved set is dropped. If search
-  finds nothing, Vault says so without calling a model.
+  checks the answer: any citation to a note that wasn't in the retrieved set is dropped, and the
+  rest show as numbered citations [1], [2] that open the note. If search finds nothing, Vault says
+  so without calling a model.
 - Local models by default: it auto-detects Ollama or LM Studio. The first-run card recommends
   `qwen3:8b`.
 - You can add a cloud provider if you want (OpenAI, Anthropic, Gemini, OpenRouter, Mistral,
   DeepSeek, Together, Groq, xAI or any OpenAI-compatible URL), with a Test connection button.
   Cloud providers are only called when you enable them.
-- Plugins are declarative `plugin.json` packs (provider presets, personas, prompt packs, MCP
-  server presets). They can't run code, so they're safe to share as a zip.
+- Plugins are declarative `plugin.json` packs (provider presets, voices and personalities, prompt
+  packs, MCP server presets). They can't run code, so they're safe to share as a zip.
 
 Also in there: Media chat (YouTube or local captions become timed notes you can ask about),
-reusable personas that change tone but not the grounding rules, an MCP client that can connect to
-Notion's hosted MCP server, a loopback HTTP bridge with an Obsidian plugin scaffold, and citation
-pack export.
+personalities and voices that change tone but not the grounding rules, Markdown/Obsidian, EPUB and
+PDF import, a recall-first Study mode and spaced review, an MCP client that can connect to Notion's
+hosted MCP server, a loopback HTTP bridge (token-protected) with an Obsidian plugin scaffold, and
+citation pack export.
 
 Limits, honestly: retrieval is keyword search with no embeddings, it's single-user, and macOS builds
 aren't signed yet.
@@ -54,8 +56,8 @@ TypeScript SDK. Installers are built with electron-builder.
 
 Local-first design choices:
 
-- The notes database, settings, API keys (owner-only files) and plugins all live in the app's
-  user-data folder.
+- The notes database, settings, API keys (encrypted with the OS keychain where available, otherwise owner-only files) and plugins all
+  live in the app's user-data folder.
 - Auto mode tries Ollama, then LM Studio, then other local servers, and only then cloud providers
   you've enabled and given a key. Health checks ping local servers only.
 - With a cloud provider, only the question, the matching passages and recent chat turns are sent.
@@ -67,6 +69,5 @@ What's next:
 
 - Vault as an MCP server, so AI agents can use your notes as cited memory
 - Signed and notarized macOS builds
-- A starter sample vault for a better first run
 
 Happy to answer anything about the grounding prompt, the citation check, or local model choices.
