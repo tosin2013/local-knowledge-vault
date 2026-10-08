@@ -16,6 +16,7 @@ import AddIcon from '@mui/icons-material/Add'
 import type { VaultPluginRenderProps } from '../../plugins/types'
 import { ProjectSelect } from '../ProjectSelect'
 import { ExamDateControl } from './ExamDateControl'
+import { useStudyProject, type StudyProjectProps } from './useStudyProject'
 import type { ReviewGrade, ReviewQueueItem, SearchHit } from '../../../electron/types'
 
 /** The SM-2-style four-button scale; `again` is the leftmost (worst) grade. */
@@ -26,7 +27,9 @@ const GRADES: Array<{ grade: ReviewGrade; label: string }> = [
   { grade: 'easy', label: 'Easy' },
 ]
 
-export function ReviewView({ onClose }: VaultPluginRenderProps) {
+export type ReviewViewProps = VaultPluginRenderProps & StudyProjectProps
+
+export function ReviewView({ onClose, project: projectProp, onProjectChange }: ReviewViewProps) {
   const [due, setDue] = useState<ReviewQueueItem[]>([])
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
@@ -38,7 +41,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
   const [results, setResults] = useState<SearchHit[]>([])
   const [searching, setSearching] = useState(false)
   const [added, setAdded] = useState<Record<string, boolean>>({})
-  const [project, setProject] = useState('')
+  const [project, setProject] = useStudyProject(projectProp, onProjectChange)
 
   const hasReviewApi = !!window.lkv?.review?.listDue
   const hasSearchApi = !!window.lkv?.search?.query
@@ -100,7 +103,8 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
     setSearching(true)
     setError(null)
     try {
-      const { hits } = await window.lkv.search.query({ text, limit: 8 })
+      // Scoped to the picked project (#262); "All projects" searches everything.
+      const { hits } = await window.lkv.search.query({ text, limit: 8, ...(project ? { filters: { project } } : {}) })
       setResults(hits)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

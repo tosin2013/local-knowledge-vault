@@ -33,7 +33,9 @@ describe('App', () => {
     fireEvent.click(study)
     expect(await screen.findByTestId('study-tab')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Study' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('tab', { name: 'Review due notes' })).toHaveAttribute('aria-selected', 'true')
+    // Study opens on Study home (#262).
+    expect(screen.getByRole('tab', { name: 'Home' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByTestId('study-home')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: 'Import practice test' }))
     expect(await screen.findByText('Test to notes')).toBeInTheDocument()
     // Back to Ask, then Study again keeps the last section.
@@ -65,7 +67,7 @@ describe('App', () => {
     await waitFor(() => expect(lkv.plugins.list).toHaveBeenCalled())
     fireEvent.click(await screen.findByRole('button', { name: 'Study' }))
     expect(await screen.findByTestId('study-tab')).toBeInTheDocument()
-    expect(screen.getAllByRole('tab')).toHaveLength(3)
+    expect(screen.getAllByRole('tab')).toHaveLength(4)
   })
 
   it('handles the new-note menu action (⌘N)', async () => {

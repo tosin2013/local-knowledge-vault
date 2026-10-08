@@ -27,7 +27,17 @@ import {
   mergeProject,
   deleteProject,
 } from '../electron/db'
-import { cardUnitsForNote, createNoteCards, listCardsForItem, noteCardKey, WHOLE_NOTE_MAX_CHARS } from '../electron/study-cards'
+import {
+  boilerplateReason,
+  cardUnitsForNote,
+  contentWords,
+  createNoteCards,
+  enrollProject,
+  enrollSkipReason,
+  listCardsForItem,
+  noteCardKey,
+  WHOLE_NOTE_MAX_CHARS,
+} from '../electron/study-cards'
 import {
   anchorFirstIntervalDays,
   scheduleReview,
@@ -41,6 +51,8 @@ import {
   getCardState,
   listReviewLog,
   examDateForCard,
+  getStudyStats,
+  summarizeLastSession,
 } from '../electron/review'
 import type { ReviewState } from '../electron/types'
 
@@ -356,6 +368,123 @@ function main(): void {
     (getDb().prepare(`SELECT COUNT(*) AS c FROM project_settings WHERE name = 'Chem'`).get() as { c: number }).c === 0,
     'deleting a project removes its settings',
   )
+
+  // --- Study this project (#262) ---
+  console.log('\nboilerplate detection (pure)')
+  const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ')
+  assert(contentWords('Source: bio.pdf\nPage: 3\n\nOne two three').length === 3, 'import header lines are not content')
+  assert(boilerplateReason('') === 'empty', 'an empty body is empty')
+  assert(boilerplateReason('Source: x.pdf\nPage: 1\n\nCover') === 'too short to quiz on', 'a near-empty page is too short')
+  const regentsCover = `Source: regents.pdf\nPage: 1\n\nLIVING ENVIRONMENT The University of the State of New York REGENTS HIGH SCHOOL EXAMINATION
+Student Name______________ School Name______________
+The possession or use of any communications device is strictly prohibited when taking this examination.
+A separate answer sheet for multiple-choice questions has been provided. Follow the instructions from the proctor.
+You must sign the declaration printed on your separate answer sheet. ${words(150)}
+DO NOT OPEN THIS EXAMINATION BOOKLET UNTIL THE SIGNAL IS GIVEN.`
+  assert(boilerplateReason(regentsCover)?.startsWith('boilerplate') === true, 'an exam cover/instructions page is boilerplate')
+  const comptiaAbout = `Copyright © 2024 CompTIA, Inc. All rights reserved. About the Exam. Individuals who utilize brain dumps
+violate the CompTIA Candidate Agreement. ${words(200)}`
+  assert(boilerplateReason(comptiaAbout)?.startsWith('boilerplate') === true, 'a copyright + exam-policy page is boilerplate')
+  const contentWithHeader = `CompTIA A+ 220-1201 Exam Objectives. Copyright © 2024 CompTIA, Inc. All rights reserved.
+1.1 Given a scenario, monitor mobile device hardware and use appropriate replacement techniques. ${words(200)}`
+  assert(boilerplateReason(contentWithHeader) === null, 'a long content page with one repeated copyright header is kept')
+  assert(
+    boilerplateReason(`We use cookies to improve your experience. Accept all cookies. ${words(40)}`)?.startsWith('boilerplate') === true,
+    'a short cookie-banner page is boilerplate',
+  )
+  const realNote = `Photosynthesis converts light energy into chemical energy. ${words(30)}`
+  assert(boilerplateReason(realNote) === null, 'a real note is kept')
+  assert(
+    enrollSkipReason({ body: realNote, kind: 'note', status: 'ai-draft' })?.includes('AI draft') === true,
+    'unconfirmed AI drafts are skipped',
+  )
+  assert(enrollSkipReason({ body: realNote, kind: 'transcript', status: 'active' })?.includes('transcript') === true, 'transcripts are skipped')
+  assert(enrollSkipReason({ body: realNote, kind: 'book', status: 'active' }) === null, 'book pages are enrolled')
+  assert(enrollSkipReason({ body: realNote, kind: 'article', status: 'active' }) === null, 'articles are enrolled')
+
+  console.log('\nenrollProject')
+  const course = 'Regents Bio'
+  const mk = (title: string, body: string, extra: Record<string, unknown> = {}) =>
+    createItem({ title, body, kind: 'note', para: 'resources', project: course, ...extra } as Parameters<typeof createItem>[0])
+  const good1 = mk('Osmosis', `Osmosis is the diffusion of water across a membrane. ${words(30)}`)
+  const good2 = mk('Enzymes', `Enzymes are biological catalysts that lower activation energy. ${words(30)}`)
+  const page = mk('Regents · p.5', `Source: bio.pdf\nPage: 5\n\n${[para(1), para(2), para(3)].join('\n\n')}`, { kind: 'book' })
+  const article = mk('Cell article', `Cells are the basic unit of life. ${words(40)}`, { kind: 'article' })
+  const cover = mk('Regents · p.1', regentsCover, { kind: 'book' })
+  const draft = mk('Draft: ATP', `ATP stores energy in phosphate bonds. ${words(30)}`, { status: 'ai-draft' })
+  const tiny = mk('Stub', 'TODO')
+  const transcript = mk('Lecture · 00:00', `Today we talk about mitosis. ${words(40)}`, { kind: 'transcript' })
+  const trashed = mk('Old', `Old note body text. ${words(30)}`)
+  trashItem(trashed.id)
+  const preEnrolled = mk('Already', `Already in review before bulk enrol. ${words(30)}`)
+  enqueueReview(preEnrolled.id)
+
+  let threwNoProject = false
+  try {
+    enrollProject('  ')
+  } catch {
+    threwNoProject = true
+  }
+  assert(threwNoProject, 'enrollProject needs a project')
+
+  const first = enrollProject(course)
+  const pageCards = listCardsForItem(page.id).length
+  assert(pageCards > 1, `a long imported page becomes ${pageCards} chunk cards`)
+  assert(first.notes === 4, `four notes enrolled (got ${first.notes})`)
+  assert(first.cards === 3 + pageCards, `cards = 3 whole-note + ${pageCards} chunk cards (got ${first.cards})`)
+  assert(first.alreadyScheduled === 1, 'the pre-enrolled note is counted as already scheduled')
+  const skippedIds = first.skipped.map((x) => x.itemId).sort()
+  assert(
+    JSON.stringify(skippedIds) === JSON.stringify([cover.id, draft.id, tiny.id, transcript.id].sort()),
+    'cover, AI draft, stub and transcript are skipped',
+  )
+  assert(first.skipped.every((x) => x.reason && x.title), 'every skip has a title and a reason')
+  assert(!first.skipped.some((x) => x.itemId === trashed.id), 'trashed notes are ignored entirely')
+  assert(listCardsForItem(good1.id).length === 1 && listCardsForItem(article.id).length === 1, 'short notes are one card each')
+
+  rateReview(listCardsForItem(good1.id)[0].id, 'good')
+  const second = enrollProject(course)
+  assert(second.notes === 0 && second.cards === 0, 'running it twice adds nothing')
+  assert(second.alreadyScheduled === 5, 'everything enrolled is now already scheduled')
+  assert(getCardState(listCardsForItem(good1.id)[0].id)?.reps === 1, 'a second run does not reset a schedule')
+  assert(
+    (getDb().prepare('SELECT COUNT(*) AS c FROM study_cards c JOIN items i ON i.id = c.item_id WHERE i.project = ?').get(course) as { c: number }).c ===
+      first.cards + 1,
+    'no duplicate cards',
+  )
+  // Confirming the draft makes it eligible on the next run.
+  updateItem(draft.id, { status: 'active' })
+  const third = enrollProject(course)
+  assert(third.notes === 1 && third.cards === 1, 'a confirmed draft is enrolled on the next run')
+  void good2
+
+  console.log('\nstudy stats')
+  const stats = getStudyStats(course)
+  const courseCards = first.cards + 1 + third.cards
+  assert(stats.project === course && stats.totalCards === courseCards, `stats count ${courseCards} cards`)
+  assert(stats.due === courseCards - 1, 'due counts every card but the one just graded')
+  assert(stats.newCards === courseCards - 1, 'new cards are the never-reviewed ones')
+  assert(stats.liveNotes === 9 && stats.enrolledNotes === 6, `live notes 9, enrolled 6 (got ${stats.liveNotes}/${stats.enrolledNotes})`)
+  assert(stats.lastSession?.reviewed === 1 && stats.lastSession.got === 1 && stats.lastSession.score === 1, 'last session from the review log')
+  assert(stats.examDate === null, 'no exam date set yet')
+  setProjectExamDate(course, '2027-06-18')
+  assert(getStudyStats(course).examDate === '2027-06-18', 'stats include the exam date')
+  const all = getStudyStats()
+  assert(all.project === null && all.examDate === null && all.totalCards >= courseCards, 'all-projects stats have no exam date')
+
+  console.log('\nsummarizeLastSession (pure)')
+  assert(summarizeLastSession([]) === null, 'no reviews → no session')
+  const t = (min: number) => new Date(Date.UTC(2026, 9, 8, 12, 0) + min * 60_000).toISOString()
+  const sess = summarizeLastSession([
+    { grade: 'again', reviewedAt: t(-120) }, // earlier session (90-min gap)
+    { grade: 'good', reviewedAt: t(0) },
+    { grade: 'hard', reviewedAt: t(5) },
+    { grade: 'again', reviewedAt: t(20) },
+    { grade: 'easy', reviewedAt: t(45) },
+  ])
+  assert(sess?.reviewed === 4, 'the last session is the run with gaps under 30 minutes')
+  assert(sess?.got === 2 && sess.partial === 1 && sess.missed === 1, 'got/partial/missed counts')
+  assert(sess?.score === 0.5 && sess.startedAt === t(0) && sess.endedAt === t(45), 'score and bounds')
 
   closeDb()
 

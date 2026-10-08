@@ -260,6 +260,7 @@ async function main(): Promise<void> {
     'testToNotes:analyze', 'testToNotes:parse',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
+    'review:enqueueProject', 'review:stats',
     // projects + per-project settings (#261)
     'projects:list', 'projects:rename', 'projects:merge', 'projects:delete',
     'projects:getSettings', 'projects:setExamDate',
@@ -356,6 +357,10 @@ async function main(): Promise<void> {
   const examRated = await ipcRendererMock.invoke('review:rate', { cardId: dueCards[0].card_id, grade: 'good' }) as { intervalDays: number }
   // 20 days out → the Cepeda anchor gives 3 days (15%), not the plain 1-day first interval.
   assert(examRated.intervalDays === 3, 'review:rate anchors the first interval to the project exam date')
+  const bulk = await ipcRendererMock.invoke('review:enqueueProject', 'IPC Exam') as { notes: number; alreadyScheduled: number; skipped: unknown[] }
+  assert(bulk.notes === 0 && bulk.alreadyScheduled === 1 && Array.isArray(bulk.skipped), 'review:enqueueProject is idempotent over enrolled notes')
+  const ipcStats = await ipcRendererMock.invoke('review:stats', 'IPC Exam') as { totalCards: number; examDate: string | null; lastSession: { reviewed: number } | null }
+  assert(ipcStats.totalCards === 1 && ipcStats.examDate === examDay && ipcStats.lastSession?.reviewed === 1, 'review:stats returns the project numbers')
   const cleared = await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', null) as { examDate: string | null }
   assert(cleared.examDate === null, 'projects:setExamDate clears with null')
 

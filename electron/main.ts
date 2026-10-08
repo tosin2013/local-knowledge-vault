@@ -49,7 +49,8 @@ import { askGrounded } from './generate'
 import { parsePersonalityPack, personalityFileName, serializePersonalityPack } from './personality-pack'
 import { sendChatTurn } from './chat'
 import { analyzeTestResults, parseTestResultsWithAi } from './test-to-notes'
-import { listDueReviews, countDueReviews, rateReview, enqueueReview, removeReview } from './review'
+import { listDueReviews, countDueReviews, rateReview, enqueueReview, removeReview, getStudyStats } from './review'
+import { enrollProject } from './study-cards'
 import { listRecentAttempts, recordStudyAttempt, studyCalibration } from './study'
 import { generateStudyQuestions } from './study-questions'
 import { ollamaHealth } from './ollama'
@@ -501,6 +502,9 @@ function registerIpc(): void {
   )
   ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) => enqueueReview(input.itemId))
   ipcMain.handle('review:remove', (_e, itemId: string) => removeReview(itemId))
+  // Study home (#262): bulk "Study this project" and the project's numbers.
+  ipcMain.handle('review:enqueueProject', (_e, project: string) => enrollProject(String(project ?? '')))
+  ipcMain.handle('review:stats', (_e, project?: string) => getStudyStats(project ?? undefined))
 
   // Study mode (#215): recall-before-reveal attempts + calibration.
   ipcMain.handle('study:record', (_e, input: StudyAttemptInput) => recordStudyAttempt(input))

@@ -18,6 +18,8 @@ import type {
   ReviewScheduleRow,
   ReviewState,
   StudyCardOrigin,
+  StudySessionSummary,
+  StudyStats,
 } from './types'
 
 const MS_PER_DAY = 86_400_000
@@ -382,4 +384,94 @@ export function listReviewLog(cardId: string): ReviewLogRow[] {
     reviewedAt: String(r.reviewed_at),
     migrated: Number(r.migrated) === 1,
   }))
+}
+
+/** Reviews closer together than this belong to the same session (#262). */
+export const SESSION_GAP_MS = 30 * 60 * 1000
+
+/**
+ * Group the most recent run of reviews into a session summary. Pure. `log`
+ * may be in any order; migrated rows should be left out by the caller.
+ */
+export function summarizeLastSession(
+  log: Array<{ grade: string; reviewedAt: string }>,
+  gapMs = SESSION_GAP_MS,
+): StudySessionSummary | null {
+  const rows = log
+    .map((r) => ({ grade: r.grade, t: new Date(r.reviewedAt).getTime(), at: r.reviewedAt }))
+    .filter((r) => Number.isFinite(r.t))
+    .sort((a, b) => b.t - a.t)
+  if (rows.length === 0) return null
+  const session = [rows[0]]
+  for (let i = 1; i < rows.length; i++) {
+    if (session[session.length - 1].t - rows[i].t >= gapMs) break
+    session.push(rows[i])
+  }
+  let got = 0
+  let partial = 0
+  let missed = 0
+  for (const r of session) {
+    if (r.grade === 'good' || r.grade === 'easy') got++
+    else if (r.grade === 'hard') partial++
+    else missed++
+  }
+  return {
+    reviewed: session.length,
+    got,
+    partial,
+    missed,
+    score: got / session.length,
+    startedAt: session[session.length - 1].at,
+    endedAt: session[0].at,
+  }
+}
+
+/** Study home numbers for a project ('' / undefined = every project). */
+export function getStudyStats(project?: string, now: Date = new Date()): StudyStats {
+  const database = getDb()
+  const name = (project ?? '').trim()
+  const scope = name ? ' AND i.project = @project' : ''
+  const params = { project: name, now: now.toISOString() }
+  const live = `i.status NOT IN ('trashed', 'archived')`
+  const cards = database
+    .prepare(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 1 ELSE 0 END), 0) AS fresh,
+              COALESCE(SUM(CASE WHEN cs.due_at <= @now THEN 1 ELSE 0 END), 0) AS due,
+              COUNT(DISTINCT c.item_id) AS notes
+       FROM study_cards c
+       JOIN card_schedule cs ON cs.card_id = c.id
+       JOIN items i ON i.id = c.item_id
+       WHERE c.status = 'active' AND ${live}${scope}`,
+    )
+    .get(params) as { total: number; fresh: number; due: number; notes: number }
+  const notes = database
+    .prepare(`SELECT COUNT(*) AS c FROM items i WHERE ${live}${scope}`)
+    .get(params) as { c: number }
+  const log = database
+    .prepare(
+      `SELECT l.grade AS grade, l.reviewed_at AS reviewedAt
+       FROM review_log l
+       JOIN study_cards c ON c.id = l.card_id
+       JOIN items i ON i.id = c.item_id
+       WHERE l.migrated = 0${scope}
+       ORDER BY l.reviewed_at DESC
+       LIMIT 500`,
+    )
+    .all(params) as Array<{ grade: string; reviewedAt: string }>
+  const exam = name
+    ? (database.prepare('SELECT exam_date FROM project_settings WHERE name = ?').get(name) as
+        | { exam_date: string | null }
+        | undefined)
+    : undefined
+  return {
+    project: name || null,
+    examDate: exam?.exam_date ? String(exam.exam_date) : null,
+    due: Number(cards.due),
+    totalCards: Number(cards.total),
+    newCards: Number(cards.fresh),
+    liveNotes: Number(notes.c),
+    enrolledNotes: Number(cards.notes),
+    lastSession: summarizeLastSession(log),
+  }
 }

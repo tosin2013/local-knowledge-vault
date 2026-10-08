@@ -1,10 +1,12 @@
+import { useCallback, useState } from 'react'
 import { Box, Stack, Tab, Tabs, Typography } from '@mui/material'
 import SchoolIcon from '@mui/icons-material/School'
 import type { Item } from '../../../electron/types'
 import { ReviewView } from './ReviewView'
 import { StudyView } from './StudyView'
 import { TestToNotesView } from './TestToNotesView'
-import { STUDY_SECTIONS, type StudySection } from './sections'
+import { StudyHome } from './StudyHome'
+import { STUDY_SECTIONS, loadStudyProject, saveStudyProject, type StudySection } from './sections'
 
 export interface StudyTabProps {
   section: StudySection
@@ -14,12 +16,18 @@ export interface StudyTabProps {
 }
 
 /**
- * The top-level Study tab (#260): exam prep from your own notes. For now it
- * hosts the three existing screens unchanged — Review due notes, Quiz me on…
- * and Import practice test. Study home and the session loop follow in #262/#263.
+ * The top-level Study tab (#260): exam prep from your own notes. Study home
+ * (#262) comes first; Review, Quiz me on… and Import practice test follow.
+ * One project picker is shared by every section and remembered across
+ * section and tab switches (#262).
  */
 export function StudyTab({ section, onSection, onOpenNote, onNewDraft }: StudyTabProps) {
-  const viewProps = { onOpenNote, onNewDraft }
+  const [project, setProjectState] = useState(loadStudyProject)
+  const setProject = useCallback((next: string) => {
+    setProjectState(next)
+    saveStudyProject(next)
+  }, [])
+  const viewProps = { onOpenNote, onNewDraft, project, onProjectChange: setProject }
   return (
     <Box
       data-testid="study-tab"
@@ -59,6 +67,9 @@ export function StudyTab({ section, onSection, onOpenNote, onNewDraft }: StudyTa
         aria-labelledby={`study-tab-${section}`}
         sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
       >
+        {section === 'home' && (
+          <StudyHome project={project} onProjectChange={setProject} onStartReview={() => onSection('review')} />
+        )}
         {section === 'review' && <ReviewView {...viewProps} />}
         {section === 'quiz' && <StudyView {...viewProps} />}
         {section === 'import' && <TestToNotesView {...viewProps} />}

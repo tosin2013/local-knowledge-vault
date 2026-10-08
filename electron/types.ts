@@ -924,6 +924,48 @@ export interface ReviewEnqueueInput {
   itemId: string
 }
 
+/** What "Study this project" did (#262). */
+export interface StudyEnrollResult {
+  project: string
+  /** Notes enrolled by this call. */
+  notes: number
+  /** Cards created by this call. */
+  cards: number
+  /** Notes that already had cards (left untouched). */
+  alreadyScheduled: number
+  /** Notes left out, each with a reason. */
+  skipped: Array<{ itemId: string; title: string; reason: string }>
+}
+
+/** The last study session's grades (#262). A session is a run of reviews with gaps under 30 minutes. */
+export interface StudySessionSummary {
+  reviewed: number
+  got: number
+  partial: number
+  missed: number
+  /** Share recalled: got / reviewed (0–1). */
+  score: number
+  startedAt: string
+  endedAt: string
+}
+
+/** Study home numbers for one project, or every project when `project` is null (#262). */
+export interface StudyStats {
+  project: string | null
+  examDate: string | null
+  /** Cards due now. */
+  due: number
+  /** Active cards on live notes. */
+  totalCards: number
+  /** Cards never reviewed yet. */
+  newCards: number
+  /** Live (not trashed or archived) notes. */
+  liveNotes: number
+  /** Live notes with at least one card. */
+  enrolledNotes: number
+  lastSession: StudySessionSummary | null
+}
+
 /** What enrolling a note produced. */
 export interface ReviewEnqueueResult {
   /** Cards created now (0 when the note was already enrolled). */
