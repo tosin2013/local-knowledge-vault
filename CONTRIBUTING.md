@@ -5,6 +5,9 @@ code fits together, read [docs/development.md](docs/development.md). Providers a
 [docs/providers.md](docs/providers.md) and the plugin format in
 [docs/plugins-authoring.md](docs/plugins-authoring.md).
 
+**You need Node.js 22.22.2+** (pinned in `.nvmrc` — run `nvm use`). On Linux, installing also needs
+`python3`, `make` and `g++` because `better-sqlite3` is compiled locally.
+
 These rules apply to people and to AI coding agents alike.
 
 Found a security problem? Don't open an issue; report it privately as described in

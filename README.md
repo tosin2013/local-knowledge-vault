@@ -223,8 +223,10 @@ What leaves your machine:
 
 ## Build from source
 
-Requires Node.js and npm. `better-sqlite3` is a native module; on Linux you may need `python3`,
-`make` and `g++`.
+Requires **Node.js 22.22.2 or newer** (the dependency tree — `electron@44`, `better-sqlite3@13`,
+`jsdom@30` — needs Node 22; run `nvm use` to pick up the pinned version). `better-sqlite3` is a
+native module compiled for your Node during install; on Linux you need `python3`, `make` and `g++`
+(e.g. `sudo apt install build-essential python3`).
 
 ```bash
 git clone https://github.com/tosin2013/local-knowledge-vault.git

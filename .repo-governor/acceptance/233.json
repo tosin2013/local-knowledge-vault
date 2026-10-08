@@ -1,0 +1,13 @@
+{
+  "$comment": "Completion bar for #233: the Node 22 requirement is declared (engines + .nvmrc) and documented where people look (README, CONTRIBUTING, development docs), including the Linux build tools. Verified failing first: package.json had no engines field, no .nvmrc existed, and none of the three docs named a Node version.",
+  "authority_id": "233",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q '\"engines\"' package.json" },
+    { "check": "command_exit", "target": "grep -q '22.22.2' package.json" },
+    { "check": "file_exists", "target": ".nvmrc" },
+    { "check": "command_exit", "target": "grep -q '22.22.2' README.md" },
+    { "check": "command_exit", "target": "grep -q 'nvm use' CONTRIBUTING.md" },
+    { "check": "command_exit", "target": "grep -q 'build-essential' docs/development.md" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
