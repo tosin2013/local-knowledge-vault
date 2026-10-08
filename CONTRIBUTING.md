@@ -66,8 +66,17 @@ npm run build
 npm run coverage   # runs every test:* suite wired into test:ci under c8, then the renderer suite, then merges both
 ```
 
-There is no test framework. Each `test:*` script is a headless smoke script in `scripts/` that exits
-non-zero on failure. If you change behaviour, extend the matching script. `test:providers:live` and
+There are two test suites:
+
+- **Main process (`electron/`)**: each `test:*` script is a headless smoke script in `scripts/` that
+  runs under Electron-as-Node and exits non-zero on failure. `npm run test:ci` runs all of the ones
+  CI uses. If you change main-process behaviour, extend the matching script.
+- **Renderer (`src/`)**: React component and hook tests with Vitest, jsdom and Testing Library in
+  `tests/renderer/` (`npm run test:renderer`). `window.lkv` is mocked in `tests/renderer/lkv.ts`.
+  Why this harness: [ADR 0001](docs/adr/0001-renderer-test-harness.md).
+
+`npm run coverage` runs `test:ci` under c8, then the renderer suite with V8 coverage, and merges the
+two reports (`scripts/merge-coverage.mjs`) into `coverage/lcov.info`. `test:providers:live` and
 `test:mcp-discovery` use the network and are not part of CI.
 
 CI uploads `coverage/lcov.info` to [Codecov](https://app.codecov.io/gh/tosin2013/local-knowledge-vault).
@@ -77,8 +86,8 @@ request adds or changes need 70% coverage. The main process (`electron/`) is gat
 (`src/`) at 70% lines (Codecov `renderer` component).
 Open `coverage/lcov-report/index.html` after `npm run coverage` to see which lines your change left untested.
 
-UI changes also need a manual check in `npm run dev`, because no test mounts the renderer yet.
-Onboarding and first-run changes seed state only once per install, so verify them against a fresh
+UI changes also need a manual check in `npm run dev`: the renderer tests mock `window.lkv`, so they
+do not catch problems in the real app wiring (#48 passed CI and rendered a blank page). Onboarding and first-run changes seed state only once per install, so verify them against a fresh
 profile rather than your normal one:
 
 ```bash

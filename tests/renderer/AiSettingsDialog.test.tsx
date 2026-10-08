@@ -36,6 +36,16 @@ describe('AiSettingsDialog', () => {
     expect(props.onUseAdvanced).toHaveBeenCalled()
   })
 
+  it('warns when keys cannot be encrypted on this computer (#237)', () => {
+    render(<AiSettingsDialog {...makeProps({ llmStatus: makeLlmStatus({ keyStorage: 'plaintext' }) })} />)
+    expect(screen.getByTestId('key-storage-notice')).toHaveTextContent(/not encrypted/)
+  })
+
+  it('shows no key-storage notice when keys are encrypted (#237)', () => {
+    render(<AiSettingsDialog {...makeProps({ llmStatus: makeLlmStatus({ keyStorage: 'encrypted' }) })} />)
+    expect(screen.queryByTestId('key-storage-notice')).not.toBeInTheDocument()
+  })
+
   it('shows the first-run card when setup is needed', () => {
     const props = makeProps({ advanced: false, llmStatus: makeLlmStatus({ needsSetup: true }) })
     render(<AiSettingsDialog {...props} />)

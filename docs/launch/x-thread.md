@@ -16,7 +16,7 @@ Local models by default. 🧵
 
 Here's the whole loop in 30 seconds: local model → ask → cited answer → open the source note → honest "I don't know".
 
-## 3/8 (214 chars)
+## 3/8 (232 chars)
 
 Local first:
 • Auto-detects Ollama and LM Studio
@@ -24,13 +24,13 @@ Local first:
 • Notes live in SQLite on your machine
 • Search works with no model and no network
 
-With a local model, nothing leaves your computer.
+With a local model, your notes and questions stay on your computer.
 
-## 4/8 (261 chars)
+## 4/8 (252 chars)
 
 Citations are checked, not just requested.
 
-Vault sends the model the matching notes with fixed rules, then drops any itm_ citation that wasn't in the retrieved set.
+Vault sends the model the matching notes with fixed rules, then drops any citation to a note it didn't retrieve.
 
 If search finds nothing, it says "I couldn't find that in your notes" without calling a model.
 
@@ -42,19 +42,20 @@ Prefer a cloud model? Add your own provider in a few clicks: OpenAI, Anthropic, 
 
 Test connection before saving. A cloud provider is only called if you enable it.
 
-## 6/8 (150 chars)
+## 6/8 (148 chars)
 
 > [optional image: docs/media/providers-manage-plugins.png]
 
-Plugins are a plugin.json folder or zip: provider presets, personas, prompt packs, MCP server presets.
+Plugins are a plugin.json folder or zip: provider presets, voices, prompt packs, MCP server presets.
 
 They can't run code, so they're safe to share.
 
-## 7/8 (226 chars)
+## 7/8 (278 chars)
 
 Also in there:
 • Media chat: YouTube or local captions become timed notes you can ask about
-• Personas that change tone, not the grounding rules
+• Personalities: change tone, not the grounding rules
+• Study mode: recall, then reveal the cited answer
 • An MCP client (connect Notion)
 • A local HTTP bridge + Obsidian plugin scaffold
 

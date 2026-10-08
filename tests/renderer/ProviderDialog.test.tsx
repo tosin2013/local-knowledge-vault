@@ -60,6 +60,14 @@ describe('ProviderDialog', () => {
     expect(screen.getByPlaceholderText('•••••••• saved — leave blank to keep')).toBeInTheDocument()
   })
 
+  it('says whether a saved key is encrypted on this computer (#237)', () => {
+    const { unmount } = render(<ProviderDialog {...makeProps({ initialPresetId: 'openrouter', keyStorage: 'plaintext' })} />)
+    expect(screen.getByText(/Not encrypted: this computer has no keychain/)).toBeInTheDocument()
+    unmount()
+    render(<ProviderDialog {...makeProps({ initialPresetId: 'openrouter', keyStorage: 'encrypted' })} />)
+    expect(screen.getByText(/encrypted with your system keychain/)).toBeInTheDocument()
+  })
+
   it('toggles the key visibility', () => {
     render(<ProviderDialog {...makeProps({ initialPresetId: 'openrouter' })} />)
     const key = screen.getByLabelText('API key')

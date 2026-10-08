@@ -15,10 +15,39 @@ import { getPrompt, listItems } from './db'
 import { listMediaProjects } from './media-ingest'
 import { resolveUserDataDir } from './user-data'
 import { encryptSecret, decryptSecret } from './secret-store'
+import { SECRET_BRIDGE_TOKEN_FILE } from './secret-files'
 import type { BridgeAskResult, Citation } from './types'
 
 export const BRIDGE_HOST = '127.0.0.1'
 export const BRIDGE_PORT = 8765
+
+/**
+ * Port to listen on: LKV_BRIDGE_PORT when it is a whole number from 1024 to 65535,
+ * otherwise 8765. Lets a second Vault profile run its own bridge (#240).
+ */
+export function bridgePort(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.LKV_BRIDGE_PORT?.trim()
+  if (!raw) return BRIDGE_PORT
+  const n = Number(raw)
+  if (Number.isInteger(n) && n >= 1024 && n <= 65535) return n
+  console.warn(`[Vault Bridge] ignoring LKV_BRIDGE_PORT=${JSON.stringify(raw.slice(0, 20))} (needs 1024-65535); using ${BRIDGE_PORT}`)
+  return BRIDGE_PORT
+}
+
+/** Port of the last start attempt, and why the bridge is not listening (if it failed). */
+let activePort = BRIDGE_PORT
+let lastError: string | null = null
+
+/** One readable line for a listen failure; never a stack trace (#240). */
+export function bridgeListenErrorMessage(err: NodeJS.ErrnoException, port: number): string {
+  if (err.code === 'EADDRINUSE') {
+    return `Port ${port} is already in use (another Vault profile or app?). The bridge is off for this window; set LKV_BRIDGE_PORT to use another port.`
+  }
+  if (err.code === 'EACCES') {
+    return `No permission to listen on port ${port}. The bridge is off for this window; set LKV_BRIDGE_PORT to use another port.`
+  }
+  return `Bridge could not start on port ${port}: ${err.message}`
+}
 
 /**
  * Version the bridge reports: the app's own version. Electron's `app` is not
@@ -34,7 +63,7 @@ export function bridgeVersion(): string {
   }
 }
 
-const BRIDGE_TOKEN_FILE = 'lkv-bridge-token'
+const BRIDGE_TOKEN_FILE = SECRET_BRIDGE_TOKEN_FILE
 const MAX_BODY_BYTES = 64 * 1024
 
 let server: http.Server | null = null
@@ -277,22 +306,32 @@ async function onRequest(req: http.IncomingMessage, res: http.ServerResponse, po
 }
 
 /** Start the loopback-only Bridge HTTP server (idempotent). */
-export function startBridgeServer(port: number = BRIDGE_PORT): http.Server {
+export function startBridgeServer(port: number = bridgePort()): http.Server {
   if (server) return server
 
-  server = http.createServer((req, res) => {
+  activePort = port
+  lastError = null
+  const srv = http.createServer((req, res) => {
     void onRequest(req, res, port)
   })
+  server = srv
 
-  server.listen(port, BRIDGE_HOST, () => {
+  srv.on('error', (err: NodeJS.ErrnoException) => {
+    if (!srv.listening) {
+      // Failed to start: one clear line, the app carries on without the bridge.
+      lastError = bridgeListenErrorMessage(err, port)
+      console.warn(`[Vault Bridge] ${lastError}`)
+      if (server === srv) server = null
+      return
+    }
+    console.error('[Vault Bridge] server error:', err.message)
+  })
+
+  srv.listen(port, BRIDGE_HOST, () => {
     console.log(`[Vault Bridge] listening on http://${BRIDGE_HOST}:${port}`)
   })
 
-  server.on('error', (err) => {
-    console.error('[Vault Bridge] server error:', err)
-  })
-
-  return server
+  return srv
 }
 
 export function stopBridgeServer(): void {
@@ -310,11 +349,15 @@ export function getBridgeServerStatus(): {
   host: string
   port: number
   version: string
+  /** Why the bridge is not listening, when it failed to start (#240). */
+  error?: string
 } {
+  const running = !!server && server.listening
   return {
-    running: !!server && server.listening,
+    running,
     host: BRIDGE_HOST,
-    port: BRIDGE_PORT,
+    port: activePort,
     version: bridgeVersion(),
+    ...(!running && lastError ? { error: lastError } : {}),
   }
 }

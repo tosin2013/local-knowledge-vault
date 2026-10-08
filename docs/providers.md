@@ -80,8 +80,13 @@ Go to Advanced → AI providers → **Add provider**:
 - Keys are **write-only** in the UI. The renderer only ever sees `hasKey` / `keySource`.
 - Keys you save are stored in `<userData>/lkv-keys/<provider-id>.key`, encrypted with the OS
   keychain via Electron `safeStorage` (macOS Keychain, Windows DPAPI, Linux libsecret/kwallet).
-  When OS encryption isn't available, they fall back to plaintext with `0700` directory and
-  `0600` file permissions.
+  When OS encryption isn't available (including Linux with no keyring, where Electron would only use
+  a fixed password), they fall back to plaintext with `0700` directory and `0600` file permissions,
+  and AI providers shows a notice saying so.
+- Keys saved as plaintext earlier (before encryption existed, or while no keyring was available) are
+  encrypted the next time Vault starts with encryption available. This covers `lkv-keys/*.key`, the
+  legacy Groq/xAI files, the Vault Bridge token and MCP sign-in tokens. Each file is checked by
+  decrypting it before the original is replaced, and is left as it was if anything fails.
 - Env vars win over files: `LKV_<PRESET>_API_KEY` or the provider's usual name (`OPENAI_API_KEY`,
   `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`,
   `DEEPSEEK_API_KEY`, `TOGETHER_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`).
@@ -117,7 +122,8 @@ than silently discarded.
 
 ## Privacy
 
-- With a local provider, nothing leaves the computer.
+- With a local provider, your notes and questions stay on the computer. (Separately, installed
+  builds check GitHub for a newer release on launch; turn that off in **Settings → Updates**.)
 - With a cloud provider, the question, the matching note passages, and recent chat turns are
   sent to that provider. Nothing else is sent.
 - Health checks ping local servers only. Cloud providers aren't contacted until you ask something.

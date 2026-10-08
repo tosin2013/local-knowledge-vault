@@ -16,6 +16,7 @@ import {
   Typography,
 } from '@mui/material'
 import type { PersonalityPreviewResult } from '../../electron/types'
+import { AnswerText, CitationChips } from '../components/answer/AnswerText'
 
 export interface PersonalityPreviewDialogProps {
   open: boolean
@@ -77,18 +78,14 @@ export function PersonalityPreviewDialog({
           No model answered — showing search hits only.
         </Alert>
       )}
-      <Typography
-        variant="body2"
-        component="div"
-        sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-      >
-        {text || '(no answer)'}
-      </Typography>
-      {citations && citations.length > 0 && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Sources: {citations.map((c) => c.title || c.id).join(' · ')}
+      {text ? (
+        <AnswerText text={text} citations={citations ?? []} />
+      ) : (
+        <Typography variant="body2" color="text.secondary">
+          (no answer)
         </Typography>
       )}
+      <CitationChips citations={(citations ?? []).map((c) => ({ ...c, title: c.title || c.id }))} />
     </Paper>
   )
 

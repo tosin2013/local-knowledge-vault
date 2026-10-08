@@ -14,7 +14,7 @@ export const PERSONALITY_PACK_KIND = 'vault.personality' as const
 export const PERSONALITY_PACK_VERSION = 1
 export const PERSONALITY_NAME_MAX = 80
 export const PERSONALITY_DESCRIPTION_MAX = 200
-/** The body becomes `systemExtra`, merged after the grounding rules. Cap it. */
+/** The body becomes `systemExtra`, fenced as style guidance between the grounding rules (#236). Cap it. */
 export const PERSONALITY_BODY_MAX = 4000
 
 export function buildPersonalityPack(

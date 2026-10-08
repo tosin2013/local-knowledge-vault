@@ -5,14 +5,12 @@ Work top to bottom. Items marked **(owner)** need a decision or an account only 
 ## Before anything is public
 
 1. ~~**Choose and add a LICENSE (owner).**~~ Done: Apache-2.0 (`LICENSE`, `NOTICE`).
-2. **Make the repository public (owner).** `tosin2013/local-knowledge-vault` is private; every
-   launch post links to it.
-3. **Publish installers.**
-   - The release workflow is committed at `.github/workflows/release.yml` (macOS, Windows and
-     Linux matrix with electron-builder).
-   - Tag and push: `git tag v0.1.0 && git push origin v0.1.0` (see [docs/release.md](../release.md)).
-   - Check the Release has `.dmg`, `.zip`, `.exe`, `.AppImage` and `.deb`, and install at least
-     the Mac build yourself to confirm the unsigned-open steps in the README are right.
+2. ~~**Make the repository public (owner).**~~ Done: `tosin2013/local-knowledge-vault` is public.
+3. **Publish installers.** Done for v0.1.0–v0.3.0 by `.github/workflows/release.yml` (macOS,
+   Windows and Linux matrix with electron-builder; see [docs/release.md](../release.md)).
+   - Before launch, check the latest Release has the macOS `.dmg` and `.zip` (Intel and arm64), the
+     Windows `.exe`, and the Linux `.AppImage`, `.deb`, `.rpm` and `.snap`.
+   - Install at least the Mac build yourself to confirm the unsigned-open steps in the README.
 4. **Record the demo** with [demo-script.md](./demo-script.md).
 5. **Drop the GIF/MP4 in.** Put `vault-demo.mp4` and `vault-demo.gif` in `docs/media/`, swap
    the README hero block under `<!-- DEMO: ... -->`, commit and push.

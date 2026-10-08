@@ -59,6 +59,7 @@ export function ProviderDialog({
   presets,
   editing,
   initialPresetId,
+  keyStorage,
   onClose,
   onSaved,
 }: {
@@ -67,6 +68,8 @@ export function ProviderDialog({
   editing: ProviderConfig | null
   /** Preselect a preset when adding (e.g. first-run "Use a cloud model instead"). */
   initialPresetId?: string
+  /** How saved keys are stored on this computer (#237). */
+  keyStorage?: 'encrypted' | 'plaintext'
   onClose: () => void
   onSaved: (cfg: ProviderConfig) => void
 }) {
@@ -278,7 +281,11 @@ export function ProviderDialog({
               helperText={
                 editing?.keySource === 'env'
                   ? 'Using a key from an environment variable.'
-                  : 'Stored only on this computer (owner-only file). Never shown again.'
+                  : keyStorage === 'plaintext'
+                    ? 'Stored only on this computer in an owner-only file. Not encrypted: this computer has no keychain Vault can use. Never shown again.'
+                    : keyStorage === 'encrypted'
+                      ? 'Stored only on this computer, encrypted with your system keychain. Never shown again.'
+                      : 'Stored only on this computer (owner-only file). Never shown again.'
               }
               InputProps={{
                 endAdornment: (

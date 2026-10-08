@@ -15,8 +15,13 @@ import { closeDb, initDb, listItems } from '../electron/db'
 import {
   chapterNoteTitle,
   detectBookFormat,
+  cleanEpubSection,
+  epubSectionTitle,
   epubTextFromHtml,
   groupPages,
+  normalizeLetterSpacing,
+  parseEpub,
+  stripGutenbergBoilerplate,
   importBookFromPath,
   pageNoteTitle,
 } from '../electron/book-import'
@@ -33,8 +38,16 @@ function assert(cond: boolean, msg: string): void {
   }
 }
 
-/** Build a tiny, valid EPUB with two XHTML chapters (stored mimetype first). */
-async function buildTestEpub(filePath: string): Promise<void> {
+const xhtml = (title: string, body: string): string =>
+  `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>${title}</title></head><body>${body}</body></html>`
+
+const CLEAN_SECTIONS: Array<[string, string]> = [
+  ['ch1.xhtml', xhtml('Chapter One', '<h1>Chapter One</h1><p>Alpha &amp; beta content for the first chapter.</p>')],
+  ['ch2.xhtml', xhtml('Chapter Two', '<h1>Chapter Two</h1><p>Gamma content for the second chapter.</p>')],
+]
+
+/** Build a tiny, valid EPUB from XHTML sections (stored mimetype first). */
+async function buildTestEpub(filePath: string, sections = CLEAN_SECTIONS, bookTitle = 'The Test Book'): Promise<void> {
   const zip = new JSZip()
   zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' })
   zip.file(
@@ -46,35 +59,62 @@ async function buildTestEpub(filePath: string): Promise<void> {
   </rootfiles>
 </container>`,
   )
+  const items = sections.map(([href], i) => `    <item id="c${i}" href="${href}" media-type="application/xhtml+xml"/>`).join('\n')
+  const refs = sections.map((_, i) => `    <itemref idref="c${i}"/>`).join('\n')
   zip.file(
     'OEBPS/content.opf',
     `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:title>The Test Book</dc:title>
+    <dc:title>${bookTitle}</dc:title>
     <dc:identifier id="bookid">urn:uuid:test</dc:identifier>
   </metadata>
   <manifest>
-    <item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
-    <item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+${items}
   </manifest>
   <spine>
-    <itemref idref="c1"/>
-    <itemref idref="c2"/>
+${refs}
   </spine>
 </package>`,
   )
-  zip.file(
-    'OEBPS/ch1.xhtml',
-    `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><p>Alpha &amp; beta content for the first chapter.</p></body></html>`,
-  )
-  zip.file(
-    'OEBPS/ch2.xhtml',
-    `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Two</title></head><body><h1>Chapter Two</h1><p>Gamma content for the second chapter.</p></body></html>`,
-  )
+  for (const [href, html] of sections) zip.file(`OEBPS/${href}`, html)
   const buf = await zip.generateAsync({ type: 'nodebuffer' })
   fs.writeFileSync(filePath, buf)
 }
+
+const PROSE = 'He walked to the harbour every morning and wrote down what the sailors told him about the weather.'
+
+/** Shaped like a Project Gutenberg EPUB: cover, header + START marker, END marker + licence (#239). */
+const GUTENBERG_SECTIONS: Array<[string, string]> = [
+  ['wrap0000.html', xhtml('"Cover"', '<div><img src="cover.jpg" alt="Cover"/></div>')],
+  [
+    'h-0.html',
+    xhtml(
+      'B E N J A M I N',
+      '<h2>The Project Gutenberg eBook of Test Life</h2><div>This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost. www.gutenberg.org</div>' +
+        '<span>*** START OF THE PROJECT GUTENBERG EBOOK TEST LIFE ***</span>' +
+        `<h1>B E N J A M I N</h1><p>Opening chapter. ${PROSE}</p>`,
+    ),
+  ],
+  ['h-1.html', xhtml('II', `<h1>II</h1><p>Second chapter. ${PROSE}</p>`)],
+  ['h-2.html', xhtml('Plate', '<h2>Plate</h2><p><img src="plate.jpg"/> Plate I</p>')],
+  [
+    'h-3.html',
+    xhtml(
+      'THE FULL PROJECT GUTENBERG™ LICENSE',
+      `<p>Closing chapter. ${PROSE}</p><h3>APPENDIX</h3><p>Appendix text. ${PROSE}</p>` +
+        '<span>*** END OF THE PROJECT GUTENBERG EBOOK TEST LIFE ***</span>' +
+        '<h2>THE FULL PROJECT GUTENBERG™ LICENSE</h2><p>To protect the Project Gutenberg™ mission of promoting the free distribution of electronic works, by using or distributing this work you agree to comply with all the terms of the Full Project Gutenberg™ License.</p>',
+    ),
+  ],
+  [
+    'license.html',
+    xhtml(
+      'License',
+      '<h2>THE FULL PROJECT GUTENBERG LICENSE</h2><p>PLEASE READ THIS BEFORE YOU DISTRIBUTE OR USE THIS WORK. Section 1. General Terms of Use and Redistributing Project Gutenberg electronic works.</p>',
+    ),
+  ],
+]
 
 /** Hand-build a one-page, text-layer PDF with computed xref offsets. */
 function buildMinimalPdf(text: string, title: string): Buffer {
@@ -177,6 +217,41 @@ async function main(): Promise<void> {
     !!chOne && chOne.body.includes('Alpha & beta content for the first chapter.'),
     'body contains the chapter text with entities decoded',
   )
+
+  // --- EPUB clean-up: covers, Gutenberg boilerplate, letter-spaced titles (#239) ---
+  console.log('\nEPUB clean-up (#239)')
+  assert(normalizeLetterSpacing('B E N J A M I N') === 'BENJAMIN', 'letter-spaced title is joined')
+  assert(normalizeLetterSpacing('B E N J A M I N  F R A N K L I N') === 'BENJAMIN FRANKLIN', 'double spaces still separate words')
+  assert(normalizeLetterSpacing('Chapter I. A B C') === 'Chapter I. A B C', 'short runs and normal titles are left alone')
+  assert(normalizeLetterSpacing('  Part\u00a0 Two ') === 'Part Two', 'whitespace and nbsp collapse')
+  assert(
+    stripGutenbergBoilerplate(`Header junk *** START OF THE PROJECT GUTENBERG EBOOK X *** Real text here. *** END OF THE PROJECT GUTENBERG EBOOK X *** licence`) === 'Real text here.',
+    'START/END markers trim header and footer',
+  )
+  assert(stripGutenbergBoilerplate('Real text. THE FULL PROJECT GUTENBERG™ LICENSE terms') === 'Real text.', 'licence heading with ™ cuts the rest')
+  assert(stripGutenbergBoilerplate('The Project Gutenberg eBook of X. This eBook is for the use of anyone anywhere.') === '', 'header-only section is dropped')
+  assert(stripGutenbergBoilerplate(PROSE) === PROSE, 'ordinary prose is untouched')
+  assert(cleanEpubSection('Cover', 'Cover') === '', 'cover page (title only) is skipped')
+  assert(cleanEpubSection('Plate Plate I', 'Plate') === '', 'image page with a caption is skipped')
+  assert(cleanEpubSection(`Chapter One ${PROSE}`, 'Chapter One') !== '', 'a real chapter is kept')
+  assert(epubTextFromHtml('<html><head><title>Meta</title></head><body><p>Body</p></body></html>') === 'Body', '<head> title is not body text')
+  assert(epubSectionTitle(xhtml('THE FULL PROJECT GUTENBERG™ LICENSE', '<h3>APPENDIX</h3>')) === 'APPENDIX', 'licence <title> falls back to the first real heading')
+  assert(epubSectionTitle(xhtml('B E N J A M I N', '')) === 'BENJAMIN', 'section title is normalised')
+
+  const pgPath = path.join(tmp, 'gutenberg-style.epub')
+  await buildTestEpub(pgPath, GUTENBERG_SECTIONS, 'Test Life')
+  const parsedPg = await parseEpub(fs.readFileSync(pgPath), 'gutenberg-style.epub')
+  const keptPg = parsedPg.chapters.filter((c) => c.text)
+  assert(keptPg.length === 3, `keeps the 3 real sections (got ${keptPg.length}: ${keptPg.map((c) => c.title).join(' | ')})`)
+  assert(keptPg.map((c) => c.title).join('|') === 'BENJAMIN|II|APPENDIX', `titles are clean (got ${keptPg.map((c) => c.title).join('|')})`)
+  assert(keptPg.every((c) => !/gutenberg/i.test(c.text)), 'no Gutenberg header, footer or licence text is kept')
+  assert(/^B E N J A M I N Opening chapter\./.test(keptPg[0].text), 'header before START is trimmed from a section with real text')
+  assert(keptPg[2].text.includes('Closing chapter.') && keptPg[2].text.endsWith(PROSE), 'footer after END is trimmed from a section with real text')
+
+  const pgResult = await importBookFromPath(pgPath)
+  assert(pgResult.imported === 3 && pgResult.skipped === 3, `imports 3 notes and skips cover, plate and licence (got ${pgResult.imported}/${pgResult.skipped})`)
+  const pgTitles = listItems().filter((it) => pgResult.itemIds.includes(it.id)).map((it) => it.title)
+  assert(pgTitles.includes('Test Life · BENJAMIN') && !pgTitles.some((t) => /Cover|LICENSE|B E N/.test(t)), `no junk note titles (got ${pgTitles.join(' | ')})`)
 
   // --- PDF import (hand-built text-layer PDF) ---
   console.log('\nPDF import (hand-built text-layer PDF)')

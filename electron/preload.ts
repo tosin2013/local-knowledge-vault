@@ -281,7 +281,7 @@ const api = {
       ipcRenderer.invoke('updates:setSettings', patch),
   },
   bridge: {
-    status: (): Promise<{ running: boolean; host: string; port: number; version: string }> =>
+    status: (): Promise<{ running: boolean; host: string; port: number; version: string; error?: string }> =>
       ipcRenderer.invoke('bridge:status'),
     getToken: (): Promise<string> => ipcRenderer.invoke('bridge:getToken'),
     rotateToken: (): Promise<string> => ipcRenderer.invoke('bridge:rotateToken'),

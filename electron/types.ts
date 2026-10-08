@@ -339,6 +339,8 @@ export interface LlmStatus {
   needsSetup: boolean
   /** Recommended local model for the first-run card. */
   recommendedLocalModel: { name: string; command: string; why: string }
+  /** How API keys and the bridge token are saved on this computer (#237). Set by llm:status. */
+  keyStorage?: 'encrypted' | 'plaintext'
 }
 
 export interface ProviderDraft {

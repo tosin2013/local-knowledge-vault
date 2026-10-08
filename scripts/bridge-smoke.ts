@@ -15,6 +15,9 @@ import { initDb, closeDb } from '../electron/db'
 import {
   startBridgeServer,
   stopBridgeServer,
+  getBridgeServerStatus,
+  bridgePort,
+  bridgeListenErrorMessage,
   getBridgeToken,
   rotateBridgeToken,
   BRIDGE_HOST,
@@ -188,6 +191,50 @@ async function main() {
     headers: { Authorization: `Bearer ${token}` },
   })
   assert(oldAfterRotate.status === 401, `old token rejected after rotation → 401 (got ${oldAfterRotate.status})`)
+
+  // --- port already in use (#240): one clear line, no throw, status says not listening ---
+  const statusUp = getBridgeServerStatus()
+  assert(statusUp.running === true && statusUp.port === port && !statusUp.error, 'status reports the live port')
+  stopBridgeServer()
+  const blocker = http.createServer()
+  await new Promise<void>((resolve) => blocker.listen(port, '127.0.0.1', () => resolve()))
+  const warnings: string[] = []
+  const errors: string[] = []
+  const origWarn = console.warn
+  const origError = console.error
+  console.warn = (...a: unknown[]) => void warnings.push(a.map(String).join(' '))
+  console.error = (...a: unknown[]) => void errors.push(a.map(String).join(' '))
+  try {
+    const clash = startBridgeServer(port)
+    await new Promise<void>((resolve) => {
+      clash.once('error', () => setImmediate(resolve))
+      setTimeout(resolve, 2000)
+    })
+  } finally {
+    console.warn = origWarn
+    console.error = origError
+  }
+  assert(warnings.length === 1 && /Port \d+ is already in use/.test(warnings[0]) && warnings[0].includes('LKV_BRIDGE_PORT'), `EADDRINUSE logs one clear line (got ${JSON.stringify(warnings)})`)
+  assert(errors.length === 0 && !warnings.some((w) => /\n\s+at /.test(w)), 'no stack trace is logged')
+  const statusDown = getBridgeServerStatus()
+  assert(statusDown.running === false && /already in use/.test(statusDown.error ?? ''), 'status says the bridge is not listening, and why')
+  await new Promise<void>((resolve) => blocker.close(() => resolve()))
+  const retry = startBridgeServer(port)
+  await new Promise<void>((resolve) => {
+    if (retry.listening) resolve()
+    else retry.once('listening', () => resolve())
+    setTimeout(resolve, 2000)
+  })
+  assert(getBridgeServerStatus().running === true && !getBridgeServerStatus().error, 'bridge can start again once the port is free')
+
+  // --- LKV_BRIDGE_PORT (#240) ---
+  const origWarn2 = console.warn
+  console.warn = () => undefined
+  assert(bridgePort({}) === 8765, 'default port is 8765')
+  assert(bridgePort({ LKV_BRIDGE_PORT: '8766' }) === 8766, 'LKV_BRIDGE_PORT picks another port')
+  assert(bridgePort({ LKV_BRIDGE_PORT: '80' }) === 8765 && bridgePort({ LKV_BRIDGE_PORT: 'abc' }) === 8765, 'invalid LKV_BRIDGE_PORT falls back to 8765')
+  console.warn = origWarn2
+  assert(/EACCES|permission/i.test(bridgeListenErrorMessage(Object.assign(new Error('x'), { code: 'EACCES' }), 80)), 'EACCES has its own message')
 
   closeDb()
   stopBridgeServer()

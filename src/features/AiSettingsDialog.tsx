@@ -3,6 +3,7 @@ import type { LlmStatus, ProviderConfig } from '../../electron/types'
 import { FirstRunLocalCard, SmallModelHint } from '../components/ai/FirstRunLocalCard'
 import { ProvidersPanel } from '../components/ai/ProvidersPanel'
 import { BridgeSettings } from '../components/ai/BridgeSettings'
+import { KeyStorageNotice } from '../components/ai/KeyStorageNotice'
 import { UpdateSettings } from '../components/updates/UpdateSettings'
 
 export interface AiSettingsDialogProps {
@@ -73,6 +74,7 @@ export function AiSettingsDialog(props: AiSettingsDialogProps) {
             </Stack>
           </Stack>
         )}
+        <KeyStorageNotice keyStorage={llmStatus?.keyStorage} />
         <BridgeSettings />
         <UpdateSettings />
       </DialogContent>

@@ -15,15 +15,17 @@ get an answer that cites the exact note it came from, or an honest "I don't know
 
 **How it fits with Obsidian:**
 
-- While Vault is running, it serves a small HTTP API on `127.0.0.1:8765` (loopback only).
+- While Vault is running, it serves a small HTTP API on `127.0.0.1:8765` (loopback only, and every
+  call except `/health` needs the per-install bearer token shown in Vault's settings).
 - The repo includes an Obsidian plugin scaffold (`bridges/obsidian-vault/`) with two commands:
   **Vault health** and **Ask Vault…**, which inserts the answer and its citations into your
   active note.
 - Install it by copying the folder into `.obsidian/plugins/vault-bridge/` and enabling it under
   Community plugins. It's a scaffold, not a listed community plugin.
-- Being upfront about the limit: it does **not** sync your Obsidian notes into Vault yet. Vault
-  answers from the notes stored in Vault (created in the app, imported from a URL, or from video
-  captions).
+- **Import Markdown** copies a vault folder's `.md` files into Vault in one go (title from
+  frontmatter or the first heading, `[[wiki links]]` turned into text). Being upfront about the
+  limit: it's a one-time import, not a live sync, so later edits in Obsidian don't flow back in.
+  Vault answers from the notes stored in Vault.
 
 **About Vault itself:**
 

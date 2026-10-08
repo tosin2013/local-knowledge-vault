@@ -86,6 +86,8 @@ export function decodeEntities(text: string): string {
  */
 export function epubTextFromHtml(html: string): string {
   const stripped = html
+    // <head> holds the <title>, which is metadata, not text of the section (#239).
+    .replace(/<head[\s>][\s\S]*?<\/head>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')
@@ -94,9 +96,66 @@ export function epubTextFromHtml(html: string): string {
 
 /** Strip inner tags from a title fragment and collapse whitespace. */
 function titleFromMarkup(fragment: string): string {
-  return decodeEntities(fragment.replace(/<[^>]*>/g, ' '))
+  return normalizeLetterSpacing(decodeEntities(fragment.replace(/<[^>]*>/g, '')))
+}
+
+/**
+ * Undo letter-spaced display titles (#239): `B E N J A M I N` → `BENJAMIN`. Runs of four or
+ * more single letters/digits are joined; two or more spaces still separate words, so
+ * `B E N  F R A N K` → `BEN FRANK`. Also collapses whitespace.
+ */
+export function normalizeLetterSpacing(raw: string): string {
+  return raw
+    .replace(/\u00a0/g, ' ')
+    .split(/\s{2,}/)
+    .map((part) =>
+      part.replace(/(?<!\S)((?:[\p{L}\p{N}] ){3,}[\p{L}\p{N}])(?![\p{L}\p{N}])/gu, (run) => run.replace(/ /g, '')),
+    )
+    .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+const PG_START_RE = /\*{3}\s*START OF (?:THE|THIS) PROJECT GUTENBERG E-?BOOK[^*]*\*{3}/i
+const PG_END_RE = /\*{3}\s*END OF (?:THE|THIS) PROJECT GUTENBERG E-?BOOK[^*]*\*{3}|\bEnd of (?:the )?Project Gutenberg'?s?\b/i
+const PG_LICENSE_RE = /\bTHE FULL PROJECT GUTENBERG(?:\u2122|\(TM\))?\s+LICEN[CS]E\b|\bSTART: FULL LICEN[CS]E\b/i
+const PG_HEADER_RE = /\bfor the use of anyone anywhere\b/i
+
+/**
+ * Remove Project Gutenberg wrapping from one section's text (#239): everything up to the
+ * `*** START OF … ***` line, everything from the `*** END OF … ***` line or the licence on,
+ * and a section that is only the standard eBook header. Returns '' when nothing real is left.
+ */
+export function stripGutenbergBoilerplate(text: string): string {
+  let t = text
+  const start = PG_START_RE.exec(t)
+  if (start) t = t.slice(start.index + start[0].length)
+  const end = PG_END_RE.exec(t)
+  if (end) t = t.slice(0, end.index)
+  const license = PG_LICENSE_RE.exec(t)
+  if (license) t = t.slice(0, license.index)
+  t = t.trim()
+  // A header-only section ("The Project Gutenberg eBook of …, This eBook is for the use of
+  // anyone anywhere …") with no START marker of its own.
+  if (/project gutenberg/i.test(t) && PG_HEADER_RE.test(t) && t.length < 3000) return ''
+  return t
+}
+
+/** Sections with fewer words than this (besides their own title) are covers or image pages. */
+export const MIN_SECTION_WORDS = 3
+
+/** Clean one EPUB section for import; '' means skip it (#239). */
+export function cleanEpubSection(text: string, sectionTitle: string | null): string {
+  const t = stripGutenbergBoilerplate(text)
+  if (!t) return ''
+  let rest = t
+  if (sectionTitle) {
+    const norm = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+    const titleNorm = norm(sectionTitle)
+    if (titleNorm && norm(rest).startsWith(titleNorm)) rest = norm(rest).slice(titleNorm.length)
+  }
+  const words = rest.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w))
+  return words.length < MIN_SECTION_WORDS ? '' : t
 }
 
 /** Chapter title from an XHTML `<title>`, then the first `<h1>`, then `<h2>`. */
@@ -107,6 +166,21 @@ export function epubChapterTitle(html: string): string | null {
       const title = titleFromMarkup(m[1])
       if (title) return title
     }
+  }
+  return null
+}
+
+/**
+ * Section title for an EPUB document. Gutenberg's split files sometimes take their
+ * `<title>` from the licence heading at the end of the file; then the first heading
+ * that is not Gutenberg boilerplate is used instead (#239).
+ */
+export function epubSectionTitle(html: string): string | null {
+  const title = epubChapterTitle(html)
+  if (!title || !/project gutenberg/i.test(title)) return title
+  for (const m of html.matchAll(/<h([1-3])[^>]*>([\s\S]*?)<\/h\1>/gi)) {
+    const heading = titleFromMarkup(m[2])
+    if (heading && !/project gutenberg/i.test(heading)) return heading
   }
   return null
 }
@@ -278,9 +352,10 @@ export async function parseEpub(buf: Buffer, fileName: string): Promise<ParsedBo
     const entry = zip.file(zipPath)
     if (!entry) continue
     const html = await entry.async('string')
-    const text = epubTextFromHtml(html)
-    const chapterTitle = epubChapterTitle(html) ?? title
-    chapters.push({ title: chapterTitle, text })
+    const sectionTitle = epubSectionTitle(html)
+    // Covers, image-only pages and Gutenberg licence/header sections become '' and are skipped.
+    const text = cleanEpubSection(epubTextFromHtml(html), sectionTitle)
+    chapters.push({ title: sectionTitle ?? title, text })
   }
 
   return { title, chapters }

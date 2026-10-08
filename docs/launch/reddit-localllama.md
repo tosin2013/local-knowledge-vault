@@ -13,8 +13,8 @@ Disclosure up front: this is my own project. I'm posting it here because it's bu
 models first, and I'd like feedback from people who run them daily.
 
 **What it is:** a desktop app (Electron; macOS, Windows, Linux) that stores your notes in SQLite
-and lets you ask questions about them. Every answer has to cite the note it came from (`itm_`
-IDs shown as clickable badges that open the source note). If your notes don't cover the question,
+and lets you ask questions about them. Every answer has to cite the note it came from (numbered
+citations, [1], [2], that open the source note). If your notes don't cover the question,
 it's supposed to say so.
 
 **The local part:**
@@ -38,7 +38,7 @@ Vault answers "I couldn't find that in your notes" without calling the model at 
 **Cloud is opt-in:** you can add OpenAI, Anthropic, Gemini, OpenRouter, Groq, etc., but a cloud
 provider is never called unless you enable it.
 
-**Plugins** are `plugin.json` packs (provider presets, personas, prompt packs, MCP presets) that
+**Plugins** are `plugin.json` packs (provider presets, voices, prompt packs, MCP presets) that
 can't execute code.
 
 Repo: https://github.com/tosin2013/local-knowledge-vault
