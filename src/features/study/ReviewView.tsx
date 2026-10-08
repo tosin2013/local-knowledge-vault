@@ -45,6 +45,12 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
   const current = due[index] ?? null
   const remaining = Math.max(due.length - index, 0)
 
+  // The new-card budget and coverage warning for this scope (#264).
+  const refreshStats = useCallback(async () => {
+    const getStats = window.lkv?.review?.stats
+    setStats(getStats ? await getStats(project || undefined).catch(() => null) : null)
+  }, [project])
+
   const refresh = useCallback(async () => {
     if (!window.lkv?.review?.listDue) {
       setError('Review IPC is unavailable — restart Vault after updating.')
@@ -57,15 +63,13 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
       setDue(items)
       setIndex(0)
       setRevealed(false)
-      // The new-card budget and coverage warning for this scope (#264).
-      const getStats = window.lkv.review.stats
-      setStats(getStats ? await getStats(project || undefined).catch(() => null) : null)
+      void refreshStats()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
     }
-  }, [project])
+  }, [project, refreshStats])
 
   useEffect(() => {
     void refresh()
@@ -86,6 +90,7 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
       setIndex((i) => i + 1)
       setRevealed(false)
       setStatus(grade === 'again' ? 'Missed: it comes back later in this session.' : `Graded “${gradeLabel(grade)}”.`)
+      void refreshStats()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }

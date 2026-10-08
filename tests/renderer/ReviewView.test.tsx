@@ -54,6 +54,8 @@ describe('ReviewView', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Missed' }))
     await waitFor(() => expect(lkv.review.rate).toHaveBeenCalledWith({ cardId: 'crd_itm_1', grade: 'again' }))
     expect(await screen.findByText('Missed: it comes back later in this session.')).toBeInTheDocument()
+    // The new-card budget line refreshes after each grade.
+    await waitFor(() => expect(lkv.review.stats.mock.calls.length).toBeGreaterThanOrEqual(2))
 
     // Next card, then the missed one again.
     expect(await screen.findByText('Second card')).toBeInTheDocument()
