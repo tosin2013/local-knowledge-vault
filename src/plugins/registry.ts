@@ -2,9 +2,6 @@ import type { VaultPlugin } from './types'
 import { mediaChatPlugin } from './media-chat'
 import { mediaPersonasPlugin } from './media-personas'
 import { mcpConnectionsPlugin } from './mcp-connections'
-import { testToNotesPlugin } from './test-to-notes'
-import { reviewPlugin } from './review'
-import { studyPlugin } from './study'
 import { managePluginsPlugin } from './manage'
 
 /**
@@ -13,8 +10,11 @@ import { managePluginsPlugin } from './manage'
  * The header Plugins menu reads this list automatically (minus ones the user disabled
  * in Manage plugins). Third-party plugins are declarative plugin.json packs — see
  * docs/plugins-authoring.md; they never run code.
+ *
+ * Study, Review and Test to notes are not add-ons any more: they live in the
+ * top-level Study tab (src/features/study, #260).
  */
-export const plugins: VaultPlugin[] = [mediaChatPlugin, mediaPersonasPlugin, mcpConnectionsPlugin, testToNotesPlugin, reviewPlugin, studyPlugin]
+export const plugins: VaultPlugin[] = [mediaChatPlugin, mediaPersonasPlugin, mcpConnectionsPlugin]
 
 /** System panels: always available, not listed as toggleable plugins. */
 const systemPlugins: VaultPlugin[] = [managePluginsPlugin]

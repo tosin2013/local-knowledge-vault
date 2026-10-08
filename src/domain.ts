@@ -1,6 +1,7 @@
 import type { AnswerProvider, ChatProfile, Citation, Item, ItemFilters, Para, Prompt } from '../electron/types'
 
-export type Mode = 'search' | 'chat' | 'prompts'
+/** Primary content views: Ask (`chat`), Find (`search`), Study (`study`), plus Personalities (`prompts`). */
+export type Mode = 'search' | 'chat' | 'study' | 'prompts'
 export type UiMode = 'simple' | 'advanced'
 
 export const PARA_OPTIONS: Array<Para | ''> = ['', 'projects', 'areas', 'resources', 'archives']

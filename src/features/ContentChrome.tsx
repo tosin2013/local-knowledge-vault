@@ -3,12 +3,21 @@ import CloseIcon from '@mui/icons-material/Close'
 import type { Mode } from '../domain'
 import { getPlugin } from '../plugins/registry'
 
+/** The three primary tabs, in display order: Ask → Find → Study. */
+export type PrimaryMode = 'chat' | 'search' | 'study'
+export const PRIMARY_MODES: { value: PrimaryMode; label: string }[] = [
+  { value: 'chat', label: 'Ask' },
+  { value: 'search', label: 'Find' },
+  { value: 'study', label: 'Study' },
+]
+const isPrimaryMode = (v: unknown): v is PrimaryMode => PRIMARY_MODES.some((m) => m.value === v)
+
 export interface ContentChromeProps {
   mode: Mode
   activePluginId: string | null
   statusMsg: string | null
   error: string | null
-  onToggleMode: (v: 'search' | 'chat') => void
+  onToggleMode: (v: PrimaryMode) => void
   onClearPlugin: () => void
   onClosePlugin: () => void
   onDismissStatus: () => void
@@ -38,21 +47,20 @@ export function ContentChrome(props: ContentChromeProps) {
         <ToggleButtonGroup
           exclusive
           size="small"
-          value={mode === 'search' || mode === 'chat' ? mode : null}
+          value={!activePluginId && isPrimaryMode(mode) ? mode : null}
           onChange={(_e, v) => {
-            if (v === 'search' || v === 'chat') {
+            if (isPrimaryMode(v)) {
               onToggleMode(v)
             }
           }}
           aria-label="Primary mode"
           sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 999, p: 0.25 }}
         >
-          <ToggleButton value="search" aria-label="Find">
-            Find
-          </ToggleButton>
-          <ToggleButton value="chat" aria-label="Ask">
-            Ask
-          </ToggleButton>
+          {PRIMARY_MODES.map((m) => (
+            <ToggleButton key={m.value} value={m.value} aria-label={m.label}>
+              {m.label}
+            </ToggleButton>
+          ))}
         </ToggleButtonGroup>
         {mode === 'prompts' && <Chip size="small" variant="outlined" label="Personalities" />}
         {activePluginId && (

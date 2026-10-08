@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from '../../src/App'
 
 describe('App', () => {
@@ -24,6 +24,48 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Find' })).toBeInTheDocument())
     screen.getByRole('button', { name: 'Find' }).click()
     await waitFor(() => expect(screen.getByText(/Search to find notes/)).toBeInTheDocument())
+  })
+
+  it('opens the Study tab in Simple mode and switches sections (#260)', async () => {
+    render(<App />)
+    const study = await screen.findByRole('button', { name: 'Study' })
+    expect(document.querySelector('.app.ui-simple')).not.toBeNull()
+    fireEvent.click(study)
+    expect(await screen.findByTestId('study-tab')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Study' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('tab', { name: 'Review due notes' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(screen.getByRole('tab', { name: 'Import practice test' }))
+    expect(await screen.findByText('Test to notes')).toBeInTheDocument()
+    // Back to Ask, then Study again keeps the last section.
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => expect(screen.queryByTestId('study-tab')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Study' }))
+    expect(await screen.findByRole('tab', { name: 'Import practice test' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('no longer lists Study, Review or Test to notes under Plugins', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Plugins' }))
+    expect(await screen.findByRole('menuitem', { name: /^Media chat/ })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^MCP connections/ })).toBeInTheDocument()
+    for (const name of [/^Study/, /^Review/, /^Test to notes/]) {
+      expect(screen.queryByRole('menuitem', { name })).not.toBeInTheDocument()
+    }
+  })
+
+  it('ignores stale disabled-plugin ids for the former add-ons', async () => {
+    const lkv = window.lkv as unknown as { plugins: { list: ReturnType<typeof vi.fn> } }
+    lkv.plugins.list.mockResolvedValue({
+      plugins: [],
+      errors: [],
+      pluginsDir: '',
+      disabled: ['study', 'review', 'test-to-notes'],
+    })
+    render(<App />)
+    await waitFor(() => expect(lkv.plugins.list).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'Study' }))
+    expect(await screen.findByTestId('study-tab')).toBeInTheDocument()
+    expect(screen.getAllByRole('tab')).toHaveLength(3)
   })
 
   it('handles the new-note menu action (⌘N)', async () => {

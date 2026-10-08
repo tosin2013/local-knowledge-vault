@@ -39,7 +39,8 @@ Vault shows a hint if it detects one.
    `What are the main causes of …?` Press Enter.
 3. **Check the answer.** Each point ends with a number like **[1]**. The chips under the answer
    list the chapters it used. Click one to read that chapter beside your chat.
-4. **Test yourself first.** Open **Plugins → Study**.
+4. **Test yourself first.** Click **Study** in the toggle at the top (**Ask · Find · Study**), then
+   the **Quiz me on…** tab.
    - Type a **Question** and click **Get answer from my notes**. Vault fetches the answer but
      keeps it hidden.
    - Write what you remember in **Your recall**, or click **I don't know**.
@@ -49,12 +50,12 @@ Vault shows a hint if it detects one.
 
    Once you've saved attempts, a calibration line at the top compares how sure you felt with how
    you actually did.
-5. **Schedule reviews.** Open **Plugins → Review**. Under **Add notes to review**, search for a
+5. **Schedule reviews.** In **Study**, open the **Review due notes** tab. Under **Add notes to review**, search for a
    topic, optionally set a **Target exam date**, and click **Add to review** next to the notes you
    want. When notes are due they appear under **Due now**: recall the note from its title, click
    **Show answer**, then rate yourself **Again**, **Hard**, **Good** or **Easy**. Vault picks the
-   next date. Click **Back to Ask** to return.
-6. **Learn from a practice test.** Open **Plugins → Test to notes** and paste your results into
+   next date. Click **Ask** in the toggle to return.
+6. **Learn from a practice test.** In **Study**, open the **Import practice test** tab and paste your results into
    **Paste practice-test results**. Plain text works:
 
    ```text
@@ -103,4 +104,5 @@ Vault shows a hint if it detects one.
   notes.
 - [Learning from video](video.md): turn lecture recordings or YouTube videos into notes you can
   ask about.
-- [PLUGINS.md](../../PLUGINS.md): more detail on Study, Review and Test to notes.
+- [PLUGINS.md](../../PLUGINS.md#study-tab-not-an-add-on): more detail on the Study tab's three
+  sections.

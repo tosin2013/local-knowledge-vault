@@ -15,8 +15,8 @@ import {
 import QuizIcon from '@mui/icons-material/Quiz'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import SaveIcon from '@mui/icons-material/Save'
-import type { VaultPluginRenderProps } from '../types'
-import { ProjectSelect } from '../../features/ProjectSelect'
+import type { VaultPluginRenderProps } from '../../plugins/types'
+import { ProjectSelect } from '../ProjectSelect'
 import type { TestToNotesItem, TestToNotesSuggestion } from '../../../electron/types'
 import { parseTestResults, summarizeAttempts } from '../../../electron/test-to-notes-parse'
 

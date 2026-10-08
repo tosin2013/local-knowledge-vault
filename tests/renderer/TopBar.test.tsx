@@ -33,13 +33,13 @@ describe('TopBar', () => {
   it('renders the brand and search box', () => {
     render(<TopBar {...makeProps()} />)
     expect(screen.getByText('Vault')).toBeInTheDocument()
-    expect(screen.getByLabelText('Search notes')).toBeInTheDocument()
+    expect(screen.getByLabelText('Find notes')).toBeInTheDocument()
   })
 
   it('runs search on Enter and on the Search button', () => {
     const props = makeProps({ searchText: 'hello' })
     render(<TopBar {...props} />)
-    fireEvent.keyDown(screen.getByLabelText('Search notes'), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByLabelText('Find notes'), { key: 'Enter' })
     expect(props.onRunSearch).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Search' }))
     expect(props.onRunSearch).toHaveBeenCalledTimes(2)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ReviewView } from '../../src/plugins/review/ReviewView'
+import { ReviewView } from '../../src/features/study/ReviewView'
 import { lkvMock, makeHit, makeReviewItem } from './lkv'
 
 const NOTE = makeReviewItem('itm_1', {

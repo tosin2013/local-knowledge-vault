@@ -15,9 +15,9 @@ import {
 } from '@mui/material'
 import SchoolIcon from '@mui/icons-material/School'
 import SaveIcon from '@mui/icons-material/Save'
-import type { VaultPluginRenderProps } from '../types'
+import type { VaultPluginRenderProps } from '../../plugins/types'
 import { AnswerText, CitationChips } from '../../components/answer/AnswerText'
-import { ProjectSelect } from '../../features/ProjectSelect'
+import { ProjectSelect } from '../ProjectSelect'
 import type {
   AskGroundedResult,
   StudyCalibration,

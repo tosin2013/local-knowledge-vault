@@ -135,14 +135,16 @@ accept it, and explains why a broken pack was rejected.
 - **Import books.** **Import book / PDF** turns an EPUB into one note per chapter and a PDF into
   notes by page range, all under a project named after the book. Covers, image-only pages and
   Project Gutenberg licence text are skipped.
-- **Study mode** (**Plugins → Study**). Write what you remember first, then reveal the grounded,
-  cited answer as feedback, rate your confidence and grade yourself. A calibration strip shows how
-  well your confidence matches your results.
-- **Spaced review** (**Plugins → Review**). Notes come back on a spaced schedule: recall, reveal the
-  note, rate how it went.
-- **Test to notes** (**Plugins → Test to notes**). Paste practice-test results and turn each wrong
-  answer into a grounded corrective note.
-- **AI drafts stay drafts.** Notes written by the model (for example from Test to notes) are saved as
+- **Study tab.** The toggle at the top reads **Ask · Find · Study**. **Study** gathers exam prep in
+  one place, with three sections:
+  - **Review due notes.** Notes come back on a spaced schedule: recall, reveal the note, rate how
+    it went.
+  - **Quiz me on…** Type a question, write what you remember first, then reveal the grounded,
+    cited answer as feedback, rate your confidence and grade yourself. A calibration strip shows
+    how well your confidence matches your results.
+  - **Import practice test.** Paste practice-test results and turn each wrong answer into a
+    grounded corrective note (Test to notes).
+- **AI drafts stay drafts.** Notes written by the model (for example from Import practice test) are saved as
   **AI draft** and rank below your own notes in search. To confirm one, edit it or write a one-line
   summary in your own words.
 - **Trash.** Deleted notes go to Trash first, where you can restore them or empty it.

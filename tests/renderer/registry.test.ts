@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { getPlugin, listPlugins, plugins } from '../../src/plugins/registry'
 
 describe('plugin registry', () => {
-  it('lists the six built-in toggleable panels', () => {
+  it('lists the three built-in toggleable panels', () => {
     const ids = listPlugins().map((p) => p.id).sort()
-    expect(ids).toEqual(['mcp-connections', 'media-chat', 'media-personas', 'review', 'study', 'test-to-notes'])
+    expect(ids).toEqual(['mcp-connections', 'media-chat', 'media-personas'])
+  })
+
+  it('no longer registers Study, Review or Test to notes as add-ons (#260)', () => {
+    for (const id of ['study', 'review', 'test-to-notes']) expect(getPlugin(id)).toBeUndefined()
   })
 
   it('exposes the raw plugins array', () => {
-    expect(plugins.length).toBe(6)
+    expect(plugins.length).toBe(3)
     expect(plugins.every((p) => p.name && p.description && p.render)).toBe(true)
   })
 
