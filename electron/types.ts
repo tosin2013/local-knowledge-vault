@@ -783,6 +783,19 @@ export interface TestToNotesAnalyzeInput {
   limit?: number
 }
 
+export interface TestToNotesParseInput {
+  /** Raw pasted practice-test results, in any format. */
+  text: string
+}
+
+/** The result of AI-parsing pasted test results (heuristic fallback when offline). */
+export interface TestToNotesParseResult {
+  items: TestToNotesItem[]
+  /** True when the AI path failed and the heuristic parser was used instead. */
+  offline?: boolean
+  error?: string
+}
+
 /** A grounded corrective note for one wrong answer, ready for the user to review and save. */
 export interface TestToNotesSuggestion {
   question: string
@@ -842,6 +855,13 @@ export interface ReviewEnqueueInput {
   targetDate?: string
 }
 
+export interface ReviewListInput {
+  before?: string
+  limit?: number
+  /** Optional project filter (exact match). */
+  project?: string
+}
+
 /* ---- Study mode: recall before reveal (#215) ---- */
 
 /** The learner's own verdict after the answer is revealed. */
@@ -888,4 +908,17 @@ export interface StudyCalibration {
   meanScore: number
   bias: number
   brier: number
+}
+
+/* ---- Study mode: generated sample questions ---- */
+
+export interface StudyQuestionsInput {
+  /** Optional project to draw questions from. */
+  project?: string
+  /** How many questions to generate (clamped 1..10). */
+  count?: number
+}
+
+export interface StudyQuestionsResult {
+  questions: string[]
 }

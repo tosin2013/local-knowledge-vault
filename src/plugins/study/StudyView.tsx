@@ -17,6 +17,7 @@ import SchoolIcon from '@mui/icons-material/School'
 import SaveIcon from '@mui/icons-material/Save'
 import type { VaultPluginRenderProps } from '../types'
 import { AnswerText, CitationChips } from '../../components/answer/AnswerText'
+import { ProjectSelect } from '../../features/ProjectSelect'
 import type {
   AskGroundedResult,
   StudyCalibration,
@@ -68,6 +69,10 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const [project, setProject] = useState('')
+  const [sampleQuestions, setSampleQuestions] = useState<string[]>([])
+  const [generating, setGenerating] = useState(false)
+
   const refreshCalibration = useCallback(async () => {
     if (!window.lkv?.study?.calibration) return
     try {
@@ -81,8 +86,8 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
     void refreshCalibration()
   }, [refreshCalibration])
 
-  const getAnswer = async () => {
-    const q = question.trim()
+  const getAnswer = async (qOverride?: string) => {
+    const q = (qOverride ?? question).trim()
     if (!q) {
       setError('Type a question first.')
       return
@@ -95,7 +100,10 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
     setError(null)
     setStatus(null)
     try {
-      const result = await window.lkv.ask.grounded({ question: q })
+      const result = await window.lkv.ask.grounded({
+        question: q,
+        ...(project ? { filters: { project } } : {}),
+      })
       // Store the answer but do NOT reveal it until the learner asks to.
       setAsked(q)
       setPending(result)
@@ -111,6 +119,32 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
     } finally {
       setAsking(false)
     }
+  }
+
+  const generateQuestions = async () => {
+    if (!window.lkv?.study?.questions) {
+      setError('Sample questions are unavailable — restart Vault after updating.')
+      return
+    }
+    setGenerating(true)
+    setError(null)
+    setStatus(null)
+    try {
+      const result = await window.lkv.study.questions({ project: project || undefined, count: 5 })
+      setSampleQuestions(result.questions ?? [])
+      if (!result.questions?.length) {
+        setStatus('No notes found in this project to draw questions from.')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const studyQuestion = (q: string) => {
+    setQuestion(q)
+    void getAnswer(q)
   }
 
   const canReveal = !!pending && (dontKnow || recall.trim().length > 0)
@@ -198,6 +232,15 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
         </Card>
       )}
 
+      <ProjectSelect
+        value={project}
+        onChange={(p) => {
+          setProject(p)
+          setSampleQuestions([])
+        }}
+        label="Project"
+      />
+
       <TextField
         label="Question"
         placeholder="What do you want to test yourself on?"
@@ -216,7 +259,35 @@ export function StudyView({ onClose, onOpenNote }: VaultPluginRenderProps) {
         >
           {asking ? 'Getting answer…' : 'Get answer from my notes'}
         </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={generating}
+          onClick={() => void generateQuestions()}
+          sx={{ ml: 1 }}
+        >
+          {generating ? 'Generating…' : 'Get sample questions'}
+        </Button>
       </Box>
+
+      {sampleQuestions.length > 0 && (
+        <Stack spacing={0.5} data-testid="study-sample-questions">
+          <Typography variant="caption" color="text.secondary">
+            Sample questions from this project — pick one to study:
+          </Typography>
+          {sampleQuestions.map((q) => (
+            <Button
+              key={q}
+              size="small"
+              variant="outlined"
+              sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+              onClick={() => studyQuestion(q)}
+            >
+              {q}
+            </Button>
+          ))}
+        </Stack>
+      )}
 
       {status && (
         <Alert severity="success" onClose={() => setStatus(null)}>

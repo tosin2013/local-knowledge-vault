@@ -354,6 +354,7 @@ export function createLkvMock(): LkvMock {
     },
     testToNotes: {
       analyze: vi.fn().mockResolvedValue([]),
+      parse: vi.fn().mockResolvedValue({ items: [] }),
     },
     review: {
       listDue: vi.fn().mockResolvedValue([]),
@@ -380,6 +381,7 @@ export function createLkvMock(): LkvMock {
       ),
       listRecent: vi.fn().mockResolvedValue([]),
       calibration: vi.fn().mockResolvedValue(makeStudyCalibration()),
+      questions: vi.fn().mockResolvedValue({ questions: [] }),
     },
     ollama: {
       health: vi.fn().mockResolvedValue({ ok: true, models: [] }),

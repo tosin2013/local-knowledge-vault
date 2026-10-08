@@ -167,6 +167,18 @@ function main(): void {
   assert(!listDueReviews(far).some((q) => q.id === archivedNote.id), 'archived notes are excluded')
   assert(countDueReviews(far) === 0, 'the count matches the visible queue')
 
+  // Project filter: listDueReviews / countDueReviews scope to one project.
+  const projA = createItem({ title: 'Project A note', body: 'x', kind: 'note', para: 'resources', project: 'Alpha' })
+  const projB = createItem({ title: 'Project B note', body: 'x', kind: 'note', para: 'resources', project: 'Beta' })
+  enqueueReview(projA.id)
+  enqueueReview(projB.id)
+  const alphaDue = listDueReviews(far, 50, 'Alpha')
+  assert(alphaDue.some((q) => q.id === projA.id), 'the project filter returns the matching due note')
+  assert(!alphaDue.some((q) => q.id === projB.id), 'the project filter excludes other projects')
+  assert(countDueReviews(far, 'Alpha') === 1, 'countDueReviews respects the project filter')
+  assert(countDueReviews(far, 'Beta') === 1, 'countDueReviews counts the other project')
+  assert(listDueReviews(far, 50).length === 2, 'no project filter returns every due note')
+
   const states = listReviewStates()
   assert(
     Array.isArray(states) && states.every((s) => typeof s.itemId === 'string' && typeof s.dueAt === 'string'),

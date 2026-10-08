@@ -17,6 +17,7 @@ import {
   listRecentAttempts,
   studyCalibration,
 } from '../electron/study'
+import { parseQuestions } from '../electron/study-questions'
 import { initDb, closeDb } from '../electron/db'
 import type { StudyAttempt, StudySelfGrade } from '../electron/types'
 
@@ -62,6 +63,25 @@ async function main(): Promise<void> {
   assert(gradeScore('missed') === 0, 'missed scores 0')
   assert(gradeScore('partial') === 0.5, 'partial scores 0.5')
   assert(gradeScore('got') === 1, 'got scores 1')
+
+  // --- parseQuestions (pure, no model) ---
+  console.log('\nparseQuestions')
+  const questions = parseQuestions(
+    [
+      '1. What is PARA?',
+      '2) Why does spacing beat cramming?',
+      '- What is an Area?',
+      '* What is a Resource?',
+      'Q3: What is a Project?',
+      '',
+    ].join('\n'),
+  )
+  assert(questions.length === 5, `parseQuestions returns five questions (got ${questions.length})`)
+  assert(questions[0] === 'What is PARA?', 'numbered list markers are stripped')
+  assert(questions[1] === 'Why does spacing beat cramming?', 'parenthesised number markers are stripped')
+  assert(questions[2] === 'What is an Area?', 'dash bullets are stripped')
+  assert(questions[3] === 'What is a Resource?', 'star bullets are stripped')
+  assert(questions[4] === 'What is a Project?', 'Q3: prefixes are stripped')
 
   // --- calibrationSummary: empty ---
   console.log('\ncalibrationSummary — empty')

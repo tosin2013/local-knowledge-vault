@@ -68,6 +68,7 @@ import type {
   PersonalityPreviewResult,
   Prompt,
   ReviewEnqueueInput,
+  ReviewListInput,
   ReviewQueueItem,
   ReviewRateInput,
   ReviewState,
@@ -76,7 +77,11 @@ import type {
   StudyAttempt,
   StudyAttemptInput,
   StudyCalibration,
+  StudyQuestionsInput,
+  StudyQuestionsResult,
   TestToNotesAnalyzeInput,
+  TestToNotesParseInput,
+  TestToNotesParseResult,
   TestToNotesSuggestion,
   UpdateChatProfilePatch,
   UpdateItemPatch,
@@ -112,11 +117,13 @@ const api = {
   testToNotes: {
     analyze: (input: TestToNotesAnalyzeInput): Promise<TestToNotesSuggestion[]> =>
       ipcRenderer.invoke('testToNotes:analyze', input),
+    parse: (input: TestToNotesParseInput): Promise<TestToNotesParseResult> =>
+      ipcRenderer.invoke('testToNotes:parse', input),
   },
   review: {
-    listDue: (input?: { before?: string; limit?: number }): Promise<ReviewQueueItem[]> =>
+    listDue: (input?: ReviewListInput): Promise<ReviewQueueItem[]> =>
       ipcRenderer.invoke('review:listDue', input),
-    count: (input?: { before?: string }): Promise<number> =>
+    count: (input?: ReviewListInput): Promise<number> =>
       ipcRenderer.invoke('review:count', input),
     rate: (input: ReviewRateInput): Promise<ReviewState> =>
       ipcRenderer.invoke('review:rate', input),
@@ -131,6 +138,8 @@ const api = {
       ipcRenderer.invoke('study:listRecent', limit),
     calibration: (): Promise<StudyCalibration> =>
       ipcRenderer.invoke('study:calibration'),
+    questions: (input: StudyQuestionsInput): Promise<StudyQuestionsResult> =>
+      ipcRenderer.invoke('study:questions', input),
   },
   ollama: {
     health: (): Promise<OllamaHealth> => ipcRenderer.invoke('ollama:health'),

@@ -81,4 +81,18 @@ describe('ReviewView', () => {
       }),
     )
   })
+
+  it('scopes the due list to the selected project', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Work', count: 2 }])
+    lkv.review.listDue.mockResolvedValue([NOTE])
+    render(<ReviewView />)
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Work' }))
+
+    await waitFor(() =>
+      expect(lkv.review.listDue).toHaveBeenCalledWith({ limit: 50, project: 'Work' }),
+    )
+  })
 })

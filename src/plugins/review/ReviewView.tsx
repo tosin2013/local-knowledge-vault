@@ -14,6 +14,7 @@ import {
 import EventRepeatIcon from '@mui/icons-material/EventRepeat'
 import AddIcon from '@mui/icons-material/Add'
 import type { VaultPluginRenderProps } from '../types'
+import { ProjectSelect } from '../../features/ProjectSelect'
 import type { ReviewGrade, ReviewQueueItem, SearchHit } from '../../../electron/types'
 
 /** The SM-2-style four-button scale; `again` is the leftmost (worst) grade. */
@@ -37,6 +38,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
   const [results, setResults] = useState<SearchHit[]>([])
   const [searching, setSearching] = useState(false)
   const [added, setAdded] = useState<Record<string, boolean>>({})
+  const [project, setProject] = useState('')
 
   const hasReviewApi = !!window.lkv?.review?.listDue
   const hasSearchApi = !!window.lkv?.search?.query
@@ -52,7 +54,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
     setLoading(true)
     setError(null)
     try {
-      const items = await window.lkv.review.listDue({ limit: 50 })
+      const items = await window.lkv.review.listDue({ limit: 50, ...(project ? { project } : {}) })
       setDue(items)
       setIndex(0)
       setRevealed(false)
@@ -61,7 +63,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [project])
 
   useEffect(() => {
     void refresh()
@@ -152,6 +154,8 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
         Try to recall each note from its title before revealing it. Rate how well you did and Vault
         schedules the next review.
       </Typography>
+
+      <ProjectSelect value={project} onChange={setProject} label="Project" />
 
       {!hasReviewApi && (
         <Alert severity="warning">Review IPC unavailable — restart Vault after updating.</Alert>

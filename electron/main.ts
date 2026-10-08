@@ -46,9 +46,10 @@ import { searchQuery } from './search'
 import { askGrounded } from './generate'
 import { parsePersonalityPack, personalityFileName, serializePersonalityPack } from './personality-pack'
 import { sendChatTurn } from './chat'
-import { analyzeTestResults } from './test-to-notes'
+import { analyzeTestResults, parseTestResultsWithAi } from './test-to-notes'
 import { listDueReviews, countDueReviews, rateReview, enqueueReview, removeReview } from './review'
 import { listRecentAttempts, recordStudyAttempt, studyCalibration } from './study'
+import { generateStudyQuestions } from './study-questions'
 import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
@@ -136,8 +137,11 @@ import type {
   ListItemsInput,
   SearchQueryInput,
   StudyAttemptInput,
+  StudyQuestionsInput,
   TestToNotesAnalyzeInput,
+  TestToNotesParseInput,
   ReviewEnqueueInput,
+  ReviewListInput,
   ReviewRateInput,
   UpdateChatProfilePatch,
   UpdateItemPatch,
@@ -478,12 +482,17 @@ function registerIpc(): void {
   ipcMain.handle('testToNotes:analyze', (_e, input: TestToNotesAnalyzeInput) =>
     analyzeTestResults(input?.items ?? [], { filters: input?.filters, limit: input?.limit })
   )
+  ipcMain.handle('testToNotes:parse', (_e, input: TestToNotesParseInput) =>
+    parseTestResultsWithAi(input)
+  )
 
   // Spaced review (#216): draw due notes from the user's own vault.
-  ipcMain.handle('review:listDue', (_e, input?: { before?: string; limit?: number }) =>
-    listDueReviews(input?.before, input?.limit)
+  ipcMain.handle('review:listDue', (_e, input?: ReviewListInput) =>
+    listDueReviews(input?.before, input?.limit, input?.project)
   )
-  ipcMain.handle('review:count', (_e, input?: { before?: string }) => countDueReviews(input?.before))
+  ipcMain.handle('review:count', (_e, input?: ReviewListInput) =>
+    countDueReviews(input?.before, input?.project)
+  )
   ipcMain.handle('review:rate', (_e, input: ReviewRateInput) =>
     rateReview(input.itemId, input.grade, { targetDate: input.targetDate })
   )
@@ -496,6 +505,7 @@ function registerIpc(): void {
   ipcMain.handle('study:record', (_e, input: StudyAttemptInput) => recordStudyAttempt(input))
   ipcMain.handle('study:listRecent', (_e, limit?: number) => listRecentAttempts(limit))
   ipcMain.handle('study:calibration', () => studyCalibration())
+  ipcMain.handle('study:questions', (_e, input: StudyQuestionsInput) => generateStudyQuestions(input))
 
   ipcMain.handle('ollama:health', () => {
     return ollamaHealth()

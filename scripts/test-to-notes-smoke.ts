@@ -76,6 +76,8 @@ async function main(): Promise<void> {
     isCorrectMarker,
     summarizeAttempts,
     analyzeTestResults,
+    parseAiJson,
+    parseTestResultsWithAi,
   } = require('../electron/test-to-notes')
 
   // --- isCorrectMarker ---
@@ -222,6 +224,44 @@ async function main(): Promise<void> {
   assert(noHits[0].citations.length === 0, 'no-hits suggestion has no citations')
   assert(/No notes cover this/.test(noHits[0].body), 'no-hits suggestion says the notes do not cover it')
   assert(noHits[0].offline !== true, 'no-hits suggestion is not marked offline')
+
+  // --- parseAiJson (pure) ---
+  console.log('\nparseAiJson')
+  const aiItems = parseAiJson(
+    '```json\n[{"question":"What is 2+2?","answer":"5","correct":false},{"question":"Capital of France?","answer":"Paris","correct":true}]\n```',
+  )
+  assert(aiItems !== null && aiItems.length === 2, 'parseAiJson parses a fenced JSON array')
+  assert(
+    aiItems && aiItems[0].question === 'What is 2+2?' && aiItems[0].correct === false,
+    'parseAiJson maps a wrong answer to correct=false',
+  )
+  assert(
+    aiItems && aiItems[1].answer === 'Paris' && aiItems[1].correct === true,
+    'parseAiJson maps a right answer to correct=true',
+  )
+  assert(parseAiJson('not json at all') === null, 'parseAiJson returns null for non-JSON')
+
+  // --- parseTestResultsWithAi ---
+  console.log('\nparseTestResultsWithAi')
+  setMockLlmGenerate({
+    ok: true,
+    text: '[{"question":"What is 2+2?","answer":"4","correct":true}]',
+    provider: 'ollama',
+    model: 'test',
+    local: true,
+    fallback: false,
+  })
+  const aiParsed = await parseTestResultsWithAi({ text: 'some messy export format' })
+  assert(aiParsed.items.length === 1 && aiParsed.items[0].correct === true, 'AI parse returns structured items')
+  assert(aiParsed.offline !== true, 'a successful AI parse is not marked offline')
+
+  setMockLlmGenerate({ ok: false, error: 'Connection refused', provider: 'ollama' })
+  const fallback = await parseTestResultsWithAi({ text: '1. What is 2+2? ✗\nYour answer: 5' })
+  assert(fallback.offline === true, 'an offline AI parse is marked offline')
+  assert(fallback.items.length === 1 && fallback.items[0].correct === false, 'offline AI parse falls back to the heuristic parser')
+
+  const emptyParse = await parseTestResultsWithAi({ text: '   ' })
+  assert(emptyParse.items.length === 0 && emptyParse.offline !== true, 'empty input returns no items without a model call')
 
   closeDb()
   fs.rmSync(tmp, { recursive: true, force: true })

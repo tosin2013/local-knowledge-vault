@@ -172,4 +172,40 @@ describe('StudyView', () => {
       ),
     )
   })
+
+  it('generates sample questions and studies one on click', async () => {
+    const lkv = lkvMock()
+    lkv.study.questions.mockResolvedValue({ questions: ['What is PARA?', 'What is a project?'] })
+    lkv.ask.grounded.mockResolvedValue(ASK)
+    render(<StudyView />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get sample questions' }))
+    expect(await screen.findByRole('button', { name: 'What is PARA?' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'What is a project?' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'What is PARA?' }))
+    await waitFor(() =>
+      expect(lkv.ask.grounded).toHaveBeenCalledWith({ question: 'What is PARA?' }),
+    )
+  })
+
+  it('scopes the grounded answer to the selected project', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Work', count: 2 }])
+    lkv.ask.grounded.mockResolvedValue(ASK)
+    render(<StudyView />)
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Work' }))
+
+    fireEvent.change(screen.getByLabelText(/Question/i), { target: { value: 'What is PARA?' } })
+    fireEvent.click(screen.getByRole('button', { name: /Get answer/i }))
+
+    await waitFor(() =>
+      expect(lkv.ask.grounded).toHaveBeenCalledWith({
+        question: 'What is PARA?',
+        filters: { project: 'Work' },
+      }),
+    )
+  })
 })
