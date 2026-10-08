@@ -17,15 +17,10 @@ import type { VaultPluginRenderProps } from '../../plugins/types'
 import { ProjectSelect } from '../ProjectSelect'
 import { ExamDateControl } from './ExamDateControl'
 import { useStudyProject, type StudyProjectProps } from './useStudyProject'
-import type { ReviewGrade, ReviewQueueItem, SearchHit } from '../../../electron/types'
+import type { ReviewGrade, ReviewQueueItem, SearchHit, StudyStats } from '../../../electron/types'
+import { STUDY_GRADES, gradeLabel } from './grades'
+import { NEW_CARDS_PER_DAY_MAX } from './examDate'
 
-/** The SM-2-style four-button scale; `again` is the leftmost (worst) grade. */
-const GRADES: Array<{ grade: ReviewGrade; label: string }> = [
-  { grade: 'again', label: 'Again' },
-  { grade: 'hard', label: 'Hard' },
-  { grade: 'good', label: 'Good' },
-  { grade: 'easy', label: 'Easy' },
-]
 
 export type ReviewViewProps = VaultPluginRenderProps & StudyProjectProps
 
@@ -42,12 +37,19 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
   const [searching, setSearching] = useState(false)
   const [added, setAdded] = useState<Record<string, boolean>>({})
   const [project, setProject] = useStudyProject(projectProp, onProjectChange)
+  const [stats, setStats] = useState<StudyStats | null>(null)
 
   const hasReviewApi = !!window.lkv?.review?.listDue
   const hasSearchApi = !!window.lkv?.search?.query
 
   const current = due[index] ?? null
   const remaining = Math.max(due.length - index, 0)
+
+  // The new-card budget and coverage warning for this scope (#264).
+  const refreshStats = useCallback(async () => {
+    const getStats = window.lkv?.review?.stats
+    setStats(getStats ? await getStats(project || undefined).catch(() => null) : null)
+  }, [project])
 
   const refresh = useCallback(async () => {
     if (!window.lkv?.review?.listDue) {
@@ -61,12 +63,13 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
       setDue(items)
       setIndex(0)
       setRevealed(false)
+      void refreshStats()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
     }
-  }, [project])
+  }, [project, refreshStats])
 
   useEffect(() => {
     void refresh()
@@ -82,9 +85,12 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
     setError(null)
     try {
       await window.lkv.review.rate({ cardId: item.card_id, grade })
+      // A missed card comes back at the end of this session (#264).
+      if (grade === 'again') setDue((d) => [...d, { ...item, last_grade: 'again' }])
       setIndex((i) => i + 1)
       setRevealed(false)
-      setStatus(`Graded “${grade}”.`)
+      setStatus(grade === 'again' ? 'Missed: it comes back later in this session.' : `Graded “${gradeLabel(grade)}”.`)
+      void refreshStats()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -163,6 +169,19 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
         <ExamDateControl project={project} />
       </Stack>
 
+      {stats && stats.unreachable > 0 && (
+        <Alert severity="warning" data-testid="coverage-warning">
+          {stats.unreachable} {stats.unreachable === 1 ? 'card' : 'cards'} won&apos;t be reached before your exam at{' '}
+          {NEW_CARDS_PER_DAY_MAX} new cards a day. Study the rest from the notes directly, or move the exam date.
+        </Alert>
+      )}
+      {stats && stats.newPerDay > 0 && (
+        <Typography variant="caption" color="text.secondary" data-testid="new-budget">
+          New cards today: {stats.newLeftToday} of {stats.newPerDay}. Missed cards come first, then due cards, then
+          new ones.
+        </Typography>
+      )}
+
       {!hasReviewApi && (
         <Alert severity="warning">Review IPC unavailable — restart Vault after updating.</Alert>
       )}
@@ -225,11 +244,12 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
           </CardContent>
           {revealed && (
             <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ px: 2, pb: 2 }}>
-              {GRADES.map(({ grade, label }) => (
+              {STUDY_GRADES.map(({ grade, label }) => (
                 <Button
                   key={grade}
                   size="small"
                   variant={grade === 'good' ? 'contained' : 'outlined'}
+                  color={grade === 'again' ? 'error' : grade === 'hard' ? 'warning' : 'primary'}
                   onClick={() => void recordGrade(grade)}
                 >
                   {label}
@@ -291,7 +311,8 @@ export function ReviewView({ onClose, project: projectProp, onProjectChange }: R
 
       <Typography variant="caption" color="text.secondary">
         Intervals are SM-2-style and expand as you recall a note; spacing your reviews beats cramming.
-        A project's exam date anchors the first interval to your deadline.
+        With a project exam date, the first interval is anchored to it and no review is scheduled past it;
+        the last one lands the day before.
       </Typography>
 
       {!hasSearchApi && (

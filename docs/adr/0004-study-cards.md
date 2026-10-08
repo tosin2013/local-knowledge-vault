@@ -116,14 +116,48 @@ These are left out, each with a reason (`enrollSkipReason`, pure):
   0 of 2 usable questions from drafts.
 - **Video transcripts:** a learner adds single parts from Review by choice, as the evaluation decided.
 - **Archived notes.** Trashed notes are ignored and not listed.
-- **Empty notes, and notes under 20 real words** (after dropping `Source:`/`Page:` header lines).
-- **Boilerplate** (`boilerplateReason`). Signals are grouped (copyright, exam logistics, exam policy, site chrome,
+- **Empty notes and stubs:** an own note under 3 real words, or an imported page under 20 (after dropping
+  `Source:`/`Page:` header lines).
+- **Boilerplate, on imported pages and articles only** (`boilerplateReason`). The learner's own notes, pasted ones
+  included, are never skipped as boilerplate: a short own note is a good card, and the evaluation's messy pasted
+  printer page still holds the learner's material. Signals are grouped (copyright, exam logistics, exam policy, site chrome,
   blank page, contents), so a header repeated on every page counts once. A page is skipped when:
   - two or more groups match;
   - three or more exam-logistics phrases match (an exam cover or instructions page); or
   - one group matches on a page of 120 words or fewer.
 
   A long content page that carries one copyright header is kept.
+
+### Exam-aware spacing (#264)
+
+All of these are pure functions in `electron/review.ts`, with unit tests in `scripts/review-smoke.ts`.
+
+- **Days to the exam** (`calendarDaysUntil`): local calendar days, so 1 = tomorrow and 0 = today.
+- **Interval cap** (`capIntervalForExam`, applied inside `scheduleReview`): let `remaining = daysLeft − 1`, since the
+  last useful review day is the day before the exam.
+  - No cap when there is no exam date, when the exam is today, tomorrow or past (plain SM-2 resumes after it), or
+    when the card is due now.
+  - If `remaining ≤ 3`, the interval is at most `remaining`, so the last review lands on the day before the exam.
+  - Otherwise, an interval over half the remaining time becomes `floor(remaining / 2)`, so another review still fits
+    before the final one.
+  - Worked example: a card answered Got it every time with the exam 14 days out is seen on days 0, 3, 8, 10 and 13.
+- **Daily new-card budget** (`newCardBudget`): `ceil(remaining new ÷ max(1, days left − 2))`, at most 25; 25 with no
+  exam.
+  - Regents in 14 days with 60 chunks → 5 a day.
+  - A+ in 30 days with 150 cards → 6 a day.
+  - The budget is worked out from the cards that were new at the start of the day, so it stays the same during the
+    day. Each project has its own budget.
+- **Coverage warning** (`unreachableNewCards`): `remaining new − 25 × max(1, days left − 2)`. Study home and Review
+  show "N cards won't be reached before your exam" instead of cramming them in.
+- **Queue order** (`buildReviewQueue`):
+  1. missed (Again) cards;
+  2. Partly (Hard) cards;
+  3. other due cards, by due date;
+  4. today's new cards, in priority then reading order, within each project's budget.
+
+  Review puts a missed card back at the end of the current session.
+- **One grading scale:** Missed / Partly / Got it, stored as `again` / `hard` / `good`. Easy is gone from the UI;
+  stored `easy` grades are kept and read as Got it. `review:rate` accepts both scales.
 
 ## Consequences
 

@@ -16,7 +16,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import type { ProjectSummary, StudyEnrollResult, StudyStats } from '../../../electron/types'
 import { ProjectSelect } from '../ProjectSelect'
 import { ExamDateControl } from './ExamDateControl'
-import { daysToExam, daysToGoLabel, formatExamDate } from './examDate'
+import { NEW_CARDS_PER_DAY_MAX, daysToExam, daysToGoLabel, formatExamDate } from './examDate'
 
 export interface StudyHomeProps {
   project: string
@@ -143,7 +143,15 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
             value={stats.examDate ? formatExamDate(stats.examDate) : 'No date'}
             detail={stats.examDate ? daysToGoLabel(days) : project ? 'Set one above' : 'Pick a project'}
           />
-          <Stat label="Due now" value={String(stats.due)} detail={plural(stats.newCards, 'new card')} />
+          <Stat
+            label="Due now"
+            value={String(stats.due)}
+            detail={
+              stats.newCards > 0
+                ? `incl. new: ${stats.newLeftToday} of ${stats.newPerDay} today · ${plural(stats.newCards, 'new card')} left`
+                : 'no new cards left'
+            }
+          />
           <Stat
             label="Cards"
             value={String(stats.totalCards)}
@@ -159,6 +167,14 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
             }
           />
         </Stack>
+      )}
+
+      {stats && stats.unreachable > 0 && (
+        <Alert severity="warning" data-testid="coverage-warning">
+          {plural(stats.unreachable, 'card')} won&apos;t be reached before your exam at {NEW_CARDS_PER_DAY_MAX} new
+          cards a day. Vault won&apos;t cram them in: study those parts from the notes directly, or move the exam
+          date.
+        </Alert>
       )}
 
       {project && stats && stats.liveNotes === 0 && (

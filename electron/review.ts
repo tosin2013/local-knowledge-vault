@@ -18,6 +18,7 @@ import type {
   ReviewScheduleRow,
   ReviewState,
   StudyCardOrigin,
+  StudySelfGrade,
   StudySessionSummary,
   StudyStats,
 } from './types'
@@ -61,6 +62,157 @@ export function anchorFirstIntervalDays(daysUntilTarget: number): number {
   return clamp(Math.round(daysUntilTarget * fraction), 1, 60)
 }
 
+/* ---- Exam-aware spacing (#264) ---- */
+
+/** Most new cards introduced per day, with or without an exam. */
+export const NEW_CARDS_PER_DAY_MAX = 25
+
+const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})/
+
+/** Local midnight of a calendar day. */
+function localDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+/**
+ * Whole calendar days from `now` to the exam day, in local time: 1 = the exam
+ * is tomorrow, 0 = today, negative = passed. null when there is no date.
+ */
+export function calendarDaysUntil(examDate: string | null | undefined, now: Date = new Date()): number | null {
+  const v = (examDate ?? '').trim()
+  if (!v) return null
+  const m = ISO_DAY.exec(v)
+  const exam = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v)
+  if (Number.isNaN(exam.getTime())) return null
+  return Math.round((localDay(exam) - localDay(now)) / MS_PER_DAY)
+}
+
+/**
+ * Cap an interval so the next review never lands after the exam (#264).
+ * Exact rule, with `daysLeft` = calendar days to the exam and
+ * `remaining = daysLeft − 1` (the last useful review day is the day before):
+ *
+ *  - no exam date, the exam is today or tomorrow, it has passed, or the card
+ *    is due again now (interval 0) → unchanged (plain SM-2);
+ *  - `remaining ≤ 3` → at most `remaining`, so the last review lands on the
+ *    day before the exam (1–3 days before it);
+ *  - otherwise, an interval over half the remaining time is cut to
+ *    `floor(remaining / 2)`, so at least one more review still fits before
+ *    the final one.
+ *
+ * The cap is an inference from the purpose of exam prep, not a published
+ * parameter (see #264).
+ */
+export function capIntervalForExam(
+  intervalDays: number,
+  daysLeft: number | null,
+): { intervalDays: number; capped: boolean } {
+  if (daysLeft == null || daysLeft <= 1 || intervalDays <= 0) return { intervalDays, capped: false }
+  const remaining = daysLeft - 1
+  if (remaining <= 3) {
+    return intervalDays > remaining ? { intervalDays: remaining, capped: true } : { intervalDays, capped: false }
+  }
+  if (intervalDays <= remaining / 2) return { intervalDays, capped: false }
+  return { intervalDays: Math.max(1, Math.floor(remaining / 2)), capped: true }
+}
+
+/**
+ * New cards to introduce per day (#264): the cards not yet seen, spread over
+ * the days left minus two (the last two days are for review only), at most
+ * {@link NEW_CARDS_PER_DAY_MAX}. With no exam date, the maximum applies.
+ *
+ *   60 cards, exam in 14 days → ceil(60 / 12) = 5 a day
+ *   150 cards, exam in 30 days → ceil(150 / 28) = 6 a day
+ */
+export function newCardBudget(remainingNew: number, daysLeft: number | null): number {
+  if (remainingNew <= 0) return 0
+  if (daysLeft == null) return Math.min(NEW_CARDS_PER_DAY_MAX, remainingNew)
+  const days = Math.max(1, daysLeft - 2)
+  return Math.min(NEW_CARDS_PER_DAY_MAX, remainingNew, Math.ceil(remainingNew / days))
+}
+
+/**
+ * How many new cards the daily maximum can't reach before the exam (#264), so
+ * the UI can say so instead of silently cramming. 0 with no exam, or once it
+ * has passed.
+ */
+export function unreachableNewCards(remainingNew: number, daysLeft: number | null): number {
+  if (daysLeft == null || daysLeft < 0 || remainingNew <= 0) return 0
+  const capacity = NEW_CARDS_PER_DAY_MAX * Math.max(1, daysLeft - 2)
+  return Math.max(0, remainingNew - capacity)
+}
+
+/** A due card as the queue builder sees it. */
+export interface QueueCandidate {
+  project: string | null
+  dueAt: string
+  lastGrade: string | null
+  /** Never reviewed (a new card). */
+  isNew: boolean
+}
+
+const GRADE_RANK: Record<string, number> = { again: 0, hard: 1 }
+
+/**
+ * Order a session queue (#264): missed (Again) cards first, then Partly
+ * (Hard), then other due cards by due date, then new cards — in the order
+ * given (priority, then reading order) and only up to each project's
+ * allowance for today. Pure.
+ */
+export function buildReviewQueue<T extends QueueCandidate>(
+  cards: T[],
+  allowanceFor: (project: string | null) => number,
+): T[] {
+  const reviewed = cards
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => !c.isNew)
+    .sort((a, b) => {
+      const ra = GRADE_RANK[a.c.lastGrade ?? ''] ?? 2
+      const rb = GRADE_RANK[b.c.lastGrade ?? ''] ?? 2
+      if (ra !== rb) return ra - rb
+      if (a.c.dueAt !== b.c.dueAt) return a.c.dueAt < b.c.dueAt ? -1 : 1
+      return a.i - b.i
+    })
+    .map(({ c }) => c)
+  const left = new Map<string, number>()
+  const fresh: T[] = []
+  for (const c of cards) {
+    if (!c.isNew) continue
+    const key = c.project ?? ''
+    if (!left.has(key)) left.set(key, Math.max(0, allowanceFor(c.project)))
+    const n = left.get(key) ?? 0
+    if (n <= 0) continue
+    left.set(key, n - 1)
+    fresh.push(c)
+  }
+  return [...reviewed, ...fresh]
+}
+
+/** The three-level Study scale (#264) on the SM-2 grades. */
+export const SELF_GRADE_TO_REVIEW: Readonly<Record<StudySelfGrade, ReviewGrade>> = Object.freeze({
+  missed: 'again',
+  partial: 'hard',
+  got: 'good',
+})
+
+/**
+ * Normalise a grade from either scale to an SM-2 grade. Old `easy` grades are
+ * kept as they are (they read as "Got it" in the UI). Throws on anything else.
+ */
+export function toReviewGrade(grade: string): ReviewGrade {
+  if (grade === 'again' || grade === 'hard' || grade === 'good' || grade === 'easy') return grade
+  if (grade in SELF_GRADE_TO_REVIEW) return SELF_GRADE_TO_REVIEW[grade as StudySelfGrade]
+  throw new Error(`Unknown grade: ${grade}`)
+}
+
+/** How a stored SM-2 grade reads on the three-level scale; `easy` is "Got it". */
+export function reviewGradeToSelfGrade(grade: string | null | undefined): StudySelfGrade | null {
+  if (grade === 'again') return 'missed'
+  if (grade === 'hard') return 'partial'
+  if (grade === 'good' || grade === 'easy') return 'got'
+  return null
+}
+
 /**
  * The next schedule state after grading an item.
  *
@@ -68,13 +220,17 @@ export function anchorFirstIntervalDays(daysUntilTarget: number): number {
  *  - again: reset reps, count a lapse, ease −0.2, stay due now.
  *  - hard:  expand slowly (×1.2), ease −0.15.
  *  - good:  expand by ease (1 → 3 after the first two reps).
- *  - easy:  expand by ease × 1.3, ease +0.15.
+ *  - easy:  expand by ease × 1.3, ease +0.15 (legacy: the UI's three-level
+ *           scale sends again / hard / good; old `easy` grades still apply).
+ *
+ * With a target exam date the first Good is anchored (Cepeda) and every
+ * interval is capped by {@link capIntervalForExam}.
  */
 export function scheduleReview(
   prev: ReviewState,
   grade: ReviewGrade,
   opts: { targetDate?: string; now?: Date } = {},
-): { state: ReviewState; dueAt: string } {
+): { state: ReviewState; dueAt: string; capped: boolean } {
   const now = opts.now ?? new Date()
   const prevEase = clamp(prev.ease, EASE_MIN, EASE_MAX)
   const reps = prev.reps
@@ -113,14 +269,16 @@ export function scheduleReview(
       break
   }
 
+  // Exam cap (#264): never schedule past the exam date.
+  const cap = capIntervalForExam(clamp(nextInterval, 0, INTERVAL_MAX), target ? calendarDaysUntil(target, now) : null)
   const state: ReviewState = {
-    intervalDays: clamp(nextInterval, 0, INTERVAL_MAX),
+    intervalDays: cap.intervalDays,
     ease: clamp(nextEase, EASE_MIN, EASE_MAX),
     reps: nextReps,
     lapses: nextLapses,
   }
   const dueAt = new Date(now.getTime() + state.intervalDays * MS_PER_DAY).toISOString()
-  return { state, dueAt }
+  return { state, dueAt, capped: cap.capped }
 }
 
 /* ---- DB accessors ---- */
@@ -223,12 +381,83 @@ function dueWhere(project?: string): { sql: string; params: unknown[] } {
   }
 }
 
-/**
- * Cards that are due at or before `before` (default: now), earliest first.
- * Trashed and archived notes and non-active cards are excluded.
- */
-export function listDueReviews(before?: string, limit = 50, project?: string): ReviewQueueItem[] {
-  const at = before ?? nowIso()
+/** Start of the local day containing `now`, as an ISO string. */
+function startOfLocalDay(now: Date): string {
+  return new Date(localDay(now)).toISOString()
+}
+
+interface NewCardGroup {
+  project: string | null
+  examDate: string | null
+  /** New (never reviewed) cards left now. */
+  fresh: number
+  /** Cards first reviewed today. */
+  today: number
+}
+
+/** New-card counts per project for the scope (#264). */
+function newCardGroups(project: string | undefined, now: Date): NewCardGroup[] {
+  const p = project?.trim()
+  const rows = getDb()
+    .prepare(
+      `SELECT items.project AS project, ps.exam_date AS exam_date,
+              COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 1 ELSE 0 END), 0) AS fresh,
+              COALESCE(SUM(CASE WHEN (SELECT MIN(l.reviewed_at) FROM review_log l
+                                      WHERE l.card_id = c.id AND l.migrated = 0) >= @today
+                                THEN 1 ELSE 0 END), 0) AS today
+       FROM study_cards c
+       JOIN card_schedule cs ON cs.card_id = c.id
+       JOIN items ON items.id = c.item_id
+       LEFT JOIN project_settings ps ON ps.name = items.project
+       WHERE items.status NOT IN ('trashed','archived') AND c.status = 'active'${p ? ' AND items.project = @project' : ''}
+       GROUP BY items.project`,
+    )
+    .all({ today: startOfLocalDay(now), project: p ?? '' }) as Array<{
+    project: string | null
+    exam_date: string | null
+    fresh: number
+    today: number
+  }>
+  return rows.map((r) => ({
+    project: r.project == null ? null : String(r.project),
+    examDate: r.exam_date ? String(r.exam_date) : null,
+    fresh: Number(r.fresh),
+    today: Number(r.today),
+  }))
+}
+
+/** Today's new-card allowance for one group: the day's budget minus what was already introduced. */
+function groupAllowance(g: NewCardGroup, now: Date): { budget: number; left: number; unreachable: number } {
+  // Budget from the cards that were new at the start of the day, so it stays put during the day.
+  const startOfDayNew = g.fresh + g.today
+  const daysLeft = g.project ? calendarDaysUntil(g.examDate, now) : null
+  const budget = newCardBudget(startOfDayNew, daysLeft)
+  return {
+    budget,
+    left: Math.max(0, budget - g.today),
+    unreachable: unreachableNewCards(startOfDayNew, daysLeft),
+  }
+}
+
+/** The day's new-card budget for a scope (summed over its projects). */
+export function getNewCardBudget(
+  project?: string,
+  now: Date = new Date(),
+): { perDay: number; leftToday: number; unreachable: number } {
+  let perDay = 0
+  let leftToday = 0
+  let unreachable = 0
+  for (const g of newCardGroups(project, now)) {
+    const a = groupAllowance(g, now)
+    perDay += a.budget
+    leftToday += a.left
+    unreachable += a.unreachable
+  }
+  return { perDay, leftToday, unreachable }
+}
+
+/** Every due card for the scope, in session order (#264). */
+function dueQueue(before: string, project: string | undefined, now: Date): ReviewQueueItem[] {
   const where = dueWhere(project)
   const rows = getDb()
     .prepare(
@@ -241,27 +470,34 @@ export function listDueReviews(before?: string, limit = 50, project?: string): R
        JOIN items ON items.id = c.item_id
        LEFT JOIN note_chunks nc ON nc.item_id = c.item_id AND nc.chunk_index = c.chunk_index
        WHERE ${where.sql}
-       ORDER BY cs.due_at ASC, items.id, c.chunk_index
-       LIMIT ?`,
+       ORDER BY c.priority DESC, items.created_at ASC, items.rowid, c.chunk_index`,
     )
-    .all(at, ...where.params, limit) as Record<string, unknown>[]
-  return rows.map(rowToQueueItem)
+    .all(before, ...where.params) as Record<string, unknown>[]
+  const items = rows.map(rowToQueueItem)
+  const groups = new Map<string, number>()
+  for (const g of newCardGroups(project, now)) groups.set(g.project ?? '', groupAllowance(g, now).left)
+  const candidates = items.map((item) => ({
+    item,
+    project: item.project,
+    dueAt: item.due_at,
+    lastGrade: item.last_grade,
+    isNew: item.reps === 0 && item.last_reviewed_at == null,
+  }))
+  return buildReviewQueue(candidates, (p) => groups.get(p ?? '') ?? NEW_CARDS_PER_DAY_MAX).map((c) => c.item)
 }
 
-/** How many live cards are due at or before `before` (default: now). */
+/**
+ * The review session queue: cards due at or before `before` (default: now)
+ * on live notes, missed first, then Partly, then due by date, then today's
+ * new cards within each project's daily budget (#264).
+ */
+export function listDueReviews(before?: string, limit = 50, project?: string): ReviewQueueItem[] {
+  return dueQueue(before ?? nowIso(), project, new Date()).slice(0, Math.max(0, limit))
+}
+
+/** How many cards the session queue holds now (the same cards `listDueReviews` returns, unlimited). */
 export function countDueReviews(before?: string, project?: string): number {
-  const at = before ?? nowIso()
-  const where = dueWhere(project)
-  const row = getDb()
-    .prepare(
-      `SELECT COUNT(*) AS c
-       FROM card_schedule cs
-       JOIN study_cards c ON c.id = cs.card_id
-       JOIN items ON items.id = c.item_id
-       WHERE ${where.sql}`,
-    )
-    .get(at, ...where.params) as { c: number }
-  return Number(row.c)
+  return dueQueue(before ?? nowIso(), project, new Date()).length
 }
 
 /**
@@ -437,14 +673,13 @@ export function getStudyStats(project?: string, now: Date = new Date()): StudySt
     .prepare(
       `SELECT COUNT(*) AS total,
               COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 1 ELSE 0 END), 0) AS fresh,
-              COALESCE(SUM(CASE WHEN cs.due_at <= @now THEN 1 ELSE 0 END), 0) AS due,
               COUNT(DISTINCT c.item_id) AS notes
        FROM study_cards c
        JOIN card_schedule cs ON cs.card_id = c.id
        JOIN items i ON i.id = c.item_id
        WHERE c.status = 'active' AND ${live}${scope}`,
     )
-    .get(params) as { total: number; fresh: number; due: number; notes: number }
+    .get(params) as { total: number; fresh: number; notes: number }
   const notes = database
     .prepare(`SELECT COUNT(*) AS c FROM items i WHERE ${live}${scope}`)
     .get(params) as { c: number }
@@ -464,14 +699,19 @@ export function getStudyStats(project?: string, now: Date = new Date()): StudySt
         | { exam_date: string | null }
         | undefined)
     : undefined
+  const budget = getNewCardBudget(name || undefined, now)
   return {
     project: name || null,
     examDate: exam?.exam_date ? String(exam.exam_date) : null,
-    due: Number(cards.due),
+    // The session queue's size (due reviews + today's new cards within budget).
+    due: dueQueue(now.toISOString(), name || undefined, now).length,
     totalCards: Number(cards.total),
     newCards: Number(cards.fresh),
     liveNotes: Number(notes.c),
     enrolledNotes: Number(cards.notes),
     lastSession: summarizeLastSession(log),
+    newPerDay: budget.perDay,
+    newLeftToday: budget.leftToday,
+    unreachable: budget.unreachable,
   }
 }

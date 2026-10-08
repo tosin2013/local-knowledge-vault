@@ -23,12 +23,16 @@ describe('ReviewView', () => {
     // The title is the recall prompt; the body stays hidden until revealed.
     expect(await screen.findByText('Photosynthesis')).toBeInTheDocument()
     expect(screen.queryByText(/Chlorophyll captures light/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Good' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
     expect(await screen.findByText(/Chlorophyll captures light/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Good' }))
+    // One three-level scale (#264): Missed / Partly / Got it, no Easy.
+    expect(screen.getByRole('button', { name: 'Missed' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Partly' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Easy' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }))
     await waitFor(() =>
       expect(lkv.review.rate).toHaveBeenCalledWith({
         cardId: 'crd_itm_1',
@@ -38,6 +42,53 @@ describe('ReviewView', () => {
 
     // Moving to the next item drains the queue.
     expect(await screen.findByText('Nothing due.')).toBeInTheDocument()
+  })
+
+  it('brings a missed card back later in the same session (#264)', async () => {
+    const lkv = lkvMock()
+    lkv.review.listDue.mockResolvedValue([NOTE, makeReviewItem('itm_2', { title: 'Second card', body: 'Two.' })])
+    render(<ReviewView />)
+
+    expect(await screen.findByText('Photosynthesis')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Missed' }))
+    await waitFor(() => expect(lkv.review.rate).toHaveBeenCalledWith({ cardId: 'crd_itm_1', grade: 'again' }))
+    expect(await screen.findByText('Missed: it comes back later in this session.')).toBeInTheDocument()
+    // The new-card budget line refreshes after each grade.
+    await waitFor(() => expect(lkv.review.stats.mock.calls.length).toBeGreaterThanOrEqual(2))
+
+    // Next card, then the missed one again.
+    expect(await screen.findByText('Second card')).toBeInTheDocument()
+    expect(screen.getByText('2 due')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Partly' }))
+    await waitFor(() => expect(lkv.review.rate).toHaveBeenCalledWith({ cardId: 'crd_itm_2', grade: 'hard' }))
+    expect(await screen.findByText('Photosynthesis')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Got it' }))
+    expect(await screen.findByText('Nothing due.')).toBeInTheDocument()
+  })
+
+  it('shows the new-card budget and the coverage warning (#264)', async () => {
+    const lkv = lkvMock()
+    lkv.review.stats.mockResolvedValue({
+      project: null,
+      examDate: null,
+      due: 30,
+      totalCards: 300,
+      newCards: 290,
+      liveNotes: 100,
+      enrolledNotes: 100,
+      lastSession: null,
+      newPerDay: 25,
+      newLeftToday: 20,
+      unreachable: 40,
+    })
+    render(<ReviewView />)
+    expect(await screen.findByTestId('new-budget')).toHaveTextContent('New cards today: 20 of 25.')
+    expect(screen.getByTestId('coverage-warning')).toHaveTextContent(
+      "40 cards won't be reached before your exam at 25 new cards a day.",
+    )
   })
 
   it('keeps the due card usable when search results overflow the panel', async () => {
@@ -92,9 +143,9 @@ describe('ReviewView', () => {
     expect(lkv.projects.getSettings).toHaveBeenCalledWith('Biology')
 
     fireEvent.click(await screen.findByRole('button', { name: 'Show answer' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Easy' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Got it' }))
     // The main process reads the date from the card's project.
-    await waitFor(() => expect(lkv.review.rate).toHaveBeenCalledWith({ cardId: 'crd_itm_1', grade: 'easy' }))
+    await waitFor(() => expect(lkv.review.rate).toHaveBeenCalledWith({ cardId: 'crd_itm_1', grade: 'good' }))
   })
 
   it('sets the project exam date from Study', async () => {
@@ -185,7 +236,7 @@ describe('ReviewView', () => {
     expect(await screen.findByText('Osmosis section.')).toBeInTheDocument()
     expect(screen.queryByText(/Whole chapter text/)).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Good' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }))
     await waitFor(() =>
       expect(lkv.review.rate).toHaveBeenCalledWith(expect.objectContaining({ cardId: 'crd_part2', grade: 'good' })),
     )

@@ -53,6 +53,15 @@ import {
   examDateForCard,
   getStudyStats,
   summarizeLastSession,
+  calendarDaysUntil,
+  capIntervalForExam,
+  newCardBudget,
+  unreachableNewCards,
+  buildReviewQueue,
+  toReviewGrade,
+  reviewGradeToSelfGrade,
+  getNewCardBudget,
+  NEW_CARDS_PER_DAY_MAX,
 } from '../electron/review'
 import type { ReviewState } from '../electron/types'
 
@@ -151,6 +160,100 @@ function main(): void {
     scheduleReview(fresh, 'good', { now }).dueAt === new Date(now.getTime() + 86_400_000).toISOString(),
     'dueAt = now + interval days',
   )
+
+  // --- Exam-aware spacing (#264, pure) ---
+  console.log('\ncalendarDaysUntil')
+  const evening = new Date(2026, 9, 8, 23, 30) // local time, so the test is time-zone independent
+  assert(calendarDaysUntil('2026-10-22', evening) === 14, 'exam in 14 calendar days, even late in the day')
+  assert(calendarDaysUntil('2026-10-22', new Date(2026, 9, 8, 0, 1)) === 14, 'and early in the day')
+  assert(calendarDaysUntil('2026-10-09', evening) === 1 && calendarDaysUntil('2026-10-08', evening) === 0, 'tomorrow 1, today 0')
+  assert(calendarDaysUntil('2026-10-01', evening) === -7, 'passed exams are negative')
+  assert(calendarDaysUntil(null, evening) === null && calendarDaysUntil('', evening) === null, 'no date → null')
+
+  console.log('\ncapIntervalForExam')
+  const capped = (i: number, d: number | null) => capIntervalForExam(i, d).intervalDays
+  assert(capped(40, null) === 40, 'no exam → no cap')
+  assert(capped(40, -3) === 40, 'exam passed → normal SM-2 resumes')
+  assert(capped(40, 0) === 40 && capped(40, 1) === 40, 'exam today or tomorrow → no cap (nothing fits before it)')
+  assert(capped(0, 10) === 0, 'a missed card stays due now')
+  assert(capped(3, 14) === 3, 'short horizon: an interval under half the remaining time is kept')
+  assert(capped(25, 14) === 6 && capIntervalForExam(25, 14).capped, 'short horizon: 25 d with 14 d left → 6 d (half of 13)')
+  assert(capped(10, 14) === 6, 'over half the remaining time is cut to half')
+  assert(capped(60, 120) === 59 && capped(30, 120) === 30, 'long horizon: only intervals past half are cut')
+  assert(capped(5, 4) === 3 && capped(2, 4) === 2, '≤3 days remaining: land on the day before the exam')
+  assert(capped(5, 2) === 1, 'exam in 2 days: the next review is tomorrow, the day before')
+  // Walk a card that keeps getting Good: no review ever lands on or after the exam day, the last one lands 1 day before.
+  let day = 0
+  let interval = 1
+  const reviewDays: number[] = [0]
+  while (true) {
+    const next = capped(Math.max(1, Math.round(interval * 2.5)), 14 - day)
+    if (day + next >= 14) break
+    day += next
+    interval = next
+    reviewDays.push(day)
+  }
+  assert(reviewDays[reviewDays.length - 1] === 13, `the last review lands the day before the exam (days ${reviewDays.join(', ')})`)
+  assert(reviewDays.length >= 3, 'a well-known card is still seen at least twice before the exam')
+
+  // scheduleReview applies the cap with an exam date.
+  const examNow = new Date(2026, 9, 8, 12, 0)
+  const longCard = { intervalDays: 20, ease: 2.5, reps: 4, lapses: 0 }
+  const capRes = scheduleReview(longCard, 'good', { now: examNow, targetDate: '2026-10-22' })
+  assert(capRes.state.intervalDays === 6 && capRes.capped, 'scheduleReview caps a 50-day Good to 6 days with the exam in 14')
+  assert(new Date(capRes.dueAt) < new Date(2026, 9, 22), 'the due date is before the exam')
+  assert(scheduleReview(longCard, 'good', { now: examNow }).state.intervalDays === 50, 'without an exam the interval is 50 days')
+  assert(scheduleReview(longCard, 'good', { now: examNow, targetDate: '2026-09-01' }).state.intervalDays === 50, 'after the exam, no cap')
+
+  console.log('\nnewCardBudget / unreachableNewCards')
+  assert(newCardBudget(60, 14) === 5, 'worked example: Regents in 14 days, ~60 chunks → 5 new cards a day')
+  assert(newCardBudget(70 + 80, 30) === 6, 'worked example: A+ Core 1 in 30 days, 70 chunks + 80 reverse → 6 a day')
+  assert(newCardBudget(1000, 14) === NEW_CARDS_PER_DAY_MAX, 'the budget is capped at 25')
+  assert(newCardBudget(40, null) === 25 && newCardBudget(10, null) === 10, 'no exam → up to 25 a day')
+  assert(newCardBudget(30, 2) === 25 && newCardBudget(3, 1) === 3, 'the last days: whatever is left, still at most 25')
+  assert(newCardBudget(0, 14) === 0, 'nothing left → 0')
+  assert(unreachableNewCards(60, 14) === 0, '60 cards in 14 days are all reachable')
+  assert(unreachableNewCards(400, 14) === 100, '400 cards in 14 days: 25 × 12 = 300 reachable, 100 not')
+  assert(unreachableNewCards(400, null) === 0 && unreachableNewCards(400, -1) === 0, 'no warning with no exam or after it')
+
+  console.log('\nbuildReviewQueue (pure)')
+  const qc = (id: string, o: Partial<{ project: string | null; dueAt: string; lastGrade: string | null; isNew: boolean }>) => ({
+    id,
+    project: 'P',
+    dueAt: '2026-10-08T10:00:00.000Z',
+    lastGrade: null,
+    isNew: false,
+    ...o,
+  })
+  const queue = buildReviewQueue(
+    [
+      qc('new1', { isNew: true }),
+      qc('good-early', { lastGrade: 'good', dueAt: '2026-10-01T00:00:00.000Z' }),
+      qc('hard', { lastGrade: 'hard', dueAt: '2026-10-07T00:00:00.000Z' }),
+      qc('new2', { isNew: true }),
+      qc('again', { lastGrade: 'again', dueAt: '2026-10-08T09:00:00.000Z' }),
+      qc('good-late', { lastGrade: 'easy', dueAt: '2026-10-05T00:00:00.000Z' }),
+      qc('new3', { isNew: true }),
+      qc('other-new', { isNew: true, project: 'Q' }),
+    ],
+    (p) => (p === 'P' ? 2 : 0),
+  ).map((c) => c.id)
+  assert(
+    queue.join(',') === 'again,hard,good-early,good-late,new1,new2',
+    `missed first, then Partly, then due by date, then new within budget (${queue.join(',')})`,
+  )
+
+  console.log('\ngrade scales')
+  assert(toReviewGrade('missed') === 'again' && toReviewGrade('partial') === 'hard' && toReviewGrade('got') === 'good', 'Missed/Partly/Got it → again/hard/good')
+  assert(toReviewGrade('easy') === 'easy' && toReviewGrade('good') === 'good', 'SM-2 grades pass through (legacy easy kept)')
+  let badGrade = false
+  try {
+    toReviewGrade('perfect')
+  } catch {
+    badGrade = true
+  }
+  assert(badGrade, 'unknown grades are rejected')
+  assert(reviewGradeToSelfGrade('easy') === 'got' && reviewGradeToSelfGrade('hard') === 'partial' && reviewGradeToSelfGrade(null) === null, 'old easy reads as Got it')
 
   // --- Card units (pure) ---
   console.log('\ncardUnitsForNote')
@@ -400,6 +503,15 @@ violate the CompTIA Candidate Agreement. ${words(200)}`
   )
   assert(enrollSkipReason({ body: realNote, kind: 'transcript', status: 'active' })?.includes('transcript') === true, 'transcripts are skipped')
   assert(enrollSkipReason({ body: realNote, kind: 'book', status: 'active' }) === null, 'book pages are enrolled')
+  assert(
+    enrollSkipReason({ body: 'ATP is the energy currency of the cell.', kind: 'note', status: 'active' }) === null,
+    'a short note of your own is enrolled (boilerplate rules apply to imports only)',
+  )
+  const messyPaste = `Skip to main content\nWe use cookies to improve your experience. Accept all\nLaser printer imaging: Processing, Charging, Exposing, Developing, Transferring, Fusing, Cleaning.\n© 2026 Some Training Site. All rights reserved. Privacy · Terms`
+  assert(enrollSkipReason({ body: messyPaste, kind: 'note', status: 'active' }) === null, 'a messy paste in your own note is kept')
+  assert(enrollSkipReason({ body: messyPaste, kind: 'article', status: 'active' })?.startsWith('boilerplate') === true, 'the same text as an imported article page is boilerplate')
+  assert(enrollSkipReason({ body: 'TODO', kind: 'note', status: 'active' }) === 'too short to quiz on', 'a one-word stub is skipped')
+  assert(enrollSkipReason({ body: '  ', kind: 'note', status: 'active' }) === 'empty', 'an empty note is skipped')
   assert(enrollSkipReason({ body: realNote, kind: 'article', status: 'active' }) === null, 'articles are enrolled')
 
   console.log('\nenrollProject')
@@ -485,6 +597,53 @@ violate the CompTIA Candidate Agreement. ${words(200)}`
   assert(sess?.reviewed === 4, 'the last session is the run with gaps under 30 minutes')
   assert(sess?.got === 2 && sess.partial === 1 && sess.missed === 1, 'got/partial/missed counts')
   assert(sess?.score === 0.5 && sess.startedAt === t(0) && sess.endedAt === t(45), 'score and bounds')
+
+  // --- Exam-aware queue over the DB (#264) ---
+  console.log('\nexam-aware queue')
+  const examCourse = 'Exam course'
+  const examNotes = Array.from({ length: 60 }, (_, i) =>
+    createItem({ title: `Card ${i}`, body: `Fact number ${i} about the course. ${words(25)}`, kind: 'note', para: 'resources', project: examCourse }),
+  )
+  enrollProject(examCourse)
+  const in14 = new Date(Date.now() + 14 * 86_400_000)
+  const in14Day = `${in14.getFullYear()}-${String(in14.getMonth() + 1).padStart(2, '0')}-${String(in14.getDate()).padStart(2, '0')}`
+  setProjectExamDate(examCourse, in14Day)
+  const b0 = getNewCardBudget(examCourse)
+  assert(b0.perDay === 5 && b0.leftToday === 5 && b0.unreachable === 0, `60 cards, exam in 14 days → 5 new today (got ${JSON.stringify(b0)})`)
+  const q0 = listDueReviews(undefined, 50, examCourse)
+  assert(q0.length === 5 && q0.every((q) => q.reps === 0), 'the session holds only 5 new cards')
+  assert(q0[0].title === 'Card 0' && q0[4].title === 'Card 4', 'new cards come in reading order')
+  assert(countDueReviews(undefined, examCourse) === 5 && getStudyStats(examCourse).due === 5, 'count and stats match the queue')
+
+  // Grade them: one missed, one partly, three got it.
+  rateReview(q0[0].card_id, 'good')
+  rateReview(q0[1].card_id, 'again')
+  rateReview(q0[2].card_id, 'hard')
+  rateReview(q0[3].card_id, 'good')
+  rateReview(q0[4].card_id, 'good')
+  const b1 = getNewCardBudget(examCourse)
+  assert(b1.perDay === 5 && b1.leftToday === 0, 'the day\'s budget is used up (it does not grow back during the day)')
+  const q1 = listDueReviews(undefined, 50, examCourse)
+  assert(q1.length === 1 && q1[0].card_id === q0[1].card_id, 'only the missed card is due again today')
+  const later = new Date(Date.now() + 2 * 86_400_000).toISOString()
+  const q2 = listDueReviews(later, 50, examCourse)
+  assert(q2[0].card_id === q0[1].card_id && q2[1].card_id === q0[2].card_id, 'later: the missed card first, then Partly')
+  // The cap keeps every schedule before the exam.
+  const examMidnight = new Date(in14.getFullYear(), in14.getMonth(), in14.getDate()).toISOString()
+  for (let r = 0; r < 6; r++) rateReview(q0[0].card_id, 'good')
+  const capRow = getDb().prepare('SELECT due_at FROM card_schedule WHERE card_id = ?').get(q0[0].card_id) as { due_at: string }
+  assert(capRow.due_at < examMidnight, 'repeated Got it never schedules past the exam')
+
+  // More cards than 25 a day can cover → a warning count.
+  for (let i = 0; i < 300; i++) {
+    createItem({ title: `Extra ${i}`, body: `Extra fact ${i}. ${words(25)}`, kind: 'note', para: 'resources', project: examCourse })
+  }
+  enrollProject(examCourse)
+  const b2 = getNewCardBudget(examCourse)
+  assert(b2.perDay === 25, 'a big backlog hits the 25-a-day maximum')
+  assert(b2.unreachable === 360 - 25 * 12, `cards that won't be reached are counted (${b2.unreachable})`)
+  assert(getStudyStats(examCourse).unreachable === b2.unreachable, 'stats carry the warning count')
+  void examNotes
 
   closeDb()
 

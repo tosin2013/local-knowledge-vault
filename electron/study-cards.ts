@@ -266,16 +266,30 @@ export interface EnrollCandidate {
   enrolled: boolean
 }
 
+/** Kinds that come from an import (PDF/EPUB pages, web articles) and can carry boilerplate. */
+const IMPORTED_KINDS = new Set(['book', 'article'])
+/** A note of the learner's own with fewer real words than this has nothing to quiz on. */
+const MIN_OWN_NOTE_WORDS = 3
+
 /**
  * Why a project note is left out of "Study this project", or null to enroll it.
  * Pure. Unconfirmed AI drafts wait for the own-words confirm (#217); video
  * transcripts are enrolled one at a time from Review, by choice.
+ *
+ * Boilerplate detection applies only to imported pages and articles. The
+ * learner's own notes (including pasted ones) are kept unless they are
+ * empty or a stub: a short note such as "ATP = the cell's energy currency"
+ * is a good card, and a messy paste still holds the learner's material.
  */
 export function enrollSkipReason(note: Pick<EnrollCandidate, 'body' | 'kind' | 'status'>): string | null {
   if (note.status === 'ai-draft') return 'unconfirmed AI draft (confirm it in your own words first)'
   if (note.status === 'archived') return 'archived'
   if (note.kind === 'transcript') return 'video transcript (add single parts from Review)'
-  return boilerplateReason(note.body)
+  if (IMPORTED_KINDS.has(note.kind)) return boilerplateReason(note.body)
+  const words = contentWords(note.body).length
+  if (words === 0) return 'empty'
+  if (words < MIN_OWN_NOTE_WORDS) return 'too short to quiz on'
+  return null
 }
 
 export type EnrollProjectResult = StudyEnrollResult
