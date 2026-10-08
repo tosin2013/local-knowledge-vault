@@ -198,12 +198,25 @@ export function groupPages(pages: string[], opts?: { maxChars?: number }): PageG
   let startPage = 0
   let endPage = 0
 
-  const flush = (): void => {
+  const flush = (carry: boolean): void => {
     if (buf.length === 0) return
     const text = buf.join('\n\n').replace(/\s+/g, ' ').trim()
-    if (text) groups.push({ text, startPage, endPage })
-    buf = []
-    bufChars = 0
+    // Carry a trailing sentence fragment (no terminal punctuation) into the
+    // next note, so a sentence split across a page boundary is joined instead
+    // of being cut mid-idea (#272). The final flush does not carry — there is
+    // no next note, so the fragment would be dropped.
+    const m = carry ? text.match(/([.!?])\s+([^.!?]+)$/) : null
+    if (m && m[2].length <= maxChars) {
+      const complete = text.slice(0, m.index! + 1).trim()
+      if (complete) groups.push({ text: complete, startPage, endPage })
+      buf = [m[2]]
+      bufChars = m[2].length
+      startPage = endPage
+    } else {
+      groups.push({ text, startPage, endPage })
+      buf = []
+      bufChars = 0
+    }
   }
 
   for (let i = 0; i < pages.length; i++) {
@@ -212,7 +225,7 @@ export function groupPages(pages: string[], opts?: { maxChars?: number }): PageG
     const pageNo = i + 1
     const adjacent = buf.length > 0 && endPage === pageNo - 1
     const nextChars = bufChars + (buf.length > 0 ? 2 : 0) + clean.length
-    if (buf.length > 0 && (!adjacent || nextChars > maxChars)) flush()
+    if (buf.length > 0 && (!adjacent || nextChars > maxChars)) flush(true)
     if (buf.length === 0) {
       startPage = pageNo
       bufChars = 0
@@ -221,7 +234,7 @@ export function groupPages(pages: string[], opts?: { maxChars?: number }): PageG
     bufChars += (buf.length > 1 ? 2 : 0) + clean.length
     endPage = pageNo
   }
-  flush()
+  flush(false)
   return groups
 }
 
