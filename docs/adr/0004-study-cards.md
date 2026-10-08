@@ -196,7 +196,8 @@ The session loop lives in `electron/study-session.ts` (IPC `study:startSession`,
   `validateCitations`. A card the model declines (`[]`) or a question that fails validation gets a deterministic
   fallback, cached with the reason in `q_note`: a fill-the-gap (cloze) from a sentence of the section, blanking its
   strongest term (acronym, number, proper noun, long word), or, if no sentence works, "Explain … in your own words"
-  with the section shown on reveal. Rate limits, the daily cap and offline providers also get the fallback, with a
+  with the section shown on reveal. An empty reply (a reasoning model that spent its budget thinking, #275) is
+  retried once with a 3,000-token budget. Rate limits, the daily cap and offline providers also get the fallback, with a
   notice naming the reason, but are **not** cached, so the next session tries the model again. Provider error text
   is never shown.
 - **Cache:** `study_cards.question/answer/quote` plus `q_kind` (`generated`, `cloze`, `explain`, `test`, `pair`),

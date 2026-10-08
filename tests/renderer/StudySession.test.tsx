@@ -70,6 +70,8 @@ describe('StudySession (#263)', () => {
     // The cited note opens from the reveal.
     fireEvent.click(screen.getByRole('button', { name: 'Open note Photosynthesis' }))
     expect(onOpenNote).toHaveBeenCalledWith('itm_1')
+    fireEvent.click(screen.getByRole('button', { name: 'Open note' }))
+    expect(onOpenNote).toHaveBeenCalledTimes(2)
 
     // The whole section is one click away.
     fireEvent.click(screen.getByRole('button', { name: 'Show the whole section' }))

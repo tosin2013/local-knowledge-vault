@@ -22,6 +22,9 @@ type MockGen =
 let mockResult: MockGen = { ok: false, error: 'No local model detected', provider: null as unknown as string }
 let mockCalls = 0
 let lastPrompt = ''
+let lastMaxTokens = 0
+/** Replies used before mockResult, one per call. */
+const mockQueue: MockGen[] = []
 function reply(text: string): MockGen {
   return { ok: true, text, provider: 'groq', providerLabel: 'Groq', model: 'openai/gpt-oss-20b', local: false, fallback: false }
 }
@@ -29,10 +32,11 @@ function reply(text: string): MockGen {
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === './llm' || request.endsWith('/electron/llm')) {
     return {
-      llmGenerate: async (input: { prompt: string }) => {
+      llmGenerate: async (input: { prompt: string; maxTokens?: number }) => {
         mockCalls++
         lastPrompt = input.prompt
-        return mockResult
+        lastMaxTokens = input.maxTokens ?? 0
+        return mockQueue.length > 0 ? mockQueue.shift()! : mockResult
       },
       providerDisplayName: (id: string | null | undefined, label?: string) => label || id || 'AI',
     }
@@ -194,8 +198,17 @@ async function main(): Promise<void> {
   const f1 = await s.getCardQuestion(c4.id)
   assert(/Groq call failed/.test(f1.notice ?? '') && !/boom/.test(f1.notice ?? ''), 'other failures name the provider, not its message')
   mockResult = reply('')
+  let callsBefore = mockCalls
   const e1 = await s.getCardQuestion(c4.id)
   assert(e1.kind === 'cloze' && /no question/.test(e1.notice ?? ''), 'empty output (reasoning budget, #275) falls back, uncached')
+  assert(mockCalls - callsBefore === 2 && lastMaxTokens === s.CARD_QUESTION_RETRY_MAX_TOKENS, 'an empty reply is retried once with a bigger budget')
+  callsBefore = mockCalls
+  mockQueue.push(reply(''))
+  mockQueue.push(reply(JSON.stringify([{ question: 'Which two molecules power carbon fixation in the stroma?', answer: 'ATP and NADPH', quote: 'uses ATP and NADPH' }])))
+  const nRetry = db.createItem({ title: 'Retry', body: SECTION, kind: 'note', para: 'resources', project: 'Bio' })
+  const [cRetry] = cardsMod.createNoteCards(nRetry.id).created
+  const e2 = await s.getCardQuestion(cRetry.id)
+  assert(mockCalls - callsBefore === 2 && e2.kind === 'generated', `the retry is used when the first reply is empty (${e2.kind}: ${e2.notice ?? ''})`)
   mockResult = reply('[]')
   const z1 = await s.getCardQuestion(c4.id)
   assert(/nothing study-worthy/.test(z1.notice ?? ''), '[] → fallback, cached with the reason')

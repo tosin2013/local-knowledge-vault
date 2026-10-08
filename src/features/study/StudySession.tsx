@@ -404,6 +404,11 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                           aria-label={`Open note ${c.title}`}
                         />
                       ))}
+                      {onOpenNote && (
+                        <Button size="small" startIcon={<OpenInNewIcon fontSize="small" />} onClick={() => onOpenNote(question.itemId)}>
+                          Open note
+                        </Button>
+                      )}
                       {question.kind !== 'explain' && question.answer && question.sectionText && (
                         <Button size="small" onClick={() => setShowSection((v) => !v)}>
                           {showSection ? 'Hide the section' : 'Show the whole section'}

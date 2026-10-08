@@ -45,6 +45,8 @@ import type {
 
 /** Output budget for one card. Reasoning models spend part of it thinking (#275). */
 export const CARD_QUESTION_MAX_TOKENS = 1500
+/** Budget for the single retry after an empty reply. */
+export const CARD_QUESTION_RETRY_MAX_TOKENS = 3000
 /** Default and maximum cards in one session. */
 export const SESSION_DEFAULT_CARDS = 20
 export const SESSION_MAX_CARDS = 100
@@ -404,7 +406,12 @@ export async function getCardQuestion(cardId: string): Promise<StudyCardQuestion
     passage: section,
   }
   const messages = buildGroundedMessages(CARD_QUESTION_TASK, [hit])
-  const gen = await llmGenerate({ ...messages, maxTokens: CARD_QUESTION_MAX_TOKENS })
+  let gen = await llmGenerate({ ...messages, maxTokens: CARD_QUESTION_MAX_TOKENS })
+  if (gen.ok && !(gen.text ?? '').trim()) {
+    // A reasoning model can spend its whole budget thinking and return nothing
+    // (about 1 call in 10 on gpt-oss-20b, #275). One retry with a bigger budget.
+    gen = await llmGenerate({ ...messages, maxTokens: CARD_QUESTION_RETRY_MAX_TOKENS })
+  }
   if (!gen.ok) {
     // Transient: not cached, so the next session tries the model again.
     const why = failureNotice(gen.error, gen.providerLabel)
