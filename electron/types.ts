@@ -538,6 +538,8 @@ export interface BookImportResult {
   imported: number
   skipped: number
   emptyPages?: number
+  /** Repeated header/footer/banner lines dropped from the PDF (debug aid). */
+  removedLines?: number
   itemIds: string[]
   errors: string[]
 }

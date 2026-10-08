@@ -232,6 +232,99 @@ export function pageNoteTitle(book: string, startPage: number, endPage = startPa
   return `${source} · ${locator}`
 }
 
+/** Known cookie-consent / privacy-banner phrases that pollute printed pages. */
+const BANNER_PATTERNS: RegExp[] = [
+  /we use cookies/i,
+  /accept (all )?cookies/i,
+  /manage cookie/i,
+  /cookie (settings|preferences|consent|policy)/i,
+  /by (continuing|using this site|clicking)/i,
+  /privacy (policy|preferences|center|notice)/i,
+  /terms of (use|service)/i,
+]
+
+/** A numbered section heading like "8.1 Overview of Photosynthesis". */
+const SECTION_HEADING_RE = /^\d{1,3}(?:\.\d+)*\s+\S.{2,}/
+
+/** Extract text lines from pdfjs `getTextContent()` items, grouped by y-position. */
+export function extractPageLines(content: unknown): string[] {
+  const items = (content as { items?: unknown[] } | undefined)?.items ?? []
+  const lines = new Map<number, Array<{ x: number; str: string }>>()
+  for (const raw of items) {
+    const it = raw as { str?: unknown; transform?: unknown }
+    if (typeof it?.str !== 'string' || !it.str.trim()) continue
+    const t = it.transform as number[] | undefined
+    const y = t && t.length >= 6 ? Math.round(t[5]) : 0
+    const x = t && t.length >= 6 ? t[4] : 0
+    const arr = lines.get(y) ?? []
+    arr.push({ x, str: it.str })
+    lines.set(y, arr)
+  }
+  return [...lines.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([, arr]) => arr.sort((p, q) => p.x - q.x).map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+}
+
+export interface CleanedPdfPages {
+  pages: string[]
+  /** A detected section heading per page (1-based index), or null. */
+  sectionTitles: Array<string | null>
+  removedLines: number
+}
+
+/**
+ * Remove junk that repeats on printed pages (#272): a line that appears on at
+ * least half the pages is a running header/footer (or a cookie banner) and is
+ * dropped. Known banner phrases are dropped even when they do not repeat. Also
+ * detects a numbered section heading ("8.1 Overview …") per page.
+ */
+export function cleanPdfPages(pageLines: string[][]): CleanedPdfPages {
+  const list = pageLines ?? []
+  const lineSets = list.map((lines) => new Set((lines ?? []).map((l) => (l ?? '').trim()).filter(Boolean)))
+
+  const counts = new Map<string, number>()
+  for (const set of lineSets) for (const l of set) counts.set(l, (counts.get(l) ?? 0) + 1)
+
+  const threshold = Math.max(2, Math.ceil(list.length / 2))
+  const repeated = new Set<string>()
+  for (const [l, c] of counts) if (c >= threshold) repeated.add(l)
+
+  let removedLines = 0
+  const cleaned: string[] = []
+  const sectionTitles: Array<string | null> = []
+  for (const lines of list) {
+    const kept: string[] = []
+    let section: string | null = null
+    for (const raw of lines ?? []) {
+      const line = (raw ?? '').trim()
+      if (!line) continue
+      const drop = repeated.has(line) || BANNER_PATTERNS.some((re) => re.test(line))
+      if (drop) {
+        removedLines++
+        continue
+      }
+      if (!section && line.length <= 80 && SECTION_HEADING_RE.test(line)) section = line.slice(0, 80)
+      kept.push(line)
+    }
+    cleaned.push(kept.join(' '))
+    sectionTitles.push(section)
+  }
+  return { pages: cleaned, sectionTitles, removedLines }
+}
+
+/** Note title for a PDF page group, with a section heading when one is found. */
+export function pageNoteTitleWithSection(
+  book: string,
+  startPage: number,
+  endPage: number,
+  section?: string | null,
+): string {
+  const base = pageNoteTitle(book, startPage, endPage)
+  return section ? `${base} · ${section}` : base
+}
+
+
 /** Note title for an EPUB chapter: `"<Book> · <Chapter>"` (+ `" (part N)"`). */
 export function chapterNoteTitle(book: string, chapter: string, part?: number): string {
   const source = (book ?? '').trim() || 'Book'
@@ -423,25 +516,24 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
       /* metadata is optional */
     }
 
-    const pages: string[] = []
+    const pageLines: string[][] = []
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n)
       const content = await page.getTextContent()
-      const text = content.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-      pages.push(text)
+      pageLines.push(extractPageLines(content))
     }
-    const emptyPages = pages.filter((p) => !p).length
+
+    // Drop repeated headers/footers/cookie banners and detect section headings (#272).
+    const { pages: cleanedPages, sectionTitles, removedLines } = cleanPdfPages(pageLines)
+    const emptyPages = cleanedPages.filter((p) => !p).length
 
     const itemIds: string[] = []
     let imported = 0
     runInTransaction(() => {
-      for (const group of groupPages(pages)) {
+      for (const group of groupPages(cleanedPages)) {
+        const section = sectionTitles[group.startPage - 1] ?? null
         const item = createItem({
-          title: pageNoteTitle(title, group.startPage, group.endPage),
+          title: pageNoteTitleWithSection(title, group.startPage, group.endPage, section),
           summary: summarize(group.text),
           body: buildBookBody({
             fileName,
@@ -458,7 +550,16 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
         imported++
       }
     })
-    return { format: 'pdf', project: title, imported, skipped: 0, emptyPages, itemIds, errors: [] }
+    return {
+      format: 'pdf',
+      project: title,
+      imported,
+      skipped: 0,
+      emptyPages,
+      removedLines,
+      itemIds,
+      errors: [],
+    }
   } catch (e) {
     return {
       format: 'pdf',
