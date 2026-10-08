@@ -57,19 +57,52 @@ export function stripInvalidCitations(answer: string, allowedIds: Set<string> | 
   return answer.replace(STRIP_INVALID_RE, (full, id) => (allowed.has(id) ? full : ''))
 }
 
-/** Label prepended when a model answers but cites none of the retrieved notes. */
-export const UNCITED_LABEL = '⚠ No notes cited — this answer may not be grounded in your notes.'
+/** Label shown when an answer with substance cites none of the retrieved notes (#38, #235). */
+export { UNCITED_LABEL } from './answer-flags'
 
 /**
- * Finalize a model answer for display: strip hallucinated citation markers,
- * apply the empty-response sentinel, and flag answers that cite nothing (#38).
+ * Honest-refusal detector (#235): the model said the passages/notes don't cover
+ * the question. That is correct behaviour, not a grounding failure, so it must
+ * not carry the uncited warning. Refusals come in two shapes:
+ *  - negated source phrase: "the notes do not cover…", "the passages don't
+ *    contain…", "none of the passages contain…";
+ *  - an apology leading the answer: "I'm sorry, but …".
  */
-export function finalizeAnswer(text: string, allowedIds: Set<string> | string[]): string {
+const NEGATED_SOURCE_RE =
+  /\b(?:passages?|notes?|excerpts?|documents?|snippets?|text|information|results?)\b[^.!?]{0,80}?\b(?:don'?t|do not|doesn'?t|does not|didn'?t|did not|isn'?t|is not|aren'?t|are not|wasn'?t|was not|weren'?t|were not|couldn'?t|can'?t|cannot|won'?t|will not|lack|lacks|lacked|missing|no|none|nothing|not)\b/i
+/** "none of the passages contain…", "no information … in the notes", "couldn't find … in the excerpts". */
+const NEGATED_LEAD_RE =
+  /\b(?:none|no|nothing|not|couldn'?t|could not|can'?t|cannot|didn'?t|did not|doesn'?t|does not|don'?t|do not|isn'?t|is not|wasn'?t|unable)\b[^.!?]{0,80}?\b(?:passages?|notes?|excerpts?|documents?|snippets?|sources?|vault|information)\b/i
+const APOLOGY_LEAD_RE = /^\s*(?:i'?m\s+sorry|sorry|i\s+apologize|unfortunately|regrettably)\b/i
+
+/** True when an answer reads as an honest "the notes don't cover this". */
+export function isHonestRefusal(text: string): boolean {
+  const t = (text ?? '').trim()
+  if (!t) return false
+  if (t.length > 600) return false
+  return NEGATED_SOURCE_RE.test(t) || NEGATED_LEAD_RE.test(t) || APOLOGY_LEAD_RE.test(t)
+}
+
+export interface FinalizedAnswer {
+  /** The answer text, never carrying the warning label. */
+  answer: string
+  /** True when the answer has substance but cites nothing (→ show the warning in the UI only). */
+  uncited: boolean
+}
+
+/**
+ * Finalize a model answer: strip hallucinated citation markers, apply the
+ * empty-response sentinel, and report (not embed) whether it cites nothing
+ * (#38, #235). An honest refusal reports `uncited: false`.
+ */
+export function finalizeAnswer(text: string, allowedIds: Set<string> | string[]): FinalizedAnswer {
   const cleaned = stripInvalidCitations(text, allowedIds).trim()
-  if (!cleaned) return '(empty model response)'
+  if (!cleaned) return { answer: '(empty model response)', uncited: false }
   // After stripping, only valid markers remain — none left means it cites nothing.
-  if (extractCitedIds(cleaned).length === 0) return `${UNCITED_LABEL}\n\n${cleaned}`
-  return cleaned
+  if (extractCitedIds(cleaned).length === 0) {
+    return { answer: cleaned, uncited: !isHonestRefusal(cleaned) }
+  }
+  return { answer: cleaned, uncited: false }
 }
 
 const HISTORY_CHAR_CAP = 4000
@@ -223,9 +256,11 @@ export async function askGrounded(input: AskGroundedInput): Promise<AskGroundedR
   const allowed = new Set(hits.map((h) => h.id))
   const rawCited = extractCitedIds(gen.text)
   const validIds = validateCitations(rawCited, allowed)
+  const finalized = finalizeAnswer(gen.text, allowed)
 
   return {
-    answer: finalizeAnswer(gen.text, allowed),
+    answer: finalized.answer,
+    uncited: finalized.uncited,
     citations: citationsFromIds(validIds),
     hits,
     provider: answerProvider(gen),

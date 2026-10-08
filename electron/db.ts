@@ -4,6 +4,7 @@
  */
 import Database from 'better-sqlite3'
 import { randomUUID } from 'crypto'
+import { stripUncitedLabel } from './answer-flags'
 import type {
   ChatMessage,
   ChatMode,
@@ -59,7 +60,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-const SCHEMA_VERSION = 4
+const SCHEMA_VERSION = 5
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -74,6 +75,9 @@ function migrate(database: Database.Database): void {
   }
   if (version < 4) {
     migrateV4(database)
+  }
+  if (version < 5) {
+    migrateV5(database)
   }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
@@ -122,6 +126,18 @@ function migrateV4(database: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_study_attempts_created ON study_attempts(created_at);
   `)
+}
+
+/**
+ * v5 (#235): the "No notes cited" warning becomes per-message metadata instead
+ * of text baked into `content`. Existing rows keep working: the column defaults
+ * to 0, and rows that still carry the embedded label are cleaned on read.
+ */
+function migrateV5(database: Database.Database): void {
+  const cols = database.prepare(`PRAGMA table_info(chat_messages)`).all() as { name: string }[]
+  if (!cols.some((c) => c.name === 'uncited')) {
+    database.exec(`ALTER TABLE chat_messages ADD COLUMN uncited INTEGER NOT NULL DEFAULT 0`)
+  }
 }
 
 /** v2 (#45): record which provider wrote each assistant message. */
@@ -573,10 +589,13 @@ function rowToMessage(row: Record<string, unknown>): ChatMessage {
     id: String(row.id),
     session_id: String(row.session_id),
     role: row.role as ChatRole,
-    content: String(row.content),
+    // #235: rows written before the warning became metadata may still embed the
+    // label; strip it on read so it never reaches the UI, exports or saved notes.
+    content: stripUncitedLabel(String(row.content)),
     citations_json: row.citations_json == null ? null : String(row.citations_json),
     hits_json: row.hits_json == null ? null : String(row.hits_json),
     provider_json: row.provider_json == null ? null : String(row.provider_json),
+    uncited: Number(row.uncited ?? 0) === 1,
     created_at: String(row.created_at),
   }
 }
@@ -654,6 +673,7 @@ export function appendMessage(input: {
   citations_json?: string | null
   hits_json?: string | null
   provider_json?: string | null
+  uncited?: boolean
 }): ChatMessage {
   const id = newId('msg')
   const ts = nowIso()
@@ -665,14 +685,15 @@ export function appendMessage(input: {
     citations_json: input.citations_json ?? null,
     hits_json: input.hits_json ?? null,
     provider_json: input.provider_json ?? null,
+    uncited: input.uncited ?? false,
     created_at: ts,
   }
   getDb()
     .prepare(
-      `INSERT INTO chat_messages (id, session_id, role, content, citations_json, hits_json, provider_json, created_at)
-       VALUES (@id, @session_id, @role, @content, @citations_json, @hits_json, @provider_json, @created_at)`
+      `INSERT INTO chat_messages (id, session_id, role, content, citations_json, hits_json, provider_json, uncited, created_at)
+       VALUES (@id, @session_id, @role, @content, @citations_json, @hits_json, @provider_json, @uncited, @created_at)`
     )
-    .run(msg)
+    .run({ ...msg, uncited: msg.uncited ? 1 : 0 })
   touchSession(input.session_id)
   return msg
 }

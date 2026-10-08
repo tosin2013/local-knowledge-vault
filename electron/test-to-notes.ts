@@ -91,12 +91,14 @@ export async function analyzeTestResults(
 
     const allowed = new Set(hits.map((h) => h.id))
     const validIds = validateCitations(extractCitedIds(gen.text), allowed)
+    const finalized = finalizeAnswer(gen.text, allowed)
     suggestions.push({
       question,
       yourAnswer,
       title,
-      body: finalizeAnswer(gen.text, allowed),
+      body: finalized.answer,
       citations: citationsFromIds(validIds),
+      uncited: finalized.uncited,
     })
   }
 

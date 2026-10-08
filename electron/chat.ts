@@ -187,7 +187,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     content: string,
     citations: Citation[],
     hitList: SearchHit[],
-    extra?: { offline?: boolean; error?: string; provider?: AnswerProvider }
+    extra?: { offline?: boolean; error?: string; provider?: AnswerProvider; uncited?: boolean }
   ): ChatSendResult => {
     const assistant = appendMessage({
       session_id: session.id,
@@ -196,6 +196,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
       citations_json: citations.length ? JSON.stringify(citations) : null,
       hits_json: hitList.length ? JSON.stringify(hitList) : null,
       provider_json: extra?.provider ? JSON.stringify(extra.provider) : null,
+      uncited: extra?.uncited ?? false,
     })
     const messages = listMessages(session.id)
     const updated = getSession(session.id) ?? currentSession
@@ -265,6 +266,10 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
   const rawCited = extractCitedIds(gen.text)
   const validIds = validateCitations(rawCited, allowed)
   const citations = citationsFromIds(validIds)
+  const finalized = finalizeAnswer(gen.text, allowed)
 
-  return finish(finalizeAnswer(gen.text, allowed), citations, hits, { provider: answerProvider(gen) })
+  return finish(finalized.answer, citations, hits, {
+    provider: answerProvider(gen),
+    uncited: finalized.uncited,
+  })
 }
