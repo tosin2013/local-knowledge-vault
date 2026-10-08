@@ -66,6 +66,8 @@ export interface SearchHit {
   para: Para
   kind: string
   project: string | null
+  /** Full matching chunk text (when a long note matched at chunk level). */
+  passage?: string
 }
 
 export interface SearchQueryInput {

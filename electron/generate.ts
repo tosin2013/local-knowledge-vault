@@ -174,7 +174,10 @@ export function buildGroundedMessages(
   const passages = hits
     .map((h, i) => {
       const item = getItem(h.id)
-      const body = item?.body?.slice(0, 1200) ?? h.snippet
+      // A chunk-level match already carries the relevant section (#219); fall
+      // back to the head of the note body otherwise.
+      const source = h.passage ?? item?.body ?? h.snippet
+      const body = source.slice(0, 1200)
       return `[Passage ${i + 1}] id=${h.id}\ntitle: ${h.title}\n${body}`
     })
     .join('\n\n')
