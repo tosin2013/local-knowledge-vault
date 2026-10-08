@@ -13,9 +13,9 @@ automatically), and you can add a cloud provider or a shareable plugin in a few 
 <p align="center"><a href="docs/media/vault-demo.mp4"><img src="docs/media/vault-demo.gif" alt="Vault demo: ask a question, click a citation, get an honest I don't know" width="860"></a></p>
 -->
 <p align="center">
-  <img src="docs/media/vault-ask-citation.png" alt="Vault answering from a book note, with a citation that opens the source note" width="860">
+  <img src="docs/media/vault-ask-citation.png" alt="Vault answering in three bullets, each ending in a numbered citation [1], [2], [3], with matching source chips below the answer" width="860">
   <br>
-  <sub>An answer with its citation. (This screenshot predates numbered citations and used a cloud provider; new installs use a local model first.)</sub>
+  <sub>Each point cites the note it came from, and the numbered chips open those notes. (Shot with a cloud provider, Groq <code>openai/gpt-oss-20b</code>; new installs use a local model first.)</sub>
 </p>
 
 ## Download
@@ -80,6 +80,11 @@ either opens the note in a side peek, so your chat stays where it is. Answers ca
 formatting (headings, lists, bold). If search finds nothing, you get "I couldn't find that in your notes" without a
 model call. Chats are saved as sessions, and **Export citation pack** writes the thread, the cited
 notes and a manifest to a folder or zip that you can hand to another LLM or a colleague.
+
+When the notes search finds don't answer the question, the model is told to say so rather than
+guess. That honest answer has no citations and no warning chip:
+
+<img src="docs/media/vault-honest-idk.png" alt="Asked for the daily dose of vitamin D, Vault answers: I couldn't find that in your notes. No citations and no warning chip." width="720">
 
 ### Local model setup that explains itself
 
