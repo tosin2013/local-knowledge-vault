@@ -83,6 +83,7 @@ async function main(): Promise<void> {
   assert(s.parseCardJson('[]').empty && s.parseCardJson('[]').card === null, '[] means nothing study-worthy')
   assert(s.parseCardJson('').card === null && !s.parseCardJson('').empty, 'empty text is not a card')
   assert(s.parseCardJson('[not json').card === null, 'broken JSON is not a card')
+  assert(s.parseCardJson('[invalid]').card === null, 'a malformed bracketed reply is not a card')
   assert(s.parseCardJson('[1, 2]').card === null, 'an array without objects is not a card')
   assert(s.parseCardJson('"just a string"').card === null, 'a JSON string is not a card')
 

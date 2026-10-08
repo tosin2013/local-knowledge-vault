@@ -373,6 +373,15 @@ async function main(): Promise<void> {
   assert(typeof answered.dueAt === 'string', 'study:answer grades the card and returns its next due date')
   const report = await ipcRendererMock.invoke('study:sessionSummary', session.sessionId, 'IPC Exam') as { cards: number; got: number }
   assert(report.cards === 1 && report.got === 1, 'study:sessionSummary counts the session')
+  // #263: exercise the session-loop handler edges (question fetch, defaults, non-array input).
+  const cardQ = await ipcRendererMock.invoke('study:cardQuestion', dueCards[0].card_id) as { question: string; kind: string }
+  assert(typeof cardQ.question === 'string', 'study:cardQuestion returns a prompt for a card')
+  const noInput = await ipcRendererMock.invoke('study:startSession') as { sessionId: string }
+  assert(typeof noInput.sessionId === 'string', 'study:startSession defaults when called with no input')
+  const notArray = await ipcRendererMock.invoke('review:enrolled', 'not-an-array') as string[]
+  assert(Array.isArray(notArray) && notArray.length === 0, 'review:enrolled tolerates a non-array input')
+  const noProj = await ipcRendererMock.invoke('study:sessionSummary', session.sessionId) as { cards: number }
+  assert(typeof noProj.cards === 'number', 'study:sessionSummary defaults the project')
   const cleared = await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', null) as { examDate: string | null }
   assert(cleared.examDate === null, 'projects:setExamDate clears with null')
 
@@ -508,6 +517,24 @@ async function main(): Promise<void> {
     api.study as { listRecent: (limit?: number) => Promise<unknown[]> }
   ).listRecent(5)
   assert(Array.isArray(studyViaPreload), 'preload study.listRecent reaches main')
+  // Session-loop methods reach main through the preload surface (#263).
+  const studySessionApi = api.study as {
+    cardQuestion: (id: string) => Promise<{ question: string }>
+    answer: (i: unknown) => Promise<unknown>
+    sessionSummary: (s: string) => Promise<unknown>
+    startSession: (i?: unknown) => Promise<{ sessionId: string }>
+  }
+  assert(typeof studySessionApi.cardQuestion === 'function', 'study.cardQuestion is function')
+  assert(typeof (await studySessionApi.cardQuestion(dueCards[0].card_id)).question === 'string', 'preload study.cardQuestion reaches main')
+  assert(typeof studySessionApi.answer === 'function', 'study.answer is function')
+  assert(typeof studySessionApi.sessionSummary === 'function', 'study.sessionSummary is function')
+  assert(typeof studySessionApi.startSession === 'function', 'study.startSession is function')
+  await studySessionApi.startSession()
+  await studySessionApi.sessionSummary(session.sessionId)
+
+  const reviewEnrolledApi = api.review as { enrolled: (ids: unknown) => Promise<string[]> }
+  assert(typeof reviewEnrolledApi.enrolled === 'function', 'review.enrolled is function')
+  assert(Array.isArray(await reviewEnrolledApi.enrolled([])), 'preload review.enrolled reaches main')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
 
   // Update notice through the preload API (#42)
