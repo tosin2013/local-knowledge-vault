@@ -10,6 +10,9 @@ is in the [README](../README.md).
 - **React 19 + Vite 5 + TypeScript** renderer (`src/`), MUI components.
 - **electron-builder** for installers.
 
+**Node 22.22.2+ required** (pinned in `.nvmrc`). `npm ci` compiles `better-sqlite3` for your Node, so
+Linux needs `python3`, `make` and `g++` (`sudo apt install build-essential python3`).
+
 ## Layout
 
 ```
