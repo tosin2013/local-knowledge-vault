@@ -486,7 +486,7 @@ function registerIpc(): void {
     parseTestResultsWithAi(input)
   )
 
-  // Spaced review (#216): draw due notes from the user's own vault.
+  // Spaced review (#216) over study cards (#259 card model).
   ipcMain.handle('review:listDue', (_e, input?: ReviewListInput) =>
     listDueReviews(input?.before, input?.limit, input?.project)
   )
@@ -494,7 +494,7 @@ function registerIpc(): void {
     countDueReviews(input?.before, input?.project)
   )
   ipcMain.handle('review:rate', (_e, input: ReviewRateInput) =>
-    rateReview(input.itemId, input.grade, { targetDate: input.targetDate })
+    rateReview(String(input.cardId ?? input.itemId ?? ''), input.grade, { targetDate: input.targetDate })
   )
   ipcMain.handle('review:enqueue', (_e, input: ReviewEnqueueInput) =>
     enqueueReview(input.itemId, { targetDate: input.targetDate })

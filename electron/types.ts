@@ -819,7 +819,7 @@ export interface TestToNotesSuggestion {
 /** How well the learner recalled an item. SM-2-style four-button scale. */
 export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy'
 
-/** The mutable scheduling state for one note. */
+/** The mutable scheduling state for one card. */
 export interface ReviewState {
   intervalDays: number
   ease: number
@@ -827,8 +827,56 @@ export interface ReviewState {
   lapses: number
 }
 
-/** A note that is due for review, with its schedule fields. */
+/* ---- Study cards (#259 card model, docs/adr/0004-study-cards.md) ---- */
+
+/** Where a card came from. Practice-test (#265) and reverse (#273) arrive in Phase 2. */
+export type StudyCardOrigin = 'note' | 'practice-test' | 'reverse'
+
+/** `pending` cards (e.g. linked to an unconfirmed draft) are not scheduled yet. */
+export type StudyCardStatus = 'active' | 'pending' | 'suspended' | 'retired'
+
+/** One study card: the unit that is reviewed and scheduled. */
+export interface StudyCard {
+  id: string
+  /** The note the card belongs to; its project is the card's project. */
+  itemId: string
+  /** null = the whole note; otherwise the `note_chunks` index. */
+  chunkIndex: number | null
+  /** Fingerprint of the chunk (or whole note) text the card was made from. */
+  chunkHash: string | null
+  /** Fingerprint of the note body when the card was made. */
+  noteHash: string | null
+  origin: StudyCardOrigin
+  /** Generated or imported question; null until #263 generates one. */
+  question: string | null
+  answer: string | null
+  /** Exact supporting quote from the note. */
+  quote: string | null
+  /** Practice-test cards: the source test's name and date (#265). */
+  sourceTest: string | null
+  sourceTestDate: string | null
+  /** Unique idempotency key, e.g. `note:itm_…#2`. */
+  sourceKey: string
+  /** Higher = more important; lower-priority cards come later in a session. */
+  priority: number
+  status: StudyCardStatus
+  createdAt: string
+  updatedAt: string
+}
+
+/** A card that is due for review: the note's fields plus the card and its schedule. */
 export interface ReviewQueueItem extends Item {
+  card_id: string
+  /** null = whole-note card. */
+  chunk_index: number | null
+  /** How many chunks the note has (for "part 2 of 5"). */
+  chunk_count: number
+  /** The text revealed for this card: the chunk, or the whole note body. */
+  card_text: string
+  origin: StudyCardOrigin
+  question: string | null
+  answer: string | null
+  quote: string | null
   due_at: string
   interval_days: number
   ease: number
@@ -838,16 +886,21 @@ export interface ReviewQueueItem extends Item {
   last_reviewed_at: string | null
 }
 
-/** One stored review_schedule row, without the note body. */
+/** One stored card schedule row, without the note body. */
 export interface ReviewScheduleRow extends ReviewState {
+  cardId: string
   itemId: string
+  chunkIndex: number | null
   dueAt: string
   lastGrade: ReviewGrade | null
   lastReviewedAt: string | null
 }
 
 export interface ReviewRateInput {
-  itemId: string
+  /** The card being graded. */
+  cardId?: string
+  /** Legacy: grade the note's first card when no cardId is given. */
+  itemId?: string
   grade: ReviewGrade
   /** Optional exam date; anchors the first Good interval (Cepeda-style). */
   targetDate?: string
@@ -857,6 +910,15 @@ export interface ReviewEnqueueInput {
   itemId: string
   /** Optional exam date; anchors the first Good interval (Cepeda-style). */
   targetDate?: string
+}
+
+/** What enrolling a note produced. */
+export interface ReviewEnqueueResult {
+  /** Cards created now (0 when the note was already enrolled). */
+  created: number
+  /** Cards the note has in total after the call. */
+  cards: number
+  alreadyEnrolled: boolean
 }
 
 export interface ReviewListInput {

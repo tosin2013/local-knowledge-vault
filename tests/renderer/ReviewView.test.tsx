@@ -31,7 +31,7 @@ describe('ReviewView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Good' }))
     await waitFor(() =>
       expect(lkv.review.rate).toHaveBeenCalledWith({
-        itemId: 'itm_1',
+        cardId: 'crd_itm_1',
         grade: 'good',
         targetDate: undefined,
       }),
@@ -89,7 +89,7 @@ describe('ReviewView', () => {
 
     await waitFor(() =>
       expect(lkv.review.rate).toHaveBeenCalledWith({
-        itemId: 'itm_1',
+        cardId: 'crd_itm_1',
         grade: 'easy',
         targetDate: '2026-06-01',
       }),
@@ -114,6 +114,44 @@ describe('ReviewView', () => {
         itemId: 'itm_9',
         targetDate: undefined,
       }),
+    )
+    expect(await screen.findByText('Added “Cell biology” to review.')).toBeInTheDocument()
+  })
+
+  it('reports how many cards a long note became', async () => {
+    const lkv = lkvMock()
+    lkv.search.query.mockResolvedValue({ hits: [makeHit('itm_9', { title: 'Cell biology' })] })
+    lkv.review.enqueue.mockResolvedValue({ created: 4, cards: 4, alreadyEnrolled: false })
+    render(<ReviewView />)
+
+    fireEvent.change(screen.getByLabelText(/Search your notes/i), { target: { value: 'cell' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to review' }))
+    expect(await screen.findByText(/as 4 cards/)).toBeInTheDocument()
+  })
+
+  it('reveals only the chunk for a chunk card and labels the part', async () => {
+    const lkv = lkvMock()
+    lkv.review.listDue.mockResolvedValue([
+      makeReviewItem('itm_3', {
+        title: 'Cell transport chapter',
+        body: 'Whole chapter text. Diffusion section. Osmosis section.',
+        card_id: 'crd_part2',
+        chunk_index: 1,
+        chunk_count: 3,
+        card_text: 'Osmosis section.',
+      }),
+    ])
+    render(<ReviewView />)
+
+    expect(await screen.findByText('Part 2 of 3')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    expect(await screen.findByText('Osmosis section.')).toBeInTheDocument()
+    expect(screen.queryByText(/Whole chapter text/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Good' }))
+    await waitFor(() =>
+      expect(lkv.review.rate).toHaveBeenCalledWith(expect.objectContaining({ cardId: 'crd_part2', grade: 'good' })),
     )
   })
 

@@ -68,6 +68,7 @@ import type {
   PersonalityPreviewResult,
   Prompt,
   ReviewEnqueueInput,
+  ReviewEnqueueResult,
   ReviewListInput,
   ReviewQueueItem,
   ReviewRateInput,
@@ -127,7 +128,7 @@ const api = {
       ipcRenderer.invoke('review:count', input),
     rate: (input: ReviewRateInput): Promise<ReviewState> =>
       ipcRenderer.invoke('review:rate', input),
-    enqueue: (input: ReviewEnqueueInput): Promise<ReviewState> =>
+    enqueue: (input: ReviewEnqueueInput): Promise<ReviewEnqueueResult> =>
       ipcRenderer.invoke('review:enqueue', input),
     remove: (itemId: string): Promise<boolean> => ipcRenderer.invoke('review:remove', itemId),
   },

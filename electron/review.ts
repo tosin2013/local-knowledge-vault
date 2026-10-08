@@ -1,15 +1,24 @@
 /**
  * Spaced-review scheduling (#216).
  *
- * A simple SM-2-style scheduler over the user's own notes. The pure helpers
- * (`anchorFirstIntervalDays`, `scheduleReview`) hold all the math so the smoke
- * test can exercise them without a database; the accessors below persist each
- * note's state in `review_schedule` (migration v3).
+ * A simple SM-2-style scheduler over study cards (#259 card model). The pure
+ * helpers (`anchorFirstIntervalDays`, `scheduleReview`) hold all the math so
+ * the smoke test can exercise them without a database; the accessors below
+ * persist each card's state in `card_schedule` and every grade in
+ * `review_log` (migration v7, which replaced the note-keyed `review_schedule`).
  *
  * FSRS is deliberately out of scope — this is a first, explainable pass.
  */
-import { getDb } from './db'
-import type { ReviewGrade, ReviewQueueItem, ReviewScheduleRow, ReviewState } from './types'
+import { getDb, newId } from './db'
+import { createNoteCards } from './study-cards'
+import type {
+  ReviewEnqueueResult,
+  ReviewGrade,
+  ReviewQueueItem,
+  ReviewScheduleRow,
+  ReviewState,
+  StudyCardOrigin,
+} from './types'
 
 const MS_PER_DAY = 86_400_000
 const EASE_MIN = 1.3
@@ -124,17 +133,29 @@ function rowToState(row: Record<string, unknown>): ReviewState {
 }
 
 function rowToQueueItem(row: Record<string, unknown>): ReviewQueueItem {
+  const body = String(row.body ?? '')
+  const chunkText = row.chunk_body == null ? null : String(row.chunk_body)
   return {
     id: String(row.id),
     title: String(row.title),
     summary: row.summary == null ? null : String(row.summary),
-    body: String(row.body ?? ''),
+    body,
     para: row.para as ReviewQueueItem['para'],
     kind: String(row.kind),
     status: String(row.status),
     project: row.project == null ? null : String(row.project),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+    card_id: String(row.card_id),
+    chunk_index: row.chunk_index == null ? null : Number(row.chunk_index),
+    chunk_count: Number(row.chunk_count ?? 0),
+    // A chunk card reveals its chunk; if the note was edited and that chunk is
+    // gone, fall back to the whole body rather than showing nothing.
+    card_text: row.chunk_index == null ? body : (chunkText ?? body),
+    origin: String(row.origin ?? 'note') as StudyCardOrigin,
+    question: row.question == null ? null : String(row.question),
+    answer: row.answer == null ? null : String(row.answer),
+    quote: row.quote == null ? null : String(row.quote),
     due_at: String(row.due_at),
     interval_days: Number(row.interval_days ?? 0),
     ease: Number(row.ease ?? DEFAULT_EASE),
@@ -145,21 +166,43 @@ function rowToQueueItem(row: Record<string, unknown>): ReviewQueueItem {
   }
 }
 
-/** The state for one note, or null when it is not in review. */
-export function getReviewState(itemId: string): ReviewState | null {
-  const row = getDb()
-    .prepare('SELECT * FROM review_schedule WHERE item_id = ?')
-    .get(itemId) as Record<string, unknown> | undefined
+/** The schedule of one card, or null when it has none. */
+export function getCardState(cardId: string): ReviewState | null {
+  const row = getDb().prepare('SELECT * FROM card_schedule WHERE card_id = ?').get(cardId) as
+    | Record<string, unknown>
+    | undefined
   return row ? rowToState(row) : null
 }
 
-/** Every stored schedule row, for diagnostics and future dashboards. */
+/** The note's first card id (whole-note card, else the lowest chunk), or null. */
+function firstCardId(itemId: string): string | null {
+  const row = getDb()
+    .prepare(
+      `SELECT c.id FROM study_cards c JOIN card_schedule cs ON cs.card_id = c.id
+       WHERE c.item_id = ? ORDER BY c.chunk_index IS NOT NULL, c.chunk_index, c.created_at LIMIT 1`,
+    )
+    .get(itemId) as { id: string } | undefined
+  return row?.id ?? null
+}
+
+/** The state of a note's first card, or null when the note is not in review. */
+export function getReviewState(itemId: string): ReviewState | null {
+  const cardId = firstCardId(itemId)
+  return cardId ? getCardState(cardId) : null
+}
+
+/** Every stored card schedule, for diagnostics and dashboards. */
 export function listReviewStates(): ReviewScheduleRow[] {
   const rows = getDb()
-    .prepare('SELECT * FROM review_schedule ORDER BY due_at ASC')
+    .prepare(
+      `SELECT cs.*, c.item_id, c.chunk_index FROM card_schedule cs
+       JOIN study_cards c ON c.id = cs.card_id ORDER BY cs.due_at ASC`,
+    )
     .all() as Record<string, unknown>[]
   return rows.map((row) => ({
+    cardId: String(row.card_id),
     itemId: String(row.item_id),
+    chunkIndex: row.chunk_index == null ? null : Number(row.chunk_index),
     dueAt: String(row.due_at),
     ...rowToState(row),
     lastGrade: (row.last_grade as ReviewGrade | null) ?? null,
@@ -167,89 +210,93 @@ export function listReviewStates(): ReviewScheduleRow[] {
   }))
 }
 
+/** Live, active cards (note not trashed/archived), optionally in one project. */
+function dueWhere(project?: string): { sql: string; params: unknown[] } {
+  const p = project?.trim()
+  return {
+    sql:
+      `items.status NOT IN ('trashed','archived') AND c.status = 'active' AND cs.due_at <= ?` +
+      (p ? ' AND items.project = ?' : ''),
+    params: p ? [p] : [],
+  }
+}
+
 /**
- * Notes that are due at or before `before` (default: now), earliest first.
- * Trashed and archived notes are excluded so the queue only offers live items.
+ * Cards that are due at or before `before` (default: now), earliest first.
+ * Trashed and archived notes and non-active cards are excluded.
  */
 export function listDueReviews(before?: string, limit = 50, project?: string): ReviewQueueItem[] {
   const at = before ?? nowIso()
-  const projectFilter = project?.trim() ? ' AND items.project = ?' : ''
-  const params: unknown[] = project?.trim() ? [at, project.trim(), limit] : [at, limit]
+  const where = dueWhere(project)
   const rows = getDb()
     .prepare(
-      `SELECT items.*, rs.due_at, rs.interval_days, rs.ease, rs.reps, rs.lapses,
-              rs.last_grade, rs.last_reviewed_at
-       FROM review_schedule rs
-       JOIN items ON items.id = rs.item_id
-       WHERE items.status NOT IN ('trashed','archived') AND rs.due_at <= ?${projectFilter}
-       ORDER BY rs.due_at ASC
+      `SELECT items.*, c.id AS card_id, c.chunk_index, c.origin, c.question, c.answer, c.quote,
+              nc.body AS chunk_body,
+              (SELECT COUNT(*) FROM note_chunks n2 WHERE n2.item_id = items.id) AS chunk_count,
+              cs.due_at, cs.interval_days, cs.ease, cs.reps, cs.lapses, cs.last_grade, cs.last_reviewed_at
+       FROM card_schedule cs
+       JOIN study_cards c ON c.id = cs.card_id
+       JOIN items ON items.id = c.item_id
+       LEFT JOIN note_chunks nc ON nc.item_id = c.item_id AND nc.chunk_index = c.chunk_index
+       WHERE ${where.sql}
+       ORDER BY cs.due_at ASC, items.id, c.chunk_index
        LIMIT ?`,
     )
-    .all(...params) as Record<string, unknown>[]
+    .all(at, ...where.params, limit) as Record<string, unknown>[]
   return rows.map(rowToQueueItem)
 }
 
-/** How many live notes are due at or before `before` (default: now). */
+/** How many live cards are due at or before `before` (default: now). */
 export function countDueReviews(before?: string, project?: string): number {
   const at = before ?? nowIso()
-  const projectFilter = project?.trim() ? ' AND items.project = ?' : ''
-  const params: unknown[] = project?.trim() ? [at, project.trim()] : [at]
+  const where = dueWhere(project)
   const row = getDb()
     .prepare(
       `SELECT COUNT(*) AS c
-       FROM review_schedule rs
-       JOIN items ON items.id = rs.item_id
-       WHERE items.status NOT IN ('trashed','archived') AND rs.due_at <= ?${projectFilter}`,
+       FROM card_schedule cs
+       JOIN study_cards c ON c.id = cs.card_id
+       JOIN items ON items.id = c.item_id
+       WHERE ${where.sql}`,
     )
-    .get(...params) as { c: number }
+    .get(at, ...where.params) as { c: number }
   return Number(row.c)
 }
 
 /**
- * Put a note into review. A new row is due immediately; an existing row is left
- * untouched (re-enqueuing never resurrects a note you already scheduled).
+ * Put a note into review: create its cards (one whole-note card, or one per
+ * chunk for a long note), each due now. Re-enqueuing a note that already has
+ * cards leaves them untouched (never resurrects a schedule).
  */
-export function enqueueReview(itemId: string, _opts: { targetDate?: string } = {}): ReviewState {
-  const database = getDb()
-  const existing = database
-    .prepare('SELECT * FROM review_schedule WHERE item_id = ?')
-    .get(itemId) as Record<string, unknown> | undefined
-  if (existing) return rowToState(existing)
-
-  const ts = nowIso()
-  database
-    .prepare(
-      `INSERT INTO review_schedule
-         (item_id, due_at, interval_days, ease, reps, lapses, last_grade, last_reviewed_at, created_at, updated_at)
-       VALUES (@item_id, @due_at, 0, @ease, 0, 0, NULL, NULL, @created_at, @updated_at)`,
-    )
-    .run({
-      item_id: itemId,
-      due_at: ts,
-      ease: DEFAULT_EASE,
-      created_at: ts,
-      updated_at: ts,
-    })
-  return { intervalDays: 0, ease: DEFAULT_EASE, reps: 0, lapses: 0 }
+export function enqueueReview(itemId: string, _opts: { targetDate?: string } = {}): ReviewEnqueueResult {
+  const { created, alreadyEnrolled } = createNoteCards(itemId)
+  const total = getDb()
+    .prepare('SELECT COUNT(*) AS c FROM study_cards WHERE item_id = ?')
+    .get(itemId) as { c: number }
+  return { created: created.length, cards: Number(total.c), alreadyEnrolled }
 }
 
-/** Remove a note from review. Returns true when a row existed. */
+/** Remove a note from review (all of its cards and their history). Returns true when any existed. */
 export function removeReview(itemId: string): boolean {
-  const result = getDb().prepare('DELETE FROM review_schedule WHERE item_id = ?').run(itemId)
+  const result = getDb().prepare('DELETE FROM study_cards WHERE item_id = ?').run(itemId)
   return result.changes > 0
 }
 
 /**
- * Record a grade for a note and persist the next schedule. Missing state is
- * treated as a fresh item (interval 0, ease 2.5).
+ * Record a grade for a card, persist the next schedule and log the review.
+ * Pass a card id; a note id (legacy callers) grades that note's first card.
+ * Missing state is treated as a fresh card (interval 0, ease 2.5).
  */
 export function rateReview(
-  itemId: string,
+  cardOrItemId: string,
   grade: ReviewGrade,
   opts: { targetDate?: string } = {},
 ): ReviewState {
   const database = getDb()
-  const prev = getReviewState(itemId) ?? {
+  const isCard = !!database.prepare('SELECT 1 FROM study_cards WHERE id = ?').get(cardOrItemId)
+  const cardId = isCard ? cardOrItemId : firstCardId(cardOrItemId)
+  if (!cardId) throw new Error('This note is not in review.')
+
+  const prev = getCardState(cardId) ?? {
     intervalDays: 0,
     ease: DEFAULT_EASE,
     reps: 0,
@@ -258,32 +305,61 @@ export function rateReview(
   const { state, dueAt } = scheduleReview(prev, grade, { targetDate: opts.targetDate })
   const ts = nowIso()
 
-  database
-    .prepare(
-      `INSERT INTO review_schedule
-         (item_id, due_at, interval_days, ease, reps, lapses, last_grade, last_reviewed_at, created_at, updated_at)
-       VALUES (@item_id, @due_at, @interval_days, @ease, @reps, @lapses, @last_grade, @last_reviewed_at, @created_at, @updated_at)
-       ON CONFLICT(item_id) DO UPDATE SET
-         due_at = excluded.due_at,
-         interval_days = excluded.interval_days,
-         ease = excluded.ease,
-         reps = excluded.reps,
-         lapses = excluded.lapses,
-         last_grade = excluded.last_grade,
-         last_reviewed_at = excluded.last_reviewed_at,
-         updated_at = excluded.updated_at`,
-    )
-    .run({
-      item_id: itemId,
-      due_at: dueAt,
-      interval_days: state.intervalDays,
-      ease: state.ease,
-      reps: state.reps,
-      lapses: state.lapses,
-      last_grade: grade,
-      last_reviewed_at: ts,
-      created_at: ts,
-      updated_at: ts,
-    })
+  database.transaction(() => {
+    database
+      .prepare(
+        `INSERT INTO card_schedule
+           (card_id, due_at, interval_days, ease, reps, lapses, last_grade, last_reviewed_at, created_at, updated_at)
+         VALUES (@card_id, @due_at, @interval_days, @ease, @reps, @lapses, @last_grade, @last_reviewed_at, @created_at, @updated_at)
+         ON CONFLICT(card_id) DO UPDATE SET
+           due_at = excluded.due_at,
+           interval_days = excluded.interval_days,
+           ease = excluded.ease,
+           reps = excluded.reps,
+           lapses = excluded.lapses,
+           last_grade = excluded.last_grade,
+           last_reviewed_at = excluded.last_reviewed_at,
+           updated_at = excluded.updated_at`,
+      )
+      .run({
+        card_id: cardId,
+        due_at: dueAt,
+        interval_days: state.intervalDays,
+        ease: state.ease,
+        reps: state.reps,
+        lapses: state.lapses,
+        last_grade: grade,
+        last_reviewed_at: ts,
+        created_at: ts,
+        updated_at: ts,
+      })
+    database
+      .prepare(
+        `INSERT INTO review_log (id, card_id, grade, reviewed_at, interval_days, ease, due_at, migrated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .run(newId('rvl'), cardId, grade, ts, state.intervalDays, state.ease, dueAt)
+  })()
   return state
+}
+
+/** One logged review (newest first), for history and session stats. */
+export interface ReviewLogRow {
+  cardId: string
+  grade: ReviewGrade
+  reviewedAt: string
+  migrated: boolean
+}
+
+/** The review history of one card, newest first. */
+export function listReviewLog(cardId: string): ReviewLogRow[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM review_log WHERE card_id = ? ORDER BY reviewed_at DESC')
+    .all(cardId) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    cardId: String(r.card_id),
+    grade: String(r.grade) as ReviewGrade,
+    reviewedAt: String(r.reviewed_at),
+    migrated: Number(r.migrated) === 1,
+  }))
 }
