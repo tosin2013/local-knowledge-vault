@@ -60,6 +60,22 @@ describe('ReviewView', () => {
     expect(await screen.findByText(/Chlorophyll captures light/)).toBeInTheDocument()
   })
 
+  it('shows the content summary as the recall prompt instead of a page title', async () => {
+    const lkv = lkvMock()
+    lkv.review.listDue.mockResolvedValue([
+      makeReviewItem('itm_2', {
+        title: 'Bio · p.4',
+        summary: 'Photosynthesis captures light energy.',
+        body: 'Photosynthesis captures light energy to make glucose.',
+      }),
+    ])
+    render(<ReviewView />)
+
+    // The recall prompt is the content summary, not the bare "file · p.N" title.
+    expect(await screen.findByText('Photosynthesis captures light energy.')).toBeInTheDocument()
+    expect(screen.queryByText('Bio · p.4')).not.toBeInTheDocument()
+  })
+
   it('passes the target exam date through to grading', async () => {
     const lkv = lkvMock()
     lkv.review.listDue.mockResolvedValue([NOTE])

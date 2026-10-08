@@ -232,6 +232,129 @@ export function pageNoteTitle(book: string, startPage: number, endPage = startPa
   return `${source} · ${locator}`
 }
 
+/** Known cookie-consent / privacy-banner phrases that pollute printed pages. */
+const BANNER_PATTERNS: RegExp[] = [
+  /we use cookies/i,
+  /accept (all )?cookies/i,
+  /manage cookie/i,
+  /cookie (settings|preferences|consent|policy)/i,
+  /by (continuing|using this site|clicking)/i,
+  /privacy (policy|preferences|center|notice)/i,
+  /terms of (use|service)/i,
+]
+
+/** A numbered section heading like "8.1 Overview of Photosynthesis". */
+const SECTION_HEADING_RE = /^\d{1,3}(?:\.\d+)*\s+\S.{2,}/
+
+export interface PdfLine {
+  text: string
+  /** Representative font height in PDF units (0 when unknown). */
+  height: number
+}
+
+/** Extract text lines from pdfjs `getTextContent()` items, grouped by y-position. */
+export function extractPageLines(content: unknown): PdfLine[] {
+  const items = (content as { items?: unknown[] } | undefined)?.items ?? []
+  const lines = new Map<number, Array<{ x: number; str: string; height: number }>>()
+  for (const raw of items) {
+    const it = raw as { str?: unknown; transform?: unknown; height?: unknown }
+    if (typeof it?.str !== 'string' || !it.str.trim()) continue
+    const t = it.transform as number[] | undefined
+    const y = t && t.length >= 6 ? Math.round(t[5]) : 0
+    const x = t && t.length >= 6 ? t[4] : 0
+    const height = typeof it.height === 'number' && it.height > 0 ? it.height : 0
+    const arr = lines.get(y) ?? []
+    arr.push({ x, str: it.str, height })
+    lines.set(y, arr)
+  }
+  return [...lines.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([, arr]) => {
+      const sorted = arr.sort((p, q) => p.x - q.x)
+      return {
+        text: sorted.map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim(),
+        height: sorted.reduce((m, p) => Math.max(m, p.height), 0),
+      }
+    })
+    .filter((l) => l.text)
+}
+
+export interface CleanedPdfPages {
+  pages: string[]
+  /** A detected section heading per page (1-based index), or null. */
+  sectionTitles: Array<string | null>
+  removedLines: number
+}
+
+/** Smallest positive line height for a page (a proxy for body text size). */
+function minLineHeight(lines: PdfLine[]): number {
+  const heights = (lines ?? []).map((l) => l.height).filter((h) => h > 0)
+  if (heights.length === 0) return 0
+  return Math.min(...heights)
+}
+
+/** A line is a section heading when it is a numbered section or clearly larger than body text. */
+function isSectionHeading(line: PdfLine, bodyHeight: number): boolean {
+  const text = line.text.trim()
+  if (!text || text.length > 80) return false
+  if (SECTION_HEADING_RE.test(text)) return true
+  return bodyHeight > 0 && line.height > bodyHeight * 1.25
+}
+
+/**
+ * Remove junk that repeats on printed pages (#272): a line that appears on at
+ * least half the pages is a running header/footer (or a cookie banner) and is
+ * dropped. Known banner phrases are dropped even when they do not repeat. Also
+ * detects a section heading — a numbered section, or a line in a clearly larger
+ * font than the body text.
+ */
+export function cleanPdfPages(pageLines: PdfLine[][]): CleanedPdfPages {
+  const list = pageLines ?? []
+  const lineSets = list.map((lines) => new Set((lines ?? []).map((l) => l.text.trim()).filter(Boolean)))
+
+  const counts = new Map<string, number>()
+  for (const set of lineSets) for (const l of set) counts.set(l, (counts.get(l) ?? 0) + 1)
+
+  const threshold = Math.max(2, Math.ceil(list.length / 2))
+  const repeated = new Set<string>()
+  for (const [l, c] of counts) if (c >= threshold) repeated.add(l)
+
+  let removedLines = 0
+  const cleaned: string[] = []
+  const sectionTitles: Array<string | null> = []
+  for (const lines of list) {
+    const kept: string[] = []
+    let section: string | null = null
+    const bodyHeight = minLineHeight(lines ?? [])
+    for (const line of lines ?? []) {
+      const text = line.text.trim()
+      if (!text) continue
+      const drop = repeated.has(text) || BANNER_PATTERNS.some((re) => re.test(text))
+      if (drop) {
+        removedLines++
+        continue
+      }
+      if (!section && isSectionHeading(line, bodyHeight)) section = text.slice(0, 80)
+      kept.push(text)
+    }
+    cleaned.push(kept.join(' '))
+    sectionTitles.push(section)
+  }
+  return { pages: cleaned, sectionTitles, removedLines }
+}
+
+/** Note title for a PDF page group, with a section heading when one is found. */
+export function pageNoteTitleWithSection(
+  book: string,
+  startPage: number,
+  endPage: number,
+  section?: string | null,
+): string {
+  const base = pageNoteTitle(book, startPage, endPage)
+  return section ? `${base} · ${section}` : base
+}
+
+
 /** Note title for an EPUB chapter: `"<Book> · <Chapter>"` (+ `" (part N)"`). */
 export function chapterNoteTitle(book: string, chapter: string, part?: number): string {
   const source = (book ?? '').trim() || 'Book'
@@ -423,25 +546,32 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
       /* metadata is optional */
     }
 
-    const pages: string[] = []
+    const pageLines: PdfLine[][] = []
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n)
       const content = await page.getTextContent()
-      const text = content.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-      pages.push(text)
+      pageLines.push(extractPageLines(content))
     }
-    const emptyPages = pages.filter((p) => !p).length
+
+    // Drop repeated headers/footers/cookie banners and detect section headings (#272).
+    const { pages: cleanedPages, sectionTitles, removedLines } = cleanPdfPages(pageLines)
+    const emptyPages = cleanedPages.filter((p) => !p).length
 
     const itemIds: string[] = []
     let imported = 0
+    let skipped = 0
     runInTransaction(() => {
-      for (const group of groupPages(pages)) {
+      for (const group of groupPages(cleanedPages)) {
+        // A page that is only boilerplate (cover, instructions, copyright) has
+        // almost no real words after cleaning — skip it (#272).
+        const words = group.text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w))
+        if (words.length < MIN_SECTION_WORDS) {
+          skipped++
+          continue
+        }
+        const section = sectionTitles[group.startPage - 1] ?? null
         const item = createItem({
-          title: pageNoteTitle(title, group.startPage, group.endPage),
+          title: pageNoteTitleWithSection(title, group.startPage, group.endPage, section),
           summary: summarize(group.text),
           body: buildBookBody({
             fileName,
@@ -458,7 +588,16 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
         imported++
       }
     })
-    return { format: 'pdf', project: title, imported, skipped: 0, emptyPages, itemIds, errors: [] }
+    return {
+      format: 'pdf',
+      project: title,
+      imported,
+      skipped,
+      emptyPages,
+      removedLines,
+      itemIds,
+      errors: [],
+    }
   } catch (e) {
     return {
       format: 'pdf',

@@ -185,7 +185,7 @@ export function ReviewView({ onClose }: VaultPluginRenderProps) {
         <Card variant="outlined" sx={{ flexShrink: 0 }}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-              {current.title}
+              {current.summary?.trim() || current.title}
             </Typography>
             {revealed ? (
               <Box
