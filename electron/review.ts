@@ -171,33 +171,37 @@ export function listReviewStates(): ReviewScheduleRow[] {
  * Notes that are due at or before `before` (default: now), earliest first.
  * Trashed and archived notes are excluded so the queue only offers live items.
  */
-export function listDueReviews(before?: string, limit = 50): ReviewQueueItem[] {
+export function listDueReviews(before?: string, limit = 50, project?: string): ReviewQueueItem[] {
   const at = before ?? nowIso()
+  const projectFilter = project?.trim() ? ' AND items.project = ?' : ''
+  const params: unknown[] = project?.trim() ? [at, project.trim(), limit] : [at, limit]
   const rows = getDb()
     .prepare(
       `SELECT items.*, rs.due_at, rs.interval_days, rs.ease, rs.reps, rs.lapses,
               rs.last_grade, rs.last_reviewed_at
        FROM review_schedule rs
        JOIN items ON items.id = rs.item_id
-       WHERE items.status NOT IN ('trashed','archived') AND rs.due_at <= ?
+       WHERE items.status NOT IN ('trashed','archived') AND rs.due_at <= ?${projectFilter}
        ORDER BY rs.due_at ASC
        LIMIT ?`,
     )
-    .all(at, limit) as Record<string, unknown>[]
+    .all(...params) as Record<string, unknown>[]
   return rows.map(rowToQueueItem)
 }
 
 /** How many live notes are due at or before `before` (default: now). */
-export function countDueReviews(before?: string): number {
+export function countDueReviews(before?: string, project?: string): number {
   const at = before ?? nowIso()
+  const projectFilter = project?.trim() ? ' AND items.project = ?' : ''
+  const params: unknown[] = project?.trim() ? [at, project.trim()] : [at]
   const row = getDb()
     .prepare(
       `SELECT COUNT(*) AS c
        FROM review_schedule rs
        JOIN items ON items.id = rs.item_id
-       WHERE items.status NOT IN ('trashed','archived') AND rs.due_at <= ?`,
+       WHERE items.status NOT IN ('trashed','archived') AND rs.due_at <= ?${projectFilter}`,
     )
-    .get(at) as { c: number }
+    .get(...params) as { c: number }
   return Number(row.c)
 }
 

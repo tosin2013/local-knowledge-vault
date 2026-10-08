@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -16,6 +16,7 @@ import QuizIcon from '@mui/icons-material/Quiz'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import SaveIcon from '@mui/icons-material/Save'
 import type { VaultPluginRenderProps } from '../types'
+import { ProjectSelect } from '../../features/ProjectSelect'
 import type { TestToNotesItem, TestToNotesSuggestion } from '../../../electron/types'
 import { parseTestResults, summarizeAttempts } from '../../../electron/test-to-notes-parse'
 
@@ -41,6 +42,11 @@ function fieldText(...parts: Array<string | undefined>): string {
 
 export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
   const [raw, setRaw] = useState('')
+  const [items, setItems] = useState<TestToNotesItem[]>([])
+  const [parsing, setParsing] = useState(false)
+  const [parseOffline, setParseOffline] = useState(false)
+  const [parseError, setParseError] = useState<string | null>(null)
+  const [project, setProject] = useState('')
   const [suggestions, setSuggestions] = useState<TestToNotesSuggestion[]>([])
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,10 +54,46 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
   const [savedSuggestions, setSavedSuggestions] = useState<Record<number, boolean>>({})
   const [savedCorrect, setSavedCorrect] = useState<Record<number, boolean>>({})
 
-  const items = useMemo(() => parseTestResults(raw), [raw])
   const summary = useMemo(() => summarizeAttempts(items), [items])
   const correctItems = useMemo(() => items.filter((it) => it.correct), [items])
   const wrongItems = useMemo(() => items.filter((it) => !it.correct), [items])
+
+  // Parse pasted results with the model (debounced). Falls back to the
+  // deterministic parser when the AI path is unavailable or fails.
+  useEffect(() => {
+    const text = raw
+    if (!text.trim()) {
+      setItems([])
+      setParsing(false)
+      setParseOffline(false)
+      setParseError(null)
+      return
+    }
+    const parse = window.lkv?.testToNotes?.parse
+    if (!parse) {
+      setItems(parseTestResults(text))
+      setParsing(false)
+      setParseOffline(false)
+      setParseError(null)
+      return
+    }
+    setParsing(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await parse({ text })
+        setItems(res.items ?? [])
+        setParseOffline(!!res.offline)
+        setParseError(res.error ?? null)
+      } catch (e) {
+        setItems(parseTestResults(text))
+        setParseOffline(true)
+        setParseError(e instanceof Error ? e.message : String(e))
+      } finally {
+        setParsing(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [raw])
 
   const hasAnalyzeApi = !!window.lkv?.testToNotes?.analyze
 
@@ -68,7 +110,10 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
     setError(null)
     setStatus(null)
     try {
-      const result = await window.lkv.testToNotes.analyze({ items: wrongItems })
+      const result = await window.lkv.testToNotes.analyze({
+        items: wrongItems,
+        ...(project ? { filters: { project } } : {}),
+      })
       setSuggestions(result)
       setSavedSuggestions({})
       setStatus(
@@ -97,7 +142,7 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
         status: 'ai-draft',
         para: 'resources',
         summary: `Corrective note for: ${suggestion.question}`.slice(0, 200),
-        project: null,
+        project: project || null,
       })
       setSavedSuggestions((prev) => ({ ...prev, [index]: true }))
       setStatus('Saved as an AI draft note — review and confirm it from your notes.')
@@ -120,6 +165,7 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
         status: 'ai-draft',
         para: 'resources',
         summary: `Practice-test flash-card: ${item.question}`.slice(0, 200),
+        project: project || null,
       })
       setSavedCorrect((prev) => ({ ...prev, [index]: true }))
       setStatus('Saved a reinforcement flash-card.')
@@ -154,9 +200,12 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
       </Stack>
 
       <Typography variant="body2" color="text.secondary">
-        Paste practice-test results, split them into correct and incorrect, and turn each wrong answer
-        into a grounded note you can review and save. No OCR, no automatic test generation.
+        Paste practice-test results in almost any format, split them into correct and incorrect, and
+        turn each wrong answer into a grounded note you can review and save. Parsing uses your model;
+        when it is offline Vault falls back to its built-in parser.
       </Typography>
+
+      <ProjectSelect value={project} onChange={setProject} label="Project" />
 
       <TextField
         label="Paste practice-test results"
@@ -172,7 +221,9 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
 
       <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
         <Typography variant="subtitle2" fontWeight={600}>
-          {`${summary.total} items · ${summary.correct} correct · ${summary.wrong} wrong`}
+          {parsing
+            ? 'Parsing…'
+            : `${summary.total} items · ${summary.correct} correct · ${summary.wrong} wrong`}
         </Typography>
         {!hasAnalyzeApi && (
           <Typography variant="caption" color="warning.main">
@@ -189,6 +240,13 @@ export function TestToNotesView({ onClose }: VaultPluginRenderProps) {
       {error && (
         <Alert severity="error" onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+      {(parseOffline || parseError) && (
+        <Alert severity="warning">
+          {parseError
+            ? `AI parsing failed (${parseError}) — showing the built-in parser's result.`
+            : 'AI offline — showing the built-in parser\u2019s result.'}
         </Alert>
       )}
       {anyOffline && (

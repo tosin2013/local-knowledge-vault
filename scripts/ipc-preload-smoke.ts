@@ -257,11 +257,11 @@ async function main(): Promise<void> {
     // ask
     'ask:grounded',
     // test to notes (#166)
-    'testToNotes:analyze',
+    'testToNotes:analyze', 'testToNotes:parse',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
     // study (#215)
-    'study:record', 'study:listRecent', 'study:calibration',
+    'study:record', 'study:listRecent', 'study:calibration', 'study:questions',
     // ollama
     'ollama:health',
     // llm
@@ -319,6 +319,10 @@ async function main(): Promise<void> {
   const testToNotes = await ipcRendererMock.invoke('testToNotes:analyze', { items: [] }) as unknown[]
   assert(Array.isArray(testToNotes), 'testToNotes:analyze returns an array')
 
+  // AI parsing of pasted results; empty input returns no items without a model call.
+  const testToNotesParsed = await ipcRendererMock.invoke('testToNotes:parse', { text: '' }) as { items: unknown[] }
+  assert(Array.isArray(testToNotesParsed.items), 'testToNotes:parse returns an items array')
+
   const dueReviews = await ipcRendererMock.invoke('review:listDue') as unknown[]
   assert(Array.isArray(dueReviews), 'review:listDue returns an array')
 
@@ -332,6 +336,9 @@ async function main(): Promise<void> {
     studyCal && typeof studyCal.count === 'number',
     'study:calibration returns a summary',
   )
+  // A project with no notes returns an empty list without a model call.
+  const studyQuestions = await ipcRendererMock.invoke('study:questions', { project: 'does-not-exist-xyz' }) as { questions: unknown[] }
+  assert(Array.isArray(studyQuestions.questions), 'study:questions returns a questions array')
 
   const ollamaHealth = await ipcRendererMock.invoke('ollama:health') as object
   assert(ollamaHealth && typeof ollamaHealth === 'object', 'ollama:health returns object')
@@ -434,6 +441,7 @@ async function main(): Promise<void> {
   assert(typeof (api.search as Record<string, unknown>).query === 'function', 'search.query is function')
   assert(typeof (api.ask as Record<string, unknown>).grounded === 'function', 'ask.grounded is function')
   assert(typeof (api.testToNotes as Record<string, unknown>).analyze === 'function', 'testToNotes.analyze is function')
+  assert(typeof (api.testToNotes as Record<string, unknown>).parse === 'function', 'testToNotes.parse is function')
   const analyzeViaPreload = await (
     api.testToNotes as { analyze: (i: { items: unknown[] }) => Promise<unknown[]> }
   ).analyze({ items: [] })
@@ -448,6 +456,7 @@ async function main(): Promise<void> {
   assert(typeof (await reviewApi.count()) === 'number', 'preload review.count reaches main')
 
   assert(typeof (api.study as Record<string, unknown>).listRecent === 'function', 'study.listRecent is function')
+  assert(typeof (api.study as Record<string, unknown>).questions === 'function', 'study.questions is function')
   const studyViaPreload = await (
     api.study as { listRecent: (limit?: number) => Promise<unknown[]> }
   ).listRecent(5)
