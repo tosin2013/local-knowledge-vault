@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #234: test:media-ingest is hermetic — the 'nothing installed' checks pass even when a repo-local .venv-ytdlp exists. Verified both directions on this machine: pre-fix code with a fake .venv-ytdlp present fails exactly the two reported checks (44 passed / 2 failed); with the fix the suite passes 46/46 with the venv present.",
+  "authority_id": "234",
+  "criteria": [
+    { "check": "command_exit", "target": "grep -q 'setYtDlpRootsOverrideForTests' electron/media-ingest.ts" },
+    { "check": "command_exit", "target": "grep -q 'setYtDlpRootsOverrideForTests' scripts/media-ingest-smoke.ts" },
+    { "check": "tests_pass", "target": "npm run test:media-ingest" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
