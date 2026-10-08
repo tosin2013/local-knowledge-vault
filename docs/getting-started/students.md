@@ -50,11 +50,15 @@ Vault shows a hint if it detects one.
 
    Once you've saved attempts, a calibration line at the top compares how sure you felt with how
    you actually did.
-5. **Schedule reviews.** In **Study**, open the **Review due notes** tab. Under **Add notes to review**, search for a
-   topic, optionally set a **Target exam date**, and click **Add to review** next to the notes you
-   want. When notes are due they appear under **Due now**: recall the note from its title, click
-   **Show answer**, then rate yourself **Again**, **Hard**, **Good** or **Easy**. Vault picks the
-   next date. Click **Ask** in the toggle to return.
+5. **Run a study session.** In **Study**, pick your project on **Home** and click **Study this project**
+   (or open the **Study session** tab and, under **Add notes to Study**, search for a topic and click
+   **Add to review**; a note that already has cards says **Already in Study**). Optionally set the
+   project's exam date. Click **Start session**: each card asks one question written from a section of
+   your note. Type your answer from memory (or click **I don't know**), set **How sure are you?**, then
+   click **Reveal answer** to see the answer, the quote from your note and a link to it. Grade yourself
+   **Missed**, **Partly** or **Got it**; missed cards come back at the end of the session. The summary
+   shows your accuracy, how your confidence matched it, the cards you were sure of but missed, the notes
+   to revisit and when the next cards are due. Click **Ask** in the toggle to return.
 6. **Learn from a practice test.** In **Study**, open the **Import practice test** tab and paste your results into
    **Paste practice-test results**. Plain text works:
 

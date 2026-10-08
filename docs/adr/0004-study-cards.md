@@ -178,6 +178,44 @@ All of these are pure functions in `electron/review.ts`, with unit tests in `scr
 - **One grading scale:** Missed / Partly / Got it, stored as `again` / `hard` / `good`. Easy is gone from the UI;
   stored `easy` grades are kept and read as Got it. `review:rate` accepts both scales.
 
+### Study session (#263, schema v9)
+
+The session loop lives in `electron/study-session.ts` (IPC `study:startSession`, `study:cardQuestion`, `study:answer`,
+`study:sessionSummary`) and `src/features/study/StudySession.tsx`.
+
+- **Start:** `buildReviewQueue` for the scope, at most 20 cards (missed first, then Partly, due, new within the
+  budget). A session id ties the attempts together.
+- **One question per card, generated when the card first comes up**, not at enroll. Enrolling a 178-page book would
+  otherwise cost hundreds of model calls at once (Groq's free tier allows about 130 a day), most for cards that won't
+  be due for weeks. The session asks for the current card and prefetches the next one, so at most one call is ahead of
+  the learner. Each call sends one section (the card's chunk, or the note body) through the grounding contract
+  (`buildGroundedMessages`) and asks for one free-recall question, a short answer and a verbatim quote, as JSON.
+- **Validation:** the quote must appear in the section (ignoring spacing, case, curly quotes and Markdown); the
+  question must not copy six or more words in a row from it, must not be multiple choice, must not ask about "the
+  passage"/"the note", and must not need content outside the section; a cited id other than the card's note fails
+  `validateCitations`. A card the model declines (`[]`) or a question that fails validation gets a deterministic
+  fallback, cached with the reason in `q_note`: a fill-the-gap (cloze) from a sentence of the section, blanking its
+  strongest term (acronym, number, proper noun, long word), or, if no sentence works, "Explain … in your own words"
+  with the section shown on reveal. Rate limits, the daily cap and offline providers also get the fallback, with a
+  notice naming the reason, but are **not** cached, so the next session tries the model again. Provider error text
+  is never shown.
+- **Cache:** `study_cards.question/answer/quote` plus `q_kind` (`generated`, `cloze`, `explain`, `test`, `pair`),
+  `q_source_hash` (hash of the section the question was written from), `q_model`, `q_at`, `q_note`. A note card's
+  question is reused while `q_source_hash` matches its section; an edit that changes the section (#286) clears it.
+  Practice-test and pair cards keep the question they were created with.
+- **Attempt before reveal:** Reveal stays disabled until the learner types an answer or chooses **I don't know**
+  (stored as confidence 0). Confidence (0–100) is set before the reveal.
+- **Feedback:** the stored answer, the quote, the cited note (opens it) and the whole section on demand.
+- **Grade:** Missed / Partly / Got it → `rateReview` (exam-aware SM-2) and one `study_attempts` row with
+  `card_id`, `item_id`, `session_id`, `grade`. A missed card goes to the end of the session queue.
+- **Summary** (first try per card): Got it / Partly / Missed counts, retried cards, accuracy (Partly = ½),
+  calibration (mean confidence vs mean score), confident misses (confidence ≥ 70, not Got it) listed first, notes
+  to revisit, the next due date and the number of cards due by the end of tomorrow.
+- **Add one note:** the note search in the Study session section asks `review:enrolled` and shows "Already in
+  Study" for notes that already have cards.
+- **Migration v9** only adds nullable columns (`study_cards.q_*`, `study_attempts.card_id/item_id/session_id/grade`)
+  and an index; existing cards, schedules and logs are untouched.
+
 ## Consequences
 
 - One schedule per card: a 30-page book can be enrolled at page or chunk level and each part is graded on its own.

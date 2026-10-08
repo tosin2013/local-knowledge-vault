@@ -102,13 +102,22 @@ export function recordStudyAttempt(input: StudyAttemptInput): StudyAttempt {
     answer: input?.answer == null ? null : capText(input.answer),
     created_at: nowIso(),
   }
+  const opt = (v: unknown) => (v == null || v === '' ? null : String(v))
   getDb()
     .prepare(
       `INSERT INTO study_attempts
-       (id, question, attempt, confidence, self_grade, self_explanation, cited_ids, answer, created_at)
-       VALUES (@id, @question, @attempt, @confidence, @self_grade, @self_explanation, @cited_ids, @answer, @created_at)`,
+       (id, question, attempt, confidence, self_grade, self_explanation, cited_ids, answer, created_at,
+        card_id, item_id, session_id, grade)
+       VALUES (@id, @question, @attempt, @confidence, @self_grade, @self_explanation, @cited_ids, @answer, @created_at,
+        @card_id, @item_id, @session_id, @grade)`,
     )
-    .run(attempt)
+    .run({
+      ...attempt,
+      card_id: opt(input?.cardId),
+      item_id: opt(input?.itemId),
+      session_id: opt(input?.sessionId),
+      grade: opt(input?.grade),
+    })
   return attempt
 }
 

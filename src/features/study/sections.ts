@@ -9,7 +9,7 @@ export type StudySection = 'home' | 'review' | 'quiz' | 'import'
 
 export const STUDY_SECTIONS: { id: StudySection; label: string }[] = [
   { id: 'home', label: 'Home' },
-  { id: 'review', label: 'Review due notes' },
+  { id: 'review', label: 'Study session' },
   { id: 'quiz', label: 'Quiz me on…' },
   { id: 'import', label: 'Import practice test' },
 ]

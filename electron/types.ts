@@ -1012,6 +1012,11 @@ export interface StudyAttemptInput {
   citedIds?: string[]
   /** The grounded answer text (or fallback copy when offline). */
   answer?: string | null
+  /** Session loop (#263): the card, its note, the session and the SM-2 grade. */
+  cardId?: string | null
+  itemId?: string | null
+  sessionId?: string | null
+  grade?: ReviewGrade | null
 }
 
 /** One persisted recall attempt plus the feedback it was graded against. */
@@ -1052,4 +1057,112 @@ export interface StudyQuestionsInput {
 
 export interface StudyQuestionsResult {
   questions: string[]
+}
+
+/* ---- Study session loop (#263) ---- */
+
+/**
+ * How a card's prompt was made: `generated` by the model from the card's
+ * section, a `cloze` (fill the gap) or `explain` prompt when no model is
+ * available or the generated card failed a drop rule, the practice test's
+ * own question (`test`, #265), or a list pair (`pair`, #273).
+ */
+export type StudyQuestionKind = 'generated' | 'cloze' | 'explain' | 'test' | 'pair'
+
+/** One card's prompt and its stored answer key, ready for a session. */
+export interface StudyCardQuestion {
+  cardId: string
+  itemId: string
+  /** The note's title (shown with the citation, never as the prompt). */
+  title: string
+  project: string | null
+  origin: StudyCardOrigin
+  kind: StudyQuestionKind
+  question: string
+  /** The stored short answer; null for an `explain` prompt (the section is the answer). */
+  answer: string | null
+  /** An exact quote from the note that supports the answer. */
+  quote: string | null
+  /** The section the card covers (revealed as feedback). */
+  sectionText: string
+  /** null = the whole note. */
+  chunkIndex: number | null
+  chunkCount: number
+  /** The note the answer is grounded in (validated: only the card's own note). */
+  citations: Citation[]
+  /** Why Vault fell back from a generated question, in plain words (never provider content). */
+  notice?: string
+  /** True when no model could be reached. */
+  offline?: boolean
+  rateLimited?: boolean
+  /** The model that wrote a `generated` question. */
+  model?: string | null
+}
+
+export interface StudySessionStartInput {
+  /** '' / undefined = every project. */
+  project?: string
+  /** Most cards in one session (default 20). */
+  limit?: number
+}
+
+export interface StudySessionStart {
+  sessionId: string
+  /** The session queue: missed first, then Partly, then due, then today's new cards (#264). */
+  cards: ReviewQueueItem[]
+}
+
+export interface StudyAnswerInput {
+  sessionId: string
+  cardId: string
+  /** The prompt the learner saw. */
+  question: string
+  /** What the learner typed before the answer was revealed. */
+  attempt?: string
+  dontKnow?: boolean
+  /** Confidence before reveal, 0–100. */
+  confidence?: number
+  /** Missed / Partly / Got it (either scale). */
+  grade: ReviewGrade | StudySelfGrade
+  /** The answer key shown on reveal. */
+  answer?: string | null
+}
+
+export interface StudyAnswerResult {
+  state: ReviewState
+  /** When the card is due again. */
+  dueAt: string
+}
+
+/** One card in the session summary. */
+export interface StudySessionCardResult {
+  cardId: string
+  itemId: string
+  title: string
+  question: string
+  confidence: number
+  grade: StudySelfGrade
+}
+
+/** End-of-session summary (#263). Grades count each card's first try. */
+export interface StudySessionReport {
+  sessionId: string
+  /** Distinct cards answered. */
+  cards: number
+  got: number
+  partial: number
+  missed: number
+  /** Cards that came back after a miss and were answered again. */
+  retried: number
+  /** Share of first tries graded Got it (Partly counts half), 0–1. */
+  accuracy: number
+  calibration: StudyCalibration
+  /** Confident (≥ 70) first tries graded Missed or Partly: the illusions of knowing. */
+  confidentMisses: StudySessionCardResult[]
+  /** Notes behind the cards that weren't Got it on the first try. */
+  revisit: Array<{ itemId: string; title: string }>
+  /** The next card due after now in this scope, if any. */
+  nextDueAt: string | null
+  /** Cards due by the end of tomorrow in this scope. */
+  dueByTomorrow: number
 }

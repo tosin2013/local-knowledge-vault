@@ -307,7 +307,8 @@ export function syncNoteCards(itemId: string, before: NoteBodyBefore): SectionSy
   )
   const edit = database.prepare(
     `UPDATE study_cards SET chunk_index = ?, chunk_hash = ?, note_hash = ?, question = NULL, answer = NULL,
-       quote = NULL, updated_at = ? WHERE id = ?`,
+       quote = NULL, q_kind = NULL, q_source_hash = NULL, q_model = NULL, q_at = NULL, q_note = NULL,
+       updated_at = ? WHERE id = ?`,
   )
   const retire = database.prepare(`UPDATE study_cards SET status = 'retired', updated_at = ? WHERE id = ?`)
   const insertCard = database.prepare(
@@ -351,6 +352,22 @@ export function syncNoteCards(itemId: string, before: NoteBodyBefore): SectionSy
 onNoteBodyChanged((itemId, before) => {
   syncNoteCards(itemId, before)
 })
+
+/**
+ * Which of these notes already have cards in Study (active or waiting), so
+ * "Add to review" can say "Already in Study" up front. Retired cards don't count.
+ */
+export function enrolledItemIds(itemIds: string[]): string[] {
+  const ids = [...new Set((Array.isArray(itemIds) ? itemIds : []).filter((x) => typeof x === 'string' && x))].slice(0, 500)
+  if (ids.length === 0) return []
+  const rows = getDb()
+    .prepare(
+      `SELECT DISTINCT item_id FROM study_cards
+       WHERE status IN ('active', 'pending') AND item_id IN (${ids.map(() => '?').join(',')})`,
+    )
+    .all(...ids) as Array<{ item_id: string }>
+  return rows.map((r) => r.item_id)
+}
 
 /** Remove every card (and its schedule and history) for a note. */
 export function deleteCardsForItem(itemId: string): number {

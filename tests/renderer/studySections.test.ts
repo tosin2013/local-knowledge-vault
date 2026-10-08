@@ -10,7 +10,7 @@ import {
 
 describe('Study tab sections (#260)', () => {
   it('lists Study home first, then the three sections (#262)', () => {
-    expect(STUDY_SECTIONS.map((s) => s.label)).toEqual(['Home', 'Review due notes', 'Quiz me on…', 'Import practice test'])
+    expect(STUDY_SECTIONS.map((s) => s.label)).toEqual(['Home', 'Study session', 'Quiz me on…', 'Import practice test'])
   })
 
   it('remembers the Study project in localStorage (#262)', () => {

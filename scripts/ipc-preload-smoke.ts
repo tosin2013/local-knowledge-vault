@@ -260,12 +260,14 @@ async function main(): Promise<void> {
     'testToNotes:analyze', 'testToNotes:parse',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
-    'review:enqueueProject', 'review:stats',
+    'review:enqueueProject', 'review:stats', 'review:enrolled',
     // projects + per-project settings (#261)
     'projects:list', 'projects:rename', 'projects:merge', 'projects:delete',
     'projects:getSettings', 'projects:setExamDate',
     // study (#215)
     'study:record', 'study:listRecent', 'study:calibration', 'study:questions',
+    // study session (#263)
+    'study:startSession', 'study:cardQuestion', 'study:answer', 'study:sessionSummary',
     // ollama
     'ollama:health',
     // llm
@@ -361,6 +363,16 @@ async function main(): Promise<void> {
   assert(bulk.notes === 0 && bulk.alreadyScheduled === 1 && Array.isArray(bulk.skipped), 'review:enqueueProject is idempotent over enrolled notes')
   const ipcStats = await ipcRendererMock.invoke('review:stats', 'IPC Exam') as { totalCards: number; examDate: string | null; lastSession: { reviewed: number } | null }
   assert(ipcStats.totalCards === 1 && ipcStats.examDate === examDay && ipcStats.lastSession?.reviewed === 1, 'review:stats returns the project numbers')
+  const enrolledIds = await ipcRendererMock.invoke('review:enrolled', [examNote.id, 'itm_missing']) as string[]
+  assert(enrolledIds.length === 1 && enrolledIds[0] === examNote.id, 'review:enrolled lists notes that already have cards')
+  const session = await ipcRendererMock.invoke('study:startSession', { project: 'IPC Exam' }) as { sessionId: string; cards: unknown[] }
+  assert(typeof session.sessionId === 'string' && session.cards.length === 0, 'study:startSession returns a session (nothing due after grading)')
+  const answered = await ipcRendererMock.invoke('study:answer', {
+    sessionId: session.sessionId, cardId: dueCards[0].card_id, question: 'Q?', attempt: 'A', confidence: 80, grade: 'got',
+  }) as { dueAt: string }
+  assert(typeof answered.dueAt === 'string', 'study:answer grades the card and returns its next due date')
+  const report = await ipcRendererMock.invoke('study:sessionSummary', session.sessionId, 'IPC Exam') as { cards: number; got: number }
+  assert(report.cards === 1 && report.got === 1, 'study:sessionSummary counts the session')
   const cleared = await ipcRendererMock.invoke('projects:setExamDate', 'IPC Exam', null) as { examDate: string | null }
   assert(cleared.examDate === null, 'projects:setExamDate clears with null')
 

@@ -58,7 +58,8 @@ import {
   getStudyStats,
   toReviewGrade,
 } from './review'
-import { enrollProject } from './study-cards'
+import { enrollProject, enrolledItemIds } from './study-cards'
+import { answerStudyCard, getCardQuestion, startStudySession, studySessionSummary } from './study-session'
 import { listRecentAttempts, recordStudyAttempt, studyCalibration } from './study'
 import { generateStudyQuestions } from './study-questions'
 import { ollamaHealth } from './ollama'
@@ -149,6 +150,8 @@ import type {
   SearchQueryInput,
   StudyAttemptInput,
   StudyQuestionsInput,
+  StudySessionStartInput,
+  StudyAnswerInput,
   TestToNotesAnalyzeInput,
   TestToNotesParseInput,
   ReviewEnqueueInput,
@@ -519,6 +522,14 @@ function registerIpc(): void {
   ipcMain.handle('study:listRecent', (_e, limit?: number) => listRecentAttempts(limit))
   ipcMain.handle('study:calibration', () => studyCalibration())
   ipcMain.handle('study:questions', (_e, input: StudyQuestionsInput) => generateStudyQuestions(input))
+  // Study session loop (#263): one question per card, attempt before reveal, grade, summary.
+  ipcMain.handle('study:startSession', (_e, input?: StudySessionStartInput) => startStudySession(input ?? {}))
+  ipcMain.handle('study:cardQuestion', (_e, cardId: string) => getCardQuestion(String(cardId ?? '')))
+  ipcMain.handle('study:answer', (_e, input: StudyAnswerInput) => answerStudyCard(input))
+  ipcMain.handle('study:sessionSummary', (_e, sessionId: string, project?: string) =>
+    studySessionSummary(String(sessionId ?? ''), project ?? undefined)
+  )
+  ipcMain.handle('review:enrolled', (_e, itemIds: string[]) => enrolledItemIds(Array.isArray(itemIds) ? itemIds : []))
 
   ipcMain.handle('ollama:health', () => {
     return ollamaHealth()
