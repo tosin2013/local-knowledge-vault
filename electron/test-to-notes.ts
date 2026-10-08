@@ -111,9 +111,13 @@ export async function parseTestResultsWithAi(
   const raw = (input?.text ?? '').replace(/\r\n?/g, '\n')
   if (!raw.trim()) return { items: [] }
 
-  // An answer sheet with no question text parses exactly offline: no model call.
+  // Formats the built-in parser reads exactly need no model call (Groq's free
+  // tier is ~130 calls a day): answer sheets, CSV exports, and exports where
+  // every item carries its answer key ("(Correct answer)", "Correct answer: …").
   const offlineItems = parseTestResults(raw)
-  if (offlineItems.length >= 2 && offlineItems.every((it) => it.needsText)) return { items: offlineItems }
+  const csv = /^\s*"?question"?\s*,/i.test(raw.trimStart().split('\n')[0] ?? '')
+  const keyed = offlineItems.every((it) => it.needsText || !!it.correctAnswer?.trim())
+  if (offlineItems.length >= 2 && (csv || keyed)) return { items: offlineItems }
 
   if (raw.length > MAX_AI_PARSE_CHARS) {
     return {

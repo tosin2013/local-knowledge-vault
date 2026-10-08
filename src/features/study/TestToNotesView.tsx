@@ -383,7 +383,7 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
             </Button>
           )}
           <Typography variant="caption" color="text.secondary">
-            {fileNote ?? 'PDF (text layer), TXT or CSV. An exam PDF and its answer key can be pasted one after the other.'}
+            {fileNote ?? 'PDF (text layer), TXT or CSV. Scanned pages need OCR first.'}
           </Typography>
         </Stack>
       )}
