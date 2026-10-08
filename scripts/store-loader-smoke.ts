@@ -243,6 +243,35 @@ async function main(): Promise<void> {
     assert(ps.removeProvider(created.id) === true, 'removeProvider removes user provider')
     assert(!fs.existsSync(ps.providerKeyPath(created.id)), 'user key file deleted on remove')
     assert(ps.removeProvider('ghost') === false, 'removeProvider miss returns false')
+
+    // #253: Ollama Cloud preset exists, openai-compatible, key required, env-mapped.
+    const { getBuiltinPreset, PRESET_ENV_KEYS } = require('../electron/providers/presets')
+    const oc = getBuiltinPreset('ollama-cloud')
+    assert(oc?.kind === 'openai-compatible' && oc.baseUrl === 'https://ollama.com/v1' && oc.requiresKey === true, 'ollama-cloud preset: openai-compatible + key required')
+    assert(oc?.local === false && oc.supportsModelList === true, 'ollama-cloud preset: cloud + fetchable model list')
+    assert(Array.isArray(PRESET_ENV_KEYS['ollama-cloud']) && PRESET_ENV_KEYS['ollama-cloud'].includes('OLLAMA_API_KEY'), 'OLLAMA_API_KEY maps to ollama-cloud')
+
+    // #252: editing a built-in local provider to a cloud URL stops labeling it Local.
+    const editedOllama = ps.upsertProvider({ id: 'ollama', kind: 'ollama', label: 'Ollama', baseUrl: 'https://ollama.com/api', model: 'gemma4:31b' })
+    assert(editedOllama.local === false, 'built-in ollama edited to a cloud URL is no longer local (#252)')
+    assert(editedOllama.requiresKey === true, 'non-local ollama requires a key (#251/#252)')
+    const back = ps.upsertProvider({ id: 'ollama', kind: 'ollama', label: 'Ollama', baseUrl: 'http://127.0.0.1:11434', model: '' })
+    assert(back.local === true && back.requiresKey === false, 'built-in ollama restored to localhost is local again')
+
+    // #252: a stored local:true with a non-local baseUrl cannot survive a load (sanitize).
+    ps.resetProviderStoreCache()
+    fs.writeFileSync(pfile, JSON.stringify({
+      schemaVersion: 1,
+      selected: 'auto',
+      providers: [
+        { id: 'ollama', presetId: 'ollama', kind: 'ollama', label: 'Ollama', baseUrl: 'https://ollama.com/api', model: '', local: true, enabled: true, source: 'builtin' },
+      ],
+      pluginOverrides: {},
+    }))
+    const sanitized = ps.loadProvidersFile()
+    const so = sanitized.providers.find((p: { id: string }) => p.id === 'ollama')
+    assert(so?.local === false, 'sanitize flips a stored local:true ollama with a cloud URL to non-local (#252)')
+    assert(ps.getProviderConfig('ollama')?.local === false, 'config read from a cloud-URL ollama is non-local (#252)')
   }
 
   /* ---------- plugin-loader validation (pure) ---------- */

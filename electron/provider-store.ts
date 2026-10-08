@@ -185,14 +185,16 @@ function sanitize(file: Partial<ProvidersFile>): ProvidersFile {
     if (typeof p.id !== 'string' || !SAFE_ID.test(p.id) || seen.has(p.id)) continue
     if (!KINDS.includes(p.kind)) continue
     seen.add(p.id)
+    const baseUrl = typeof p.baseUrl === 'string' ? p.baseUrl.trim().replace(/\/+$/, '') : ''
     providers.push({
       id: p.id,
       presetId: typeof p.presetId === 'string' ? p.presetId : undefined,
       kind: p.kind,
       label: typeof p.label === 'string' && p.label.trim() ? p.label.trim() : p.id,
-      baseUrl: typeof p.baseUrl === 'string' ? p.baseUrl.trim().replace(/\/+$/, '') : '',
+      baseUrl,
       model: typeof p.model === 'string' ? p.model.trim() : '',
-      local: p.local === true,
+      // A stored local:true with a non-local baseUrl must not survive a load (#252).
+      local: p.id === 'ollama' || p.id === 'lmstudio' ? isLocalUrl(baseUrl) : p.local === true,
       enabled: p.enabled !== false,
       source: p.source === 'user' ? 'user' : 'builtin',
     })
@@ -319,7 +321,17 @@ export function pluginProviderId(pluginId: string, presetId: string): string {
 
 function toConfig(p: StoredProvider | (Omit<StoredProvider, 'source'> & { source: ProviderSource; pluginId?: string })): ProviderConfig {
   const preset = p.presetId ? getBuiltinPreset(p.presetId) : undefined
-  const requiresKey = p.local ? false : preset ? preset.requiresKey : p.kind === 'anthropic' || p.kind === 'gemini'
+  // Built-in local servers' locality follows their base URL: editing Ollama/LM Studio to a
+  // cloud URL must stop presenting it as "Local — nothing leaves this computer" (#252).
+  const local = p.id === 'ollama' || p.id === 'lmstudio' ? isLocalUrl(p.baseUrl) : p.local
+  // Remote Ollama (ollama.com) requires an API key; the local built-in never does.
+  const requiresKey = local
+    ? false
+    : p.kind === 'ollama'
+      ? true
+      : preset
+        ? preset.requiresKey
+        : p.kind === 'anthropic' || p.kind === 'gemini'
   return {
     id: p.id,
     kind: p.kind,
@@ -328,7 +340,7 @@ function toConfig(p: StoredProvider | (Omit<StoredProvider, 'source'> & { source
     model: p.model,
     hasKey: !!getProviderKey(p.id, p.presetId),
     requiresKey,
-    local: p.local,
+    local,
     enabled: p.enabled,
     source: p.source,
     presetId: p.presetId,
@@ -474,7 +486,9 @@ export function upsertProvider(d: ProviderDraft): ProviderConfig {
       label: d.label.trim(),
       baseUrl,
       model: d.model.trim(),
-      local: prev.id === 'ollama' || prev.id === 'lmstudio' ? true : local,
+      // Built-in local servers' locality follows their URL (#252): editing Ollama/LM Studio
+      // to a cloud URL moves them to the cloud group and flags their answers as non-local.
+      local: prev.id === 'ollama' || prev.id === 'lmstudio' ? isLocalUrl(baseUrl) : local,
       enabled: d.enabled ?? prev.enabled,
     }
   } else {
