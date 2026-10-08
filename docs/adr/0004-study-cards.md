@@ -116,8 +116,11 @@ These are left out, each with a reason (`enrollSkipReason`, pure):
   0 of 2 usable questions from drafts.
 - **Video transcripts:** a learner adds single parts from Review by choice, as the evaluation decided.
 - **Archived notes.** Trashed notes are ignored and not listed.
-- **Empty notes, and notes under 20 real words** (after dropping `Source:`/`Page:` header lines).
-- **Boilerplate** (`boilerplateReason`). Signals are grouped (copyright, exam logistics, exam policy, site chrome,
+- **Empty notes and stubs:** an own note under 3 real words, or an imported page under 20 (after dropping
+  `Source:`/`Page:` header lines).
+- **Boilerplate, on imported pages and articles only** (`boilerplateReason`). The learner's own notes, pasted ones
+  included, are never skipped as boilerplate: a short own note is a good card, and the evaluation's messy pasted
+  printer page still holds the learner's material. Signals are grouped (copyright, exam logistics, exam policy, site chrome,
   blank page, contents), so a header repeated on every page counts once. A page is skipped when:
   - two or more groups match;
   - three or more exam-logistics phrases match (an exam cover or instructions page); or

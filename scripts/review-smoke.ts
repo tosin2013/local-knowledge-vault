@@ -503,6 +503,15 @@ violate the CompTIA Candidate Agreement. ${words(200)}`
   )
   assert(enrollSkipReason({ body: realNote, kind: 'transcript', status: 'active' })?.includes('transcript') === true, 'transcripts are skipped')
   assert(enrollSkipReason({ body: realNote, kind: 'book', status: 'active' }) === null, 'book pages are enrolled')
+  assert(
+    enrollSkipReason({ body: 'ATP is the energy currency of the cell.', kind: 'note', status: 'active' }) === null,
+    'a short note of your own is enrolled (boilerplate rules apply to imports only)',
+  )
+  const messyPaste = `Skip to main content\nWe use cookies to improve your experience. Accept all\nLaser printer imaging: Processing, Charging, Exposing, Developing, Transferring, Fusing, Cleaning.\n© 2026 Some Training Site. All rights reserved. Privacy · Terms`
+  assert(enrollSkipReason({ body: messyPaste, kind: 'note', status: 'active' }) === null, 'a messy paste in your own note is kept')
+  assert(enrollSkipReason({ body: messyPaste, kind: 'article', status: 'active' })?.startsWith('boilerplate') === true, 'the same text as an imported article page is boilerplate')
+  assert(enrollSkipReason({ body: 'TODO', kind: 'note', status: 'active' }) === 'too short to quiz on', 'a one-word stub is skipped')
+  assert(enrollSkipReason({ body: '  ', kind: 'note', status: 'active' }) === 'empty', 'an empty note is skipped')
   assert(enrollSkipReason({ body: realNote, kind: 'article', status: 'active' }) === null, 'articles are enrolled')
 
   console.log('\nenrollProject')
