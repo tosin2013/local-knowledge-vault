@@ -586,26 +586,47 @@ export function useNotes(deps: UseNotesDeps) {
   /** Rail project dropdown options — memoized so its identity is stable (#293). */
   const projectOptions = useMemo(() => projects.map((p) => p.name), [projects])
 
+  /**
+   * Lowercase search index for the rail filter, rebuilt only when the items
+   * change — a filter keystroke then re-filters without lowercasing every body
+   * again (#294: filter typing p95 on large vaults).
+   */
+  const railSearchIndex = useMemo(() => {
+    const idx = new Map<string, { title: string; body: string; summary: string; project: string }>()
+    for (const it of items) {
+      idx.set(it.id, {
+        title: it.title.toLowerCase(),
+        body: (it.body ?? '').toLowerCase(),
+        summary: (it.summary ?? '').toLowerCase(),
+        project: (it.project ?? '').toLowerCase(),
+      })
+    }
+    return idx
+  }, [items])
+
   /** Rail list: hide transcript chunks by default, filter-as-you-type, sort. */
   const visibleItems = useMemo(() => {
     let list = items
     if (!showTranscripts) list = list.filter((it) => it.kind !== 'transcript')
     const q = railQuery.trim().toLowerCase()
     if (q) {
-      list = list.filter(
-        (it) =>
-          it.title.toLowerCase().includes(q) ||
-          (it.body ?? '').toLowerCase().includes(q) ||
-          (it.summary ?? '').toLowerCase().includes(q) ||
-          (it.project ?? '').toLowerCase().includes(q),
-      )
+      list = list.filter((it) => {
+        const e = railSearchIndex.get(it.id)
+        return (
+          (e?.title.includes(q) ||
+            e?.body.includes(q) ||
+            e?.summary.includes(q) ||
+            e?.project.includes(q)) ??
+          false
+        )
+      })
     }
     const sorted = [...list]
     if (railSort === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title))
     else if (railSort === 'created') sorted.sort((a, b) => a.created_at.localeCompare(b.created_at))
     else sorted.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     return sorted
-  }, [items, showTranscripts, railQuery, railSort])
+  }, [items, showTranscripts, railQuery, railSort, railSearchIndex])
 
   return {
     items,
