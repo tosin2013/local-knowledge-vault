@@ -74,6 +74,11 @@ const http = require('../electron/providers/http') as typeof import('../electron
 const openai = require('../electron/providers/openai-compatible') as typeof import('../electron/providers/openai-compatible')
 const ollama = require('../electron/ollama') as typeof import('../electron/ollama')
 const structured = require('../electron/structured') as typeof import('../electron/structured')
+const fs = require('fs') as typeof import('fs')
+const os = require('os') as typeof import('os')
+const path = require('path') as typeof import('path')
+const db = require('../electron/db') as typeof import('../electron/db')
+const sq = require('../electron/study-questions') as typeof import('../electron/study-questions')
 
 let passed = 0
 let failed = 0
@@ -136,6 +141,8 @@ async function main(): Promise<void> {
   assert(!http.hasBalancedJson('[{"question":"Q",'), 'JSON cut off mid-object is unbalanced')
   assert(!http.hasBalancedJson('{"a":"unclosed'), 'JSON cut off mid-string is unbalanced')
   assert(!http.hasBalancedJson('no brackets at all'), 'prose has no JSON')
+  assert(http.hasBalancedJson('{"a":"line\\nbreak and \\"quoted\\" text"}'), 'escapes inside strings are ignored')
+  assert(!http.hasBalancedJson('{"a":1]'), 'mismatched brackets are not balanced JSON')
 
   console.log('noThinkDirective')
   assert(http.noThinkDirective('Question?').endsWith('/no_think'), 'appends the /no_think soft switch')
@@ -248,6 +255,8 @@ async function main(): Promise<void> {
       return r
     },
   )
+  const noBody = await ollama.readOllamaStreamDetailed(new Response(null))
+  assert(noBody.text === '' && !noBody.doneReason, 'a response with no body yields empty text')
 
   // --- structuredGenerate end-to-end (mocked llm) ---
   console.log('structuredGenerate')
@@ -315,6 +324,89 @@ async function main(): Promise<void> {
     'a stubborn qwen3 is reported after the fallback'
   )
   assert(bothReason.ok === false && !('text' in bothReason), 'reasoning is never returned as the answer')
+
+  mockQueue = [reply('')]
+  mockCalls = 0
+  const noBudget = await structured.structuredGenerate({ prompt: 'p', expect: 'json' })
+  assert(
+    noBudget.ok === false && noBudget.ranOutOfTokens === true && mockCalls === 1,
+    'without a retry budget a ran-out reply fails immediately'
+  )
+
+  mockQueue = [reply(''), reply('Hmm, let me think about it.', 'qwen3:4b')]
+  const retryReasoned = await structured.structuredGenerate({
+    prompt: 'p',
+    maxTokens: 1500,
+    retryMaxTokens: 3000,
+    expect: 'json',
+  })
+  assert(
+    retryReasoned.ok === false && /reasoning out loud/.test(retryReasoned.error),
+    'a budget retry that reasons is reported, not shown as the answer'
+  )
+
+  mockQueue = [reply(''), { ok: false, error: 'HTTP 500 upstream boom', provider: 'p', providerLabel: 'Mock' }]
+  const retryFailed = await structured.structuredGenerate({
+    prompt: 'p',
+    maxTokens: 1500,
+    retryMaxTokens: 3000,
+    expect: 'json',
+  })
+  assert(retryFailed.ok === false && /HTTP 500 upstream boom/.test(retryFailed.error), 'a failed retry names the provider error')
+
+  mockQueue = [reply(''), { ok: false, error: '', provider: 'p', providerLabel: 'Mock' }]
+  const blankErr = await structured.structuredGenerate({
+    prompt: 'p',
+    maxTokens: 1500,
+    retryMaxTokens: 3000,
+    expect: 'json',
+  })
+  assert(blankErr.ok === false && /ran out of output tokens/.test(blankErr.error), 'a blank retry error falls back to the ran-out copy')
+
+  mockQueue = [reply('Wait, let me think.', 'qwen3:4b'), reply('', 'qwen3:4b')]
+  const noThinkRanOut = await structured.structuredGenerate({ prompt: 'p', maxTokens: 1500, expect: 'json' })
+  assert(
+    noThinkRanOut.ok === false && /ran out of output tokens/.test(noThinkRanOut.error),
+    'a /no_think retry that runs out is reported as ran-out'
+  )
+
+  mockQueue = [reply('Wait, let me think.', 'qwen3:4b'), { ok: false, error: 'HTTP 503 down', provider: 'p', providerLabel: 'Mock' }]
+  const noThinkFailed = await structured.structuredGenerate({ prompt: 'p', maxTokens: 1500, expect: 'json' })
+  assert(noThinkFailed.ok === false && /HTTP 503 down/.test(noThinkFailed.error), 'a failed /no_think retry names the provider error')
+
+  // --- generateStudyQuestions (list shape, #275 budgets) ---
+  console.log('generateStudyQuestions')
+  db.initDb(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-275-')), 'test.sqlite'))
+
+  mockCalls = 0
+  const emptyScope = await sq.generateStudyQuestions({ project: 'Nothing' })
+  assert(emptyScope.questions.length === 0 && mockCalls === 0, 'an empty scope asks no model')
+
+  db.createItem({
+    title: 'Bio',
+    body: 'Photosynthesis happens in the chloroplast. The light reactions split water and release oxygen gas. RuBisCO is the enzyme that fixes carbon dioxide in the Calvin cycle.',
+    kind: 'note',
+    para: 'resources',
+    project: 'Bio',
+  })
+  mockQueue = [reply('1. What is photosynthesis?\n2. Why does RuBisCO matter?\n3. Where does the Calvin cycle happen?')]
+  mockCalls = 0
+  mockMaxTokens.length = 0
+  const qs = await sq.generateStudyQuestions({ project: 'Bio', count: 3 })
+  assert(qs.questions.length === 3, 'sample questions come back as a list')
+  assert(mockCalls === 1 && mockMaxTokens[0] === sq.STUDY_QUESTIONS_MAX_TOKENS, 'the list call uses the #275 budget')
+
+  mockQueue = [reply(''), reply('')]
+  let threw = ''
+  try {
+    await sq.generateStudyQuestions({ project: 'Bio' })
+  } catch (e) {
+    threw = e instanceof Error ? e.message : String(e)
+  }
+  assert(
+    /Could not generate questions/.test(threw) && /ran out of output tokens/.test(threw),
+    'a ran-out reply surfaces as a clear throw, not zero questions'
+  )
 
   console.log(`\n${passed} passed, ${failed} failed\n`)
   if (failed > 0) process.exit(1)
