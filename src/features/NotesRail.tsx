@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
   Box,
@@ -74,7 +74,7 @@ export interface NotesRailProps {
   onSelect: (id: string, opts?: { edit?: boolean }) => void
 }
 
-export function NotesRail(props: NotesRailProps) {
+export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
   const {
     advanced,
     items,
@@ -549,4 +549,4 @@ export function NotesRail(props: NotesRailProps) {
       </Box>
     </Paper>
   )
-}
+})

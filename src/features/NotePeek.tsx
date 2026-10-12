@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import {
   Autocomplete,
   Box,
@@ -39,7 +39,7 @@ export interface NotePeekProps {
   onCopyId: (id: string) => void
 }
 
-export function NotePeek(props: NotePeekProps) {
+export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
   const {
     open,
     isNewDraft,
@@ -297,4 +297,4 @@ export function NotePeek(props: NotePeekProps) {
       </Box>
     </Drawer>
   )
-}
+})

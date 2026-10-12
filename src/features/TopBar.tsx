@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   AppBar,
   Box,
@@ -51,7 +52,7 @@ export interface TopBarProps {
   onTheme: () => void
 }
 
-export function TopBar(props: TopBarProps) {
+export const TopBar = memo(function TopBar(props: TopBarProps) {
   const {
     advanced,
     mode,
@@ -255,4 +256,4 @@ export function TopBar(props: TopBarProps) {
       </Toolbar>
     </AppBar>
   )
-}
+})

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material'
 import type { AskGroundedResult, ItemFilters, SearchHit } from '../../electron/types'
 import { paraLabel } from '../domain'
@@ -15,7 +16,7 @@ export interface FindPanelProps {
   onShowMore: () => void
 }
 
-export function FindPanel(props: FindPanelProps) {
+export const FindPanel = memo(function FindPanel(props: FindPanelProps) {
   const { advanced, askResult, hits, searchText, filters, filterSummary, hasMore, onSelect, onAskInstead, onShowMore } = props
 
   return (
@@ -114,4 +115,4 @@ export function FindPanel(props: FindPanelProps) {
       )}
     </Box>
   )
-}
+})

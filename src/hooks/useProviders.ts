@@ -72,11 +72,11 @@ export function useProviders() {
     return () => window.removeEventListener(PLUGINS_CHANGED_EVENT, onChange)
   }, [refreshPluginState, refreshLlm])
 
-  const openAddProvider = (presetId?: string) => {
+  const openAddProvider = useCallback((presetId?: string) => {
     setEditingProvider(null)
     setProviderInitialPreset(presetId)
     setProviderDialogOpen(true)
-  }
+  }, [])
 
   return {
     llmStatus,

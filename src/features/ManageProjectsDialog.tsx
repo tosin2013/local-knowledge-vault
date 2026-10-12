@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import {
   Button,
   Dialog,
@@ -38,7 +38,7 @@ function projectSecondary(p: ProjectSummary): string {
 }
 
 /** Rename / merge / delete the first-class projects (each derived from note count). */
-export function ManageProjectsDialog(props: ManageProjectsDialogProps) {
+export const ManageProjectsDialog = memo(function ManageProjectsDialog(props: ManageProjectsDialogProps) {
   const { open, projects, busy, onClose, onRename, onMerge, onDelete, onSetExamDate } = props
 
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -235,4 +235,4 @@ export function ManageProjectsDialog(props: ManageProjectsDialogProps) {
       </DialogActions>
     </Dialog>
   )
-}
+})

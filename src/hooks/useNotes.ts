@@ -16,7 +16,15 @@ export interface UseNotesDeps {
   setMode: (mode: 'search' | 'chat' | 'prompts') => void
 }
 
-/** Owns the notes rail, Find search, and the note-peek editor. */
+/**
+ * Owns the notes rail, Find search, and the note-peek editor.
+ *
+ * Every function is `useCallback`-wrapped with a stable identity wherever its
+ * dependencies change rarely, so memoized children (NotesRail, ChatView …) can
+ * bail out on keystrokes that do not concern them (#293). A keystroke in the
+ * note editor only changes `draft`/`dirty`; one in the top search only
+ * `searchText`; one in the Ask composer only `chatInput`.
+ */
 export function useNotes(deps: UseNotesDeps) {
   const { setBusy, setError, setStatusMsg, advanced, setMode } = deps
 
@@ -69,6 +77,26 @@ export function useNotes(deps: UseNotesDeps) {
     setProjects(list)
   }, [])
 
+  /** Refresh the trash list. Stable identity: it is a startup-effect dep (#292). */
+  const refreshTrashed = useCallback(async () => {
+    if (!window.lkv?.items?.listTrashed) return
+    setTrashed(await window.lkv.items.listTrashed())
+  }, [])
+
+  /** Refresh whether the first-run "Vault guide" notes still exist (#163). Stable identity: it is a startup-effect dep (#292). */
+  const refreshSamples = useCallback(async () => {
+    if (!window.lkv?.items?.listSamples) {
+      setHasSamples(false)
+      return
+    }
+    try {
+      const samples = await window.lkv.items.listSamples()
+      setHasSamples(samples.length > 0)
+    } catch {
+      setHasSamples(false)
+    }
+  }, [])
+
   const runSearch = useCallback(async (textOverride?: string, limitOverride?: number) => {
     if (!window.lkv) return
     const text = textOverride !== undefined ? textOverride : searchText
@@ -96,11 +124,11 @@ export function useNotes(deps: UseNotesDeps) {
   }, [searchText, filters, findLimit, setBusy, setError, setMode])
 
   /** "Show more" in Find: raise the cap and re-query. */
-  const loadMoreHits = () => {
+  const loadMoreHits = useCallback(() => {
     const next = Math.min(findLimit + 20, 100)
     setFindLimit(next)
     void runSearch(undefined, next)
-  }
+  }, [findLimit, runSearch])
 
   useEffect(() => {
     if (!selectedId || !window.lkv) {
@@ -123,7 +151,7 @@ export function useNotes(deps: UseNotesDeps) {
     })
   }, [selectedId, isNewDraft])
 
-  const openNotePeek = (id: string, opts?: { edit?: boolean }) => {
+  const openNotePeek = useCallback((id: string, opts?: { edit?: boolean }) => {
     if (id !== NEW_DRAFT_ID) {
       setIsNewDraft(false)
     }
@@ -131,14 +159,17 @@ export function useNotes(deps: UseNotesDeps) {
     setNoteMissing(false)
     setNotePeekOpen(true)
     setPeekEditing(opts?.edit ?? false)
-  }
+  }, [])
 
   /** Open note as peek; never steals Ask/Find pane. */
-  const selectItem = (id: string, opts?: { edit?: boolean }) => {
-    openNotePeek(id, opts)
-  }
+  const selectItem = useCallback(
+    (id: string, opts?: { edit?: boolean }) => {
+      openNotePeek(id, opts)
+    },
+    [openNotePeek],
+  )
 
-  const closeNotePeek = () => {
+  const closeNotePeek = useCallback(() => {
     if (dirty || isNewDraft) {
       const ok = confirm(
         isNewDraft
@@ -156,9 +187,9 @@ export function useNotes(deps: UseNotesDeps) {
       setSelectedId(null)
       setDraft(null)
     }
-  }
+  }, [dirty, isNewDraft])
 
-  const onNewNote = () => {
+  const onNewNote = useCallback(() => {
     // Draft-only: no DB row until explicit Save (avoids blank "New note" list rows).
     const item = makeNewDraftItem()
     setIsNewDraft(true)
@@ -168,10 +199,10 @@ export function useNotes(deps: UseNotesDeps) {
     setDirty(false)
     setNotePeekOpen(true)
     setPeekEditing(true)
-  }
+  }, [])
 
   /** Open the note editor pre-filled (e.g. "Save as note" from an answer/moment). */
-  const openPrefilledDraft = (fields: Partial<Item>) => {
+  const openPrefilledDraft = useCallback((fields: Partial<Item>) => {
     const item = { ...makeNewDraftItem(), ...fields }
     setIsNewDraft(true)
     setDraft(item)
@@ -180,14 +211,17 @@ export function useNotes(deps: UseNotesDeps) {
     setDirty(true)
     setNotePeekOpen(true)
     setPeekEditing(true)
-  }
+  }, [])
 
   /** First-class "New project": open a new-note draft pre-filled with that project (#163). */
-  const onNewProject = (name: string) => {
-    openPrefilledDraft({ project: name.trim() })
-  }
+  const onNewProject = useCallback(
+    (name: string) => {
+      openPrefilledDraft({ project: name.trim() })
+    },
+    [openPrefilledDraft],
+  )
 
-  const onImportFromUrl = async () => {
+  const onImportFromUrl = useCallback(async () => {
     if (!window.lkv?.import?.fromUrl) return
     const url = importUrl.trim()
     if (!isValidHttpUrl(url)) {
@@ -218,10 +252,10 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setImportBusy(false)
     }
-  }
+  }, [importUrl, advanced, refreshList, refreshProjects, selectItem, setError, setStatusMsg])
 
   /** Import Markdown / Obsidian notes from a folder chosen in a native dialog. */
-  const onImportMarkdown = async () => {
+  const onImportMarkdown = useCallback(async () => {
     if (!window.lkv?.import?.fromMarkdown) return
     setImportMarkdownBusy(true)
     setError(null)
@@ -246,10 +280,10 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setImportMarkdownBusy(false)
     }
-  }
+  }, [advanced, refreshList, refreshProjects, setError, setStatusMsg])
 
   /** Import a local EPUB / text-layer PDF as book notes (native file picker). */
-  const onImportBook = async () => {
+  const onImportBook = useCallback(async () => {
     if (!window.lkv?.import?.fromBook) return
     setImportBookBusy(true)
     setError(null)
@@ -283,9 +317,9 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setImportBookBusy(false)
     }
-  }
+  }, [advanced, refreshList, refreshProjects, setError, setStatusMsg])
 
-  const onSave = async () => {
+  const onSave = useCallback(async () => {
     if (!window.lkv || !draft) return
     setBusy(true)
     setError(null)
@@ -331,53 +365,59 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setBusy(false)
     }
-  }
+  }, [draft, isNewDraft, dirty, refreshList, refreshProjects, setBusy, setError])
 
   /** Delete a note by id (from the rail), with confirmation. */
-  const deleteItemById = async (id: string) => {
-    if (!window.lkv) return
-    let title = id
-    try {
-      const item = await window.lkv.items.get(id)
-      if (item) title = item.title
-    } catch {
-      /* fall back to id in the confirm message */
-    }
-    if (!confirm(`Delete "${title}"?`)) return
-    await window.lkv.items.delete(id)
-    if (selectedId === id) {
-      setSelectedId(null)
-      setDraft(null)
-      setDirty(false)
-      setNotePeekOpen(false)
-      setPeekEditing(false)
-    }
-    await refreshList()
-    void refreshProjects()
-  }
+  const deleteItemById = useCallback(
+    async (id: string) => {
+      if (!window.lkv) return
+      let title = id
+      try {
+        const item = await window.lkv.items.get(id)
+        if (item) title = item.title
+      } catch {
+        /* fall back to id in the confirm message */
+      }
+      if (!confirm(`Delete "${title}"?`)) return
+      await window.lkv.items.delete(id)
+      if (selectedId === id) {
+        setSelectedId(null)
+        setDraft(null)
+        setDirty(false)
+        setNotePeekOpen(false)
+        setPeekEditing(false)
+      }
+      await refreshList()
+      void refreshProjects()
+    },
+    [selectedId, refreshList, refreshProjects],
+  )
 
   /** Promote an unconfirmed AI draft to a regular note; requires an edit or a one-line summary (#217). */
-  const confirmDraft = async (ownWords?: string) => {
-    if (!window.lkv || !draft || draft.status !== 'ai-draft' || draft.id === NEW_DRAFT_ID) return
-    const note = (ownWords ?? '').trim()
-    // A one-click confirm is not enough: the user must edit the draft or restate
-    // it in their own words (generation effect).
-    if (!note && !dirty) return
-    setBusy(true)
-    setError(null)
-    try {
-      const patch: { status: string; body?: string } = { status: 'active' }
-      if (note) patch.body = `In my own words: ${note}\n\n${draft.body}`
-      const updated = await window.lkv.items.update(draft.id, patch)
-      setDraft(updated)
-      setDirty(false)
-      await refreshList()
-    } finally {
-      setBusy(false)
-    }
-  }
+  const confirmDraft = useCallback(
+    async (ownWords?: string) => {
+      if (!window.lkv || !draft || draft.status !== 'ai-draft' || draft.id === NEW_DRAFT_ID) return
+      const note = (ownWords ?? '').trim()
+      // A one-click confirm is not enough: the user must edit the draft or restate
+      // it in their own words (generation effect).
+      if (!note && !dirty) return
+      setBusy(true)
+      setError(null)
+      try {
+        const patch: { status: string; body?: string } = { status: 'active' }
+        if (note) patch.body = `In my own words: ${note}\n\n${draft.body}`
+        const updated = await window.lkv.items.update(draft.id, patch)
+        setDraft(updated)
+        setDirty(false)
+        await refreshList()
+      } finally {
+        setBusy(false)
+      }
+    },
+    [draft, dirty, refreshList, setBusy, setError],
+  )
 
-  const onDelete = async () => {
+  const onDelete = useCallback(async () => {
     if (!window.lkv || !draft) return
     if (isNewDraft || draft.id === NEW_DRAFT_ID) {
       // Not in DB yet — just discard
@@ -404,30 +444,10 @@ export function useNotes(deps: UseNotesDeps) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-  }
-
-  /** Refresh the trash list. Stable identity: it is a startup-effect dep (#292). */
-  const refreshTrashed = useCallback(async () => {
-    if (!window.lkv?.items?.listTrashed) return
-    setTrashed(await window.lkv.items.listTrashed())
-  }, [])
-
-  /** Refresh whether the first-run "Vault guide" notes still exist (#163). Stable identity: it is a startup-effect dep (#292). */
-  const refreshSamples = useCallback(async () => {
-    if (!window.lkv?.items?.listSamples) {
-      setHasSamples(false)
-      return
-    }
-    try {
-      const samples = await window.lkv.items.listSamples()
-      setHasSamples(samples.length > 0)
-    } catch {
-      setHasSamples(false)
-    }
-  }, [])
+  }, [draft, isNewDraft, refreshList, refreshProjects, refreshTrashed, setError])
 
   /** Remove the "Vault guide" notes in one action, after confirmation. */
-  const removeSamples = async () => {
+  const removeSamples = useCallback(async () => {
     if (!window.lkv?.items?.removeSamples) return
     if (!confirm('Remove the “Vault guide” notes?')) return
     setBusy(true)
@@ -442,20 +462,20 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setBusy(false)
     }
-  }
+  }, [refreshList, refreshProjects, setBusy, setError])
 
   /** Toggle one note in the rail bulk-selection set. */
-  const toggleBulkSelect = (id: string) => {
+  const toggleBulkSelect = useCallback((id: string) => {
     setBulkSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
   /** Move every selected note to the trash. */
-  const bulkTrash = async () => {
+  const bulkTrash = useCallback(async () => {
     if (!window.lkv?.items?.trash || bulkSelected.size === 0) return
     for (const id of bulkSelected) {
       await window.lkv.items.trash(id)
@@ -464,80 +484,95 @@ export function useNotes(deps: UseNotesDeps) {
     await refreshList()
     void refreshProjects()
     void refreshTrashed()
-  }
+  }, [bulkSelected, refreshList, refreshProjects, refreshTrashed])
 
   /** Restore a trashed note. */
-  const restoreItem = async (id: string) => {
-    if (!window.lkv?.items?.restore) return
-    await window.lkv.items.restore(id)
-    await refreshTrashed()
-    await refreshList()
-    void refreshProjects()
-  }
+  const restoreItem = useCallback(
+    async (id: string) => {
+      if (!window.lkv?.items?.restore) return
+      await window.lkv.items.restore(id)
+      await refreshTrashed()
+      await refreshList()
+      void refreshProjects()
+    },
+    [refreshTrashed, refreshList, refreshProjects],
+  )
 
   /** Permanently empty the trash. */
-  const emptyTrash = async () => {
+  const emptyTrash = useCallback(async () => {
     if (!window.lkv?.items?.emptyTrash) return
     await window.lkv.items.emptyTrash()
     await refreshTrashed()
     await refreshList()
     void refreshProjects()
-  }
+  }, [refreshTrashed, refreshList, refreshProjects])
 
-  const patchDraft = <K extends keyof Item>(key: K, value: Item[K]) => {
+  const patchDraft = useCallback(<K extends keyof Item>(key: K, value: Item[K]) => {
     setDraft((d) => (d ? { ...d, [key]: value } : d))
     setDirty(true)
-  }
+  }, [])
 
-  const copyItemId = async (id: string) => {
+  const copyItemId = useCallback(async (id: string) => {
     try {
       await navigator.clipboard.writeText(id)
     } catch {
       /* ignore */
     }
-  }
+  }, [])
 
   /** Rename a project across its notes + profiles, then refresh. */
-  const renameProject = async (from: string, to: string) => {
-    if (!window.lkv?.projects) return
-    const res = await window.lkv.projects.rename(from, to)
-    if ((filters.project ?? '') === from) setFilters((f) => ({ ...f, project: to }))
-    await refreshList()
-    await refreshProjects()
-    return res
-  }
-
-  /** Merge `from` into `into` (reassign notes + profiles), then refresh. */
-  const mergeProject = async (from: string, into: string) => {
-    if (!window.lkv?.projects) return
-    const res = await window.lkv.projects.merge(from, into)
-    if ((filters.project ?? '') === from) setFilters((f) => ({ ...f, project: into }))
-    await refreshList()
-    await refreshProjects()
-    return res
-  }
-
-  /** Delete a project and its notes, then refresh. */
-  const deleteProject = async (name: string) => {
-    if (!window.lkv?.projects) return
-    const res = await window.lkv.projects.delete(name)
-    if ((filters.project ?? '') === name) setFilters((f) => ({ ...f, project: '' }))
-    await refreshList()
-    await refreshProjects()
-    return res
-  }
-
-  /** Set or clear a project's exam date (#261), then refresh the project list. */
-  const setProjectExamDate = async (name: string, examDate: string | null) => {
-    if (!window.lkv?.projects?.setExamDate) return
-    try {
-      const res = await window.lkv.projects.setExamDate(name, examDate)
+  const renameProject = useCallback(
+    async (from: string, to: string) => {
+      if (!window.lkv?.projects) return
+      const res = await window.lkv.projects.rename(from, to)
+      if ((filters.project ?? '') === from) setFilters((f) => ({ ...f, project: to }))
+      await refreshList()
       await refreshProjects()
       return res
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
+    },
+    [filters, refreshList, refreshProjects],
+  )
+
+  /** Merge `from` into `into` (reassign notes + profiles), then refresh. */
+  const mergeProject = useCallback(
+    async (from: string, into: string) => {
+      if (!window.lkv?.projects) return
+      const res = await window.lkv.projects.merge(from, into)
+      if ((filters.project ?? '') === from) setFilters((f) => ({ ...f, project: into }))
+      await refreshList()
+      await refreshProjects()
+      return res
+    },
+    [filters, refreshList, refreshProjects],
+  )
+
+  /** Delete a project and its notes, then refresh. */
+  const deleteProject = useCallback(
+    async (name: string) => {
+      if (!window.lkv?.projects) return
+      const res = await window.lkv.projects.delete(name)
+      if ((filters.project ?? '') === name) setFilters((f) => ({ ...f, project: '' }))
+      await refreshList()
+      await refreshProjects()
+      return res
+    },
+    [filters, refreshList, refreshProjects],
+  )
+
+  /** Set or clear a project's exam date (#261), then refresh the project list. */
+  const setProjectExamDate = useCallback(
+    async (name: string, examDate: string | null) => {
+      if (!window.lkv?.projects?.setExamDate) return
+      try {
+        const res = await window.lkv.projects.setExamDate(name, examDate)
+        await refreshProjects()
+        return res
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [refreshProjects, setError],
+  )
 
   const filterSummary = useMemo(() => {
     const parts: string[] = []
@@ -547,6 +582,9 @@ export function useNotes(deps: UseNotesDeps) {
     if (filters.project) parts.push(filters.project)
     return parts.length ? parts.join(' · ') : 'All notes'
   }, [filters])
+
+  /** Rail project dropdown options — memoized so its identity is stable (#293). */
+  const projectOptions = useMemo(() => projects.map((p) => p.name), [projects])
 
   /** Rail list: hide transcript chunks by default, filter-as-you-type, sort. */
   const visibleItems = useMemo(() => {
@@ -605,7 +643,7 @@ export function useNotes(deps: UseNotesDeps) {
     filtersOpen,
     setFiltersOpen,
     filterSummary,
-    projectOptions: projects.map((p) => p.name),
+    projectOptions,
     refreshList,
     refreshProjects,
     runSearch,

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Alert, Box, Chip, IconButton, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import type { Mode } from '../domain'
@@ -26,7 +27,7 @@ export interface ContentChromeProps {
   onNewDraft: (fields: Partial<import('../../electron/types').Item>) => void
 }
 
-export function ContentChrome(props: ContentChromeProps) {
+export const ContentChrome = memo(function ContentChrome(props: ContentChromeProps) {
   const {
     mode,
     activePluginId,
@@ -136,4 +137,4 @@ export function ContentChrome(props: ContentChromeProps) {
       })()}
     </>
   )
-}
+})

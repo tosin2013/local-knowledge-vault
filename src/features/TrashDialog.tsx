@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   Button,
   Dialog,
@@ -23,7 +24,7 @@ export interface TrashDialogProps {
 }
 
 /** Soft-deleted notes: restore or permanently empty. */
-export function TrashDialog(props: TrashDialogProps) {
+export const TrashDialog = memo(function TrashDialog(props: TrashDialogProps) {
   const { open, items, busy, onClose, onRestore, onEmpty } = props
 
   return (
@@ -69,4 +70,4 @@ export function TrashDialog(props: TrashDialogProps) {
       </DialogActions>
     </Dialog>
   )
-}
+})
