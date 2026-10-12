@@ -86,8 +86,6 @@ export default function App() {
     report(chat.refreshSessions())
     report(prompts.refreshPrompts())
     report(chat.refreshProfiles())
-    const t = setInterval(() => void providers.refreshLlm(), 15000)
-    return () => clearInterval(t)
   }, [
     hasApi,
     notes.refreshList,
@@ -99,6 +97,14 @@ export default function App() {
     prompts.refreshPrompts,
     chat.refreshProfiles,
   ])
+
+  // llm:status polling lives in its own effect so the startup refreshes above can
+  // never clear and restart the interval (#292).
+  useEffect(() => {
+    if (!hasApi) return
+    const t = setInterval(() => void providers.refreshLlm(), 15000)
+    return () => clearInterval(t)
+  }, [hasApi, providers.refreshLlm])
 
   // When left-rail filters change while Find is showing an active query, re-run search.
   useEffect(() => {
