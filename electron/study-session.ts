@@ -22,7 +22,7 @@
  * Every Vault-specific effect is a hypothesis (#218).
  */
 import { getDb, newId, nowIso } from './db'
-import { llmGenerate } from './llm'
+import { structuredGenerate } from './structured'
 import { isRateLimited, retryAfterMs, formatWait } from './providers/http'
 import { buildGroundedMessages, citationsFromIds, extractCitedIds, validateCitations } from './generate'
 import { hashText } from './text-hash'
@@ -389,6 +389,15 @@ function failureNotice(error: string, providerLabel?: string | null): { notice: 
       rateLimited: false,
     }
   }
+  if (/ran out of output tokens|reasoning out loud/i.test(error)) {
+    // The model answered but its reply was empty, cut off, or deliberation
+    // instead of a question — a reasoning-budget problem, not an outage (#275).
+    return {
+      notice: `${name} could not finish a written question, so this is a fill-the-gap prompt from your note. A smaller model such as qwen3:1.7b handles this better on CPU.`,
+      offline: false,
+      rateLimited: false,
+    }
+  }
   return {
     notice: `${name === 'the AI provider' ? 'The AI call' : `The ${name} call`} failed, so this prompt was made from your note without a model.`,
     offline: true,
@@ -438,27 +447,23 @@ export async function getCardQuestion(cardId: string): Promise<StudyCardQuestion
     passage: section,
   }
   const messages = buildGroundedMessages(CARD_QUESTION_TASK, [hit])
-  let gen = await llmGenerate({ ...messages, maxTokens: CARD_QUESTION_MAX_TOKENS })
-  if (gen.ok && !(gen.text ?? '').trim()) {
-    // A reasoning model can spend its whole budget thinking and return nothing
-    // (about 1 call in 10 on gpt-oss-20b, #275). One retry with a bigger budget.
-    gen = await llmGenerate({ ...messages, maxTokens: CARD_QUESTION_RETRY_MAX_TOKENS })
-  }
+  // Reasoning models can burn the whole output budget thinking and come back
+  // empty or cut off mid-JSON, or reason out loud when `think: false` is
+  // ignored (qwen3:4b). The guard classifies the reply, retries a ran-out
+  // budget once, falls back to /no_think, and never returns reasoning as the
+  // question (#275).
+  const gen = await structuredGenerate({
+    ...messages,
+    maxTokens: CARD_QUESTION_MAX_TOKENS,
+    retryMaxTokens: CARD_QUESTION_RETRY_MAX_TOKENS,
+    expect: 'json',
+  })
   if (!gen.ok) {
     // Transient: not cached, so the next session tries the model again.
     const why = failureNotice(gen.error, gen.providerLabel)
     return { ...base, ...fallbackFor(row), ...why }
   }
   const text = (gen.text ?? '').trim()
-  if (!text) {
-    // Empty output (a reasoning model used up its budget, #275): transient too.
-    return {
-      ...base,
-      ...fallbackFor(row),
-      notice: `${gen.providerLabel || 'The model'} returned no question this time, so this prompt was made from your note.`,
-      offline: false,
-    }
-  }
   const parsed = parseCardJson(text)
   const reason = parsed.empty
     ? 'nothing study-worthy found'

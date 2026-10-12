@@ -94,44 +94,48 @@ export function estimateNumCtx(
 /**
  * Read an Ollama `/api/generate` NDJSON stream (`stream: true`), concatenating
  * `response` chunks and skipping `thinking` chunks so reasoning tokens never
- * leak into the answer regardless of `<think>` tag handling.
+ * leak into the answer regardless of `<think>` tag handling. The final chunk
+ * carries `done_reason` — `"length"` means the output-token limit cut the
+ * reply off, which structured callers must treat as ran-out-of-tokens (#275).
  */
-export async function readOllamaStream(res: Response): Promise<string> {
+export async function readOllamaStreamDetailed(
+  res: Response
+): Promise<{ text: string; doneReason?: string }> {
   const body = res.body
-  if (!body) return ''
+  if (!body) return { text: '' }
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let out = ''
+  let doneReason: string | undefined
   let buffer = ''
+  const absorb = (line: string): void => {
+    if (!line) return
+    try {
+      const chunk = JSON.parse(line) as { response?: string; done?: boolean; done_reason?: string }
+      if (chunk.response) out += chunk.response
+      if (chunk.done && chunk.done_reason) doneReason = chunk.done_reason
+    } catch {
+      /* ignore a malformed/partial line */
+    }
+  }
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
     let nl = buffer.indexOf('\n')
     while (nl >= 0) {
-      const line = buffer.slice(0, nl).trim()
+      absorb(buffer.slice(0, nl).trim())
       buffer = buffer.slice(nl + 1)
-      if (line) {
-        try {
-          const chunk = JSON.parse(line) as { response?: string }
-          if (chunk.response) out += chunk.response
-        } catch {
-          /* ignore a malformed/partial line */
-        }
-      }
       nl = buffer.indexOf('\n')
     }
   }
-  const tail = (buffer + decoder.decode()).trim()
-  if (tail) {
-    try {
-      const chunk = JSON.parse(tail) as { response?: string }
-      if (chunk.response) out += chunk.response
-    } catch {
-      /* ignore */
-    }
-  }
-  return out
+  absorb((buffer + decoder.decode()).trim())
+  return { text: out, doneReason }
+}
+
+/** Text-only view of `readOllamaStreamDetailed` (existing callers/tests). */
+export async function readOllamaStream(res: Response): Promise<string> {
+  return (await readOllamaStreamDetailed(res)).text
 }
 
 export async function ollamaGenerate(
@@ -169,8 +173,10 @@ export async function ollamaGenerate(
     if (!res.ok) {
       return { ok: false, error: await readErrorDetail(res, 'Ollama') }
     }
-    const text = await readOllamaStream(res)
-    return { ok: true, text: stripThinking(text) }
+    const { text: raw, doneReason } = await readOllamaStreamDetailed(res)
+    const text = stripThinking(raw)
+    // done_reason "length" = num_predict cut the reply off (#275).
+    return { ok: true, text, truncated: doneReason === 'length' }
   } catch (err) {
     return { ok: false, error: errMessage(err) }
   }

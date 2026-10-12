@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #275 (reasoning models lose structured output). Covers all five acceptance bullets: (1) output budget >=1500 for one-note question generation + reasoning_effort low on OpenAI-compatible providers, (2) empty / finish_reason:length classified as ran-out-of-tokens with one larger-budget retry then a clear error, (3) qwen3 untagged reasoning falls back to /no_think or is reported, never shown as the answer, (4) docs/local-models.md documents expected local speeds and prefers qwen3:1.7b as the CPU default for Study generation, (5) stubbed smoke tests for the classification and the retry (test:reasoning-output) plus the existing session-loop smoke (test:study-session).",
+  "authority_id": "275",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run test:reasoning-output" },
+    { "check": "command_exit", "target": "npm run test:study-session" },
+    { "check": "file_exists", "target": "docs/local-models.md" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

@@ -8,12 +8,16 @@
  */
 import type { StudyQuestionsInput, StudyQuestionsResult } from './types'
 import { getDb } from './db'
-import { llmGenerate } from './llm'
+import { structuredGenerate } from './structured'
 
 /** Max distinct notes drawn from in one generation (keeps the prompt bounded). */
 export const MAX_SOURCE_NOTES = 12
 /** Safety cap on each chunk body sent to the model (chunks are already ~800). */
 export const CHUNK_CHAR_CAP = 1000
+/** Output budget for sample questions; reasoning models spend part of it thinking (#275). */
+export const STUDY_QUESTIONS_MAX_TOKENS = 1500
+/** Budget for the single ran-out retry (#275). */
+export const STUDY_QUESTIONS_RETRY_MAX_TOKENS = 3000
 
 export const STUDY_QUESTIONS_SYSTEM = `You generate recall questions for a spaced-repetition study session.
 Each question must be answerable from the numbered passages below.
@@ -103,9 +107,15 @@ export async function generateStudyQuestions(
     .map((p, i) => `[Passage ${i + 1}] title: ${p.title}\n${p.body.slice(0, CHUNK_CHAR_CAP)}`)
     .join('\n\n')
 
-  const gen = await llmGenerate({
+  // Sample questions are a structured call: the guard gives reasoning models a
+  // real output budget, retries a cut-off reply, and never returns their
+  // deliberation as questions (#275).
+  const gen = await structuredGenerate({
     system: STUDY_QUESTIONS_SYSTEM,
     prompt: `Passages:\n${prompt}\n\nGenerate ${count} recall questions.`,
+    maxTokens: STUDY_QUESTIONS_MAX_TOKENS,
+    retryMaxTokens: STUDY_QUESTIONS_RETRY_MAX_TOKENS,
+    expect: 'list',
   })
   if (!gen.ok) {
     throw new Error(

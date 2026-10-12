@@ -201,7 +201,10 @@ async function main(): Promise<void> {
   mockResult = reply('')
   let callsBefore = mockCalls
   const e1 = await s.getCardQuestion(c4.id)
-  assert(e1.kind === 'cloze' && /no question/.test(e1.notice ?? ''), 'empty output (reasoning budget, #275) falls back, uncached')
+  assert(
+    e1.kind === 'cloze' && /could not finish a written question/.test(e1.notice ?? '') && !e1.offline,
+    'empty output (reasoning budget, #275) falls back to a cloze prompt, uncached, not offline'
+  )
   assert(mockCalls - callsBefore === 2 && lastMaxTokens === s.CARD_QUESTION_RETRY_MAX_TOKENS, 'an empty reply is retried once with a bigger budget')
   callsBefore = mockCalls
   mockQueue.push(reply(''))

@@ -53,12 +53,16 @@ export async function anthropicChat(
       input.timeoutMs ?? 180_000
     )
     if (!res.ok) return { ok: false, error: await readErrorDetail(res, 'Anthropic') }
-    const data = (await res.json()) as { content?: Array<{ type?: string; text?: string }> }
+    const data = (await res.json()) as {
+      content?: Array<{ type?: string; text?: string }>
+      stop_reason?: string | null
+    }
     const text = (data.content ?? [])
       .filter((b) => b.type === 'text')
       .map((b) => b.text ?? '')
       .join('')
-    return { ok: true, text: text.trim() }
+    // stop_reason "max_tokens" = the output-token limit cut the reply off (#275).
+    return { ok: true, text: text.trim(), truncated: data.stop_reason === 'max_tokens' }
   } catch (err) {
     return { ok: false, error: errMessage(err) }
   }
