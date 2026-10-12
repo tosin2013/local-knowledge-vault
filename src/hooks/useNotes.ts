@@ -406,14 +406,14 @@ export function useNotes(deps: UseNotesDeps) {
     }
   }
 
-  /** Refresh the trash list. */
-  const refreshTrashed = async () => {
+  /** Refresh the trash list. Stable identity: it is a startup-effect dep (#292). */
+  const refreshTrashed = useCallback(async () => {
     if (!window.lkv?.items?.listTrashed) return
     setTrashed(await window.lkv.items.listTrashed())
-  }
+  }, [])
 
-  /** Refresh whether the first-run "Vault guide" notes still exist (#163). */
-  const refreshSamples = async () => {
+  /** Refresh whether the first-run "Vault guide" notes still exist (#163). Stable identity: it is a startup-effect dep (#292). */
+  const refreshSamples = useCallback(async () => {
     if (!window.lkv?.items?.listSamples) {
       setHasSamples(false)
       return
@@ -424,7 +424,7 @@ export function useNotes(deps: UseNotesDeps) {
     } catch {
       setHasSamples(false)
     }
-  }
+  }, [])
 
   /** Remove the "Vault guide" notes in one action, after confirmation. */
   const removeSamples = async () => {

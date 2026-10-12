@@ -70,6 +70,44 @@ describe('App', () => {
     expect(screen.getAllByRole('tab')).toHaveLength(4)
   })
 
+  it('runs startup refreshes once and stays idle (#292)', async () => {
+    const lkv = window.lkv as unknown as {
+      items: {
+        list: ReturnType<typeof vi.fn>
+        count: ReturnType<typeof vi.fn>
+        listTrashed: ReturnType<typeof vi.fn>
+        listSamples: ReturnType<typeof vi.fn>
+      }
+      projects: { list: ReturnType<typeof vi.fn> }
+      llm: { status: ReturnType<typeof vi.fn> }
+      chat: { listSessions: ReturnType<typeof vi.fn> }
+      profiles: { list: ReturnType<typeof vi.fn> }
+      prompts: { list: ReturnType<typeof vi.fn> }
+    }
+    render(<App />)
+    // The startup effect fires its refreshes after mount.
+    await waitFor(() => expect(lkv.items.list).toHaveBeenCalledTimes(1))
+    expect(lkv.items.count).toHaveBeenCalledTimes(1)
+    expect(lkv.items.listTrashed).toHaveBeenCalledTimes(1)
+    expect(lkv.items.listSamples).toHaveBeenCalledTimes(1)
+    expect(lkv.projects.list).toHaveBeenCalledTimes(1)
+    expect(lkv.chat.listSessions).toHaveBeenCalledTimes(1)
+    expect(lkv.profiles.list).toHaveBeenCalledTimes(1)
+    expect(lkv.prompts.list).toHaveBeenCalledTimes(1)
+    expect(lkv.llm.status).toHaveBeenCalledTimes(1)
+    // Idle: nothing may re-fetch. The next llm:status poll is 15 s away.
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    expect(lkv.items.list).toHaveBeenCalledTimes(1)
+    expect(lkv.items.count).toHaveBeenCalledTimes(1)
+    expect(lkv.items.listTrashed).toHaveBeenCalledTimes(1)
+    expect(lkv.items.listSamples).toHaveBeenCalledTimes(1)
+    expect(lkv.projects.list).toHaveBeenCalledTimes(1)
+    expect(lkv.chat.listSessions).toHaveBeenCalledTimes(1)
+    expect(lkv.profiles.list).toHaveBeenCalledTimes(1)
+    expect(lkv.prompts.list).toHaveBeenCalledTimes(1)
+    expect(lkv.llm.status).toHaveBeenCalledTimes(1)
+  })
+
   it('handles the new-note menu action (⌘N)', async () => {
     let handler: ((action: string) => void) | undefined
     const lkv = window.lkv as unknown as {
