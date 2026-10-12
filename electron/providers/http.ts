@@ -7,9 +7,17 @@ export interface GenerateInput {
   prompt: string
   maxTokens?: number
   timeoutMs?: number
+  /**
+   * Ask the provider to spend less on reasoning before answering (#275).
+   * Sent as `reasoning_effort` on OpenAI-compatible providers, and only for
+   * reasoning-family models (others may reject the parameter).
+   */
+  reasoningEffort?: 'low' | 'medium' | 'high'
 }
 
-export type GenerateResult = { ok: true; text: string } | { ok: false; error: string }
+export type GenerateResult =
+  | { ok: true; text: string; /** The reply was cut off by the output-token limit (#275). */ truncated?: boolean }
+  | { ok: false; error: string }
 
 export async function fetchWithTimeout(
   url: string,
@@ -106,6 +114,62 @@ export function stripThinking(text: string): string {
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/<think>[\s\S]*$/gi, '')
     .trim()
+}
+
+/**
+ * Reasoning-family model names (qwen3, gpt-oss, deepseek-r1, QwQ, *-reasoning).
+ * These spend part of any output budget thinking, so structured calls to them
+ * need a bigger budget and, where supported, a low reasoning effort (#275).
+ */
+export function isReasoningModel(model: string): boolean {
+  return /qwen3|qwq|gpt-oss|deepseek-r1|reasoning/i.test(model ?? '')
+}
+
+const REASONING_OPENERS =
+  /^(?:wait\b|okay\b|ok,|hmm\b|alright\b|let'?s think|let me think|let me work|let me see|i need to|first,[ \t]|step 1\b|thinking:)/i
+
+/**
+ * Detect qwen3-style *untagged* reasoning: the model ignored `think: false` and
+ * streams its deliberation as plain prose ("Wait, the answer must be short…"),
+ * with no <think> tags for stripThinking to catch (#275). Single-purpose check —
+ * electron/structured.ts combines it with the expected reply shape.
+ */
+export function looksLikeUntaggedReasoning(text: string): boolean {
+  const trimmed = (text ?? '').trim()
+  if (!trimmed) return false
+  return REASONING_OPENERS.test(trimmed)
+}
+
+/**
+ * Whether a reply's JSON is complete: at least one `{`/`[` and every opening
+ * bracket closed by the end. Code fences are tolerated; braces inside strings
+ * are ignored. Unbalanced brackets = the reply was cut off mid-JSON (#275).
+ */
+export function hasBalancedJson(text: string): boolean {
+  const s = (text ?? '').replace(/```[a-z]*\n?/gi, '')
+  let inString = false
+  let escaped = false
+  const stack: string[] = []
+  for (const ch of s) {
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{' || ch === '[') stack.push(ch)
+    else if (ch === '}' || ch === ']') {
+      const open = stack.pop()
+      if ((ch === '}' && open !== '{') || (ch === ']' && open !== '[')) return false
+    }
+  }
+  return stack.length === 0 && !inString && /\{|\[/.test(s)
+}
+
+/** Append the qwen3 `/no_think` soft switch, which `think: false` cannot replace (#275). */
+export function noThinkDirective(prompt: string): string {
+  return `${(prompt ?? '').trimEnd()}\n\n/no_think`
 }
 
 export function errMessage(err: unknown): string {

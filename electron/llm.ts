@@ -203,6 +203,8 @@ export type LlmGenerateResult =
       model: string
       /** True when Auto picked a cloud provider because no local model answered (#45). */
       fallback: boolean
+      /** True when the reply was cut off by the output-token limit (#275). */
+      truncated?: boolean
     }
   | { ok: false; error: string; provider?: string | null; providerLabel?: string }
 
@@ -230,6 +232,7 @@ export async function llmGenerate(input: GenerateInput | string): Promise<LlmGen
         local,
         model: c.model,
         fallback: !local && resolved.status.selected === 'auto',
+        truncated: gen.truncated,
       }
     }
     lastErr = { error: gen.error, provider: c.provider.id, providerLabel: c.provider.label }

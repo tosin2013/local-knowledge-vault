@@ -8,6 +8,7 @@
 import {
   errMessage,
   fetchWithTimeout,
+  isReasoningModel,
   joinUrl,
   readErrorDetail,
   stripThinking,
@@ -65,6 +66,10 @@ export function buildOpenAiChatBody(
   const temp = opts.temperature === undefined ? 0.2 : opts.temperature
   if (temp !== null) body.temperature = temp
   if (input.maxTokens) body.max_tokens = input.maxTokens
+  // Structured calls to reasoning models ask for low reasoning effort so the
+  // budget is spent on the answer, not the thinking (#275). Only reasoning
+  // families get the parameter — others reject unknown fields.
+  if (input.reasoningEffort && isReasoningModel(model)) body.reasoning_effort = input.reasoningEffort
   return body
 }
 
@@ -83,29 +88,39 @@ export async function openAiChat(
 ): Promise<GenerateResult> {
   const timeoutMs = input.timeoutMs ?? 180_000
   try {
-    let res = await postChat(t, buildOpenAiChatBody(model, input), timeoutMs)
+    let body = buildOpenAiChatBody(model, input)
+    let res = await postChat(t, body, timeoutMs)
     if (!res.ok && res.status === 400) {
-      // Some models (e.g. reasoning families) reject custom temperature / max_tokens — retry plain.
+      // Some models (e.g. reasoning families) reject custom temperature /
+      // max_tokens / reasoning_effort — retry plain (#275).
       const detail = await readErrorDetail(res, t.label ?? 'Provider')
-      if (/temperature|max_tokens|unsupported (parameter|value)/i.test(detail)) {
-        res = await postChat(
-          t,
-          buildOpenAiChatBody(model, { ...input, maxTokens: undefined }, { temperature: null }),
-          timeoutMs
+      if (/temperature|max_tokens|reasoning_effort|unsupported (parameter|value)/i.test(detail)) {
+        body = buildOpenAiChatBody(
+          model,
+          { ...input, maxTokens: undefined, reasoningEffort: undefined },
+          { temperature: null },
         )
+        res = await postChat(t, body, timeoutMs)
       } else {
         return { ok: false, error: detail }
       }
     }
     if (!res.ok) return { ok: false, error: await readErrorDetail(res, t.label ?? 'Provider') }
     const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>
+      choices?: Array<{
+        message?: { content?: string | Array<{ type?: string; text?: string }> }
+        finish_reason?: string | null
+      }>
     }
-    const content = data.choices?.[0]?.message?.content
+    const choice = data.choices?.[0]
+    const content = choice?.message?.content
     const text = Array.isArray(content)
       ? content.map((c) => c.text ?? '').join('')
       : (content ?? '')
-    return { ok: true, text: stripThinking(text) }
+    // A "length" finish means the output-token limit was hit — reasoning models
+    // can spend the whole budget thinking and leave nothing for the answer (#275).
+    const truncated = choice?.finish_reason === 'length'
+    return { ok: true, text: stripThinking(text), truncated }
   } catch (err) {
     return { ok: false, error: errMessage(err) }
   }

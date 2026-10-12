@@ -15,6 +15,7 @@ import type {
 } from './types'
 import { searchQuery } from './search'
 import { llmGenerate } from './llm'
+import { structuredGenerate } from './structured'
 import { isRateLimited, retryAfterMs } from './providers/http'
 import {
   buildGroundedMessages,
@@ -27,6 +28,11 @@ import {
 import { MAX_TEST_FIELD_CHARS, parseTestResults, resolveOption } from './test-to-notes-parse'
 
 export * from './test-to-notes-parse'
+
+/** Output budget for AI parsing; reasoning models spend part of it thinking (#275). */
+export const TEST_TO_NOTES_PARSE_MAX_TOKENS = 2000
+/** Budget for the guard's single ran-out retry (#275). */
+export const TEST_TO_NOTES_PARSE_RETRY_MAX_TOKENS = 4000
 
 export const TEST_TO_NOTES_PARSE_SYSTEM = `You parse pasted practice-test results into a structured list.
 The input can be plain text, CSV, a quiz export, a copied results page, or an answer sheet, in almost any format.
@@ -126,8 +132,16 @@ export async function parseTestResultsWithAi(
     }
   }
   const request = { system: TEST_TO_NOTES_PARSE_SYSTEM, prompt: `Test results:\n${raw}` }
+  // Parse is a structured JSON call, so each attempt gets the reasoning guard:
+  // a real output budget, one larger-budget retry for a cut-off reply, and the
+  // /no_think fallback for qwen3-style reasoning out loud (#275).
   for (let attempt = 0; attempt < 2; attempt++) {
-    const gen = await llmGenerate(request)
+    const gen = await structuredGenerate({
+      ...request,
+      maxTokens: TEST_TO_NOTES_PARSE_MAX_TOKENS,
+      retryMaxTokens: TEST_TO_NOTES_PARSE_RETRY_MAX_TOKENS,
+      expect: 'json',
+    })
     if (!gen.ok) {
       const rateLimited = isRateLimited(gen.error)
       return {
