@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Box, Button, Chip, Link, List, ListItemButton, Paper, Stack, TextField, Typography } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -42,7 +42,7 @@ export interface PromptsViewProps {
   shareNotice: string
 }
 
-export function PromptsView(props: PromptsViewProps) {
+export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
   const {
     advanced,
     busy,
@@ -311,4 +311,4 @@ export function PromptsView(props: PromptsViewProps) {
       />
     </Box>
   )
-}
+})

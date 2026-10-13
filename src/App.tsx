@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, CssBaseline, Paper, ThemeProvider, Typography } from '@mui/material'
 import { listPlugins } from './plugins/registry'
 import { ProviderDialog } from './components/ai/ProviderDialog'
 import { aiChipLabel } from './components/ai/FirstRunLocalCard'
 import { personalityDisplayName, AI_DRAFT_STATUS, provenanceHeader, type Mode } from './domain'
+import type { Citation, ProviderConfig } from '../electron/types'
 import { useUi } from './hooks/useUi'
 import { useProviders } from './hooks/useProviders'
 import { useNotes } from './hooks/useNotes'
@@ -126,12 +127,12 @@ export default function App() {
   }, [ui.advanced, mode])
 
   /** Jump to Ask (chat) tab, optionally prefill from top search. */
-  const goAskAi = () => {
+  const goAskAi = useCallback(() => {
     if (notes.searchText.trim()) {
       chat.setChatInput(notes.searchText.trim())
     }
     setMode('chat')
-  }
+  }, [notes.searchText, chat.setChatInput])
 
   // Latest handlers so the one-time menu subscription never goes stale.
   const newNoteRef = useRef(notes.onNewNote)
@@ -156,7 +157,10 @@ export default function App() {
   const aiStatusText = aiChipLabel(providers.llmStatus, ui.advanced)
   const showFirstRun = !!providers.llmStatus?.needsSetup
   const showSmallHint = !!providers.llmStatus?.active?.smallModel && !providers.smallHintDismissed
-  const visiblePlugins = listPlugins().filter((p) => !providers.disabledPlugins.includes(p.id))
+  const visiblePlugins = useMemo(
+    () => listPlugins().filter((p) => !providers.disabledPlugins.includes(p.id)),
+    [providers.disabledPlugins],
+  )
 
   /**
    * Open a built-in panel. Study, Review and Test to notes are no longer add-ons
@@ -165,7 +169,7 @@ export default function App() {
    * disabled-plugin list, so a saved `study`/`review`/`test-to-notes` entry there
    * is simply ignored.
    */
-  const openPlugin = (id: string) => {
+  const openPlugin = useCallback((id: string) => {
     const section = legacyStudySection(id)
     if (section) {
       setActivePluginId(null)
@@ -175,10 +179,133 @@ export default function App() {
     }
     setActivePluginId(id)
     setMode('chat')
-  }
-  const quickAsks = providers.pluginContribs.promptPacks.flatMap((pack) =>
-    pack.prompts.slice(0, 6).map((q) => ({ q, pack: pack.name })),
-  ).slice(0, 8)
+  }, [])
+  const quickAsks = useMemo(
+    () =>
+      providers.pluginContribs.promptPacks
+        .flatMap((pack) => pack.prompts.slice(0, 6).map((q) => ({ q, pack: pack.name })))
+        .slice(0, 8),
+    [providers.pluginContribs],
+  )
+
+  // Stable handlers for the memoized children: a keystroke in the top search,
+  // the Ask composer or the note editor must not re-render the others (#293).
+  const handleRunSearch = useCallback(() => void notes.runSearch(), [notes.runSearch])
+  const handleAiSettings = useCallback(() => providers.setAiSettingsOpen(true), [providers.setAiSettingsOpen])
+  const handleRecheck = useCallback(() => void providers.recheckLlm(), [providers.recheckLlm])
+  const handlePersonalities = useCallback(() => {
+    setActivePluginId(null)
+    setMode('prompts')
+  }, [])
+  const handleSelectPlugin = useCallback(
+    (id: string) => {
+      setPluginsMenuAnchor(null)
+      openPlugin(id)
+    },
+    [openPlugin],
+  )
+  const handleAdvanced = useCallback(
+    (v: boolean) => ui.setUiModePersist(v ? 'advanced' : 'simple'),
+    [ui.setUiModePersist],
+  )
+  const handleTheme = useCallback(
+    () => ui.setThemePersist(ui.theme === 'blink' ? 'blink-light' : 'blink'),
+    [ui.setThemePersist, ui.theme],
+  )
+  const handleProject = useCallback(
+    (project: string) => notes.setFilters((f) => ({ ...f, project })),
+    [notes.setFilters],
+  )
+  const handleManageProjects = useCallback(() => setManageProjectsOpen(true), [])
+  const handleDeleteItem = useCallback((id: string) => void notes.deleteItemById(id), [notes.deleteItemById])
+  const handleBulkTrash = useCallback(() => void notes.bulkTrash(), [notes.bulkTrash])
+  const handleOpenTrash = useCallback(() => setTrashOpen(true), [])
+  const handleRemoveSamples = useCallback(() => void notes.removeSamples(), [notes.removeSamples])
+  const handleImport = useCallback(() => void notes.onImportFromUrl(), [notes.onImportFromUrl])
+  const handleImportMarkdown = useCallback(() => void notes.onImportMarkdown(), [notes.onImportMarkdown])
+  const handleImportBook = useCallback(() => void notes.onImportBook(), [notes.onImportBook])
+  const handleToggleMode = useCallback(
+    (v: Mode) => {
+      setActivePluginId(null)
+      setMode(v)
+    },
+    [],
+  )
+  const handleClearPlugin = useCallback(() => setActivePluginId(null), [])
+  const handleClosePlugin = useCallback(() => {
+    setActivePluginId(null)
+    setMode('chat')
+  }, [])
+  const handleDismissStatus = useCallback(() => setStatusMsg(null), [])
+  const handleDismissError = useCallback(() => setError(null), [])
+  const handleOpenNote = useCallback((id: string) => notes.selectItem(id), [notes.selectItem])
+  const handleEditProvider = useCallback(
+    (p: ProviderConfig) => {
+      providers.setEditingProvider(p)
+      providers.setProviderDialogOpen(true)
+    },
+    [providers.setEditingProvider, providers.setProviderDialogOpen],
+  )
+  const handleAddProvider = providers.openAddProvider
+  const handleDismissSmallHint = useCallback(() => providers.setSmallHintDismissed(true), [providers.setSmallHintDismissed])
+  const handleOpenRename = useCallback(() => {
+    if (chat.selectedUserProfile) {
+      chat.setProfileRenameName(chat.selectedUserProfile.name)
+      chat.setProfileRenameOpen(true)
+      chat.setProfileSaveOpen(false)
+    }
+  }, [chat.selectedUserProfile, chat.setProfileRenameName, chat.setProfileRenameOpen, chat.setProfileSaveOpen])
+  const handleRename = useCallback(() => void chat.onRenameProfile(), [chat.onRenameProfile])
+  const handleRenameCancel = useCallback(() => chat.setProfileRenameOpen(false), [chat.setProfileRenameOpen])
+  const handleDeleteProfile = useCallback(() => void chat.onDeleteProfile(), [chat.onDeleteProfile])
+  const handleChatPrompt = useCallback(
+    (promptId: string) => chat.onChatPromptChange(promptId),
+    [chat.onChatPromptChange],
+  )
+  const handleNotesFrom = useCallback(
+    (project: string) => chat.onNotesFromChange(project),
+    [chat.onNotesFromChange],
+  )
+  const handleOpenProfileSave = useCallback(() => {
+    const prompt = prompts.prompts.find((p) => p.id === chat.selectedPromptId)
+    const persona = prompt ? personalityDisplayName(prompt) : 'Custom'
+    const proj = chat.project.trim()
+    chat.setProfileSaveName(proj ? `${persona} · ${proj}` : persona)
+    chat.setProfileSaveOpen(true)
+    chat.setProfileRenameOpen(false)
+  }, [prompts.prompts, chat.selectedPromptId, chat.project, chat.setProfileSaveName, chat.setProfileSaveOpen, chat.setProfileRenameOpen])
+  const handleSaveAsProfile = useCallback(() => void chat.onSaveAsProfile(), [chat.onSaveAsProfile])
+  const handleProfileSaveCancel = useCallback(() => chat.setProfileSaveOpen(false), [chat.setProfileSaveOpen])
+  const handleSend = useCallback(() => void chat.onSendChat(), [chat.onSendChat])
+  const handleNewChat = useCallback(() => void chat.onNewChat(), [chat.onNewChat])
+  const handleExportCitationPack = useCallback(() => void chat.onExportCitationPack(), [chat.onExportCitationPack])
+  const handleSelectSession = useCallback((id: string) => void chat.onSelectSession(id), [chat.onSelectSession])
+  const handleDeleteSession = useCallback((id: string) => void chat.onDeleteSession(id), [chat.onDeleteSession])
+  const handleSaveAsNote = useCallback(
+    (content: string, cites: Citation[]) => {
+      const title = (content.trim().split(/[?!.\n]/)[0] || 'Saved answer').slice(0, 60)
+      notes.openPrefilledDraft({
+        title,
+        body: provenanceHeader({ citedIds: cites.map((c) => c.id) }) + content,
+        kind: 'note',
+        para: 'resources',
+        status: AI_DRAFT_STATUS,
+        project: chat.project.trim() || null,
+      })
+    },
+    [notes.openPrefilledDraft, chat.project],
+  )
+  const handleUseInAsk = useCallback(
+    (promptId: string) => {
+      chat.onChatPromptChange(promptId)
+      setMode('chat')
+    },
+    [chat.onChatPromptChange],
+  )
+  const handleDeletePrompt = useCallback(() => void prompts.onDeletePrompt(), [prompts.onDeletePrompt])
+  const handleSavePrompt = useCallback(() => void prompts.onSavePrompt(), [prompts.onSavePrompt])
+  const handleExportPrompt = useCallback((target: 'file' | 'clipboard') => void prompts.onExportPrompt(target), [prompts.onExportPrompt])
+  const handleImportPrompt = useCallback(() => void prompts.onImportPrompt(), [prompts.onImportPrompt])
 
   if (!hasApi) {
     return (
@@ -225,20 +352,14 @@ export default function App() {
           busy={busy}
           searchInputRef={searchInputRef}
           onSearchText={notes.setSearchText}
-          onRunSearch={() => void notes.runSearch()}
-          onAiSettings={() => providers.setAiSettingsOpen(true)}
-          onRecheck={() => void providers.recheckLlm()}
-          onPersonalities={() => {
-            setActivePluginId(null)
-            setMode('prompts')
-          }}
+          onRunSearch={handleRunSearch}
+          onAiSettings={handleAiSettings}
+          onRecheck={handleRecheck}
+          onPersonalities={handlePersonalities}
           onPluginsMenu={setPluginsMenuAnchor}
-          onSelectPlugin={(id) => {
-            setPluginsMenuAnchor(null)
-            openPlugin(id)
-          }}
-          onAdvanced={(v) => ui.setUiModePersist(v ? 'advanced' : 'simple')}
-          onTheme={() => ui.setThemePersist(ui.theme === 'blink' ? 'blink-light' : 'blink')}
+          onSelectPlugin={handleSelectPlugin}
+          onAdvanced={handleAdvanced}
+          onTheme={handleTheme}
         />
 
         <Box className="main">
@@ -260,23 +381,23 @@ export default function App() {
             railSort={notes.railSort}
             showTranscripts={notes.showTranscripts}
             onNewNote={notes.onNewNote}
-            onNewProject={(name) => notes.onNewProject(name)}
+            onNewProject={notes.onNewProject}
             onImportUrl={notes.setImportUrl}
-            onImport={() => void notes.onImportFromUrl()}
-            onImportMarkdown={() => void notes.onImportMarkdown()}
-            onImportBook={() => void notes.onImportBook()}
-            onProject={(project) => notes.setFilters((f) => ({ ...f, project }))}
-            onManageProjects={() => setManageProjectsOpen(true)}
-            onDeleteItem={(id) => void notes.deleteItemById(id)}
+            onImport={handleImport}
+            onImportMarkdown={handleImportMarkdown}
+            onImportBook={handleImportBook}
+            onProject={handleProject}
+            onManageProjects={handleManageProjects}
+            onDeleteItem={handleDeleteItem}
             onRailQuery={notes.setRailQuery}
             onRailSort={notes.setRailSort}
             onShowTranscripts={notes.setShowTranscripts}
-            onOpenTrash={() => setTrashOpen(true)}
+            onOpenTrash={handleOpenTrash}
             hasSamples={notes.hasSamples}
-            onRemoveSamples={() => void notes.removeSamples()}
+            onRemoveSamples={handleRemoveSamples}
             bulkSelected={notes.bulkSelected}
             onToggleBulk={notes.toggleBulkSelect}
-            onBulkTrash={() => void notes.bulkTrash()}
+            onBulkTrash={handleBulkTrash}
             onFilters={notes.setFilters}
             onFiltersOpen={notes.setFiltersOpen}
             onSelect={notes.selectItem}
@@ -292,18 +413,12 @@ export default function App() {
               activePluginId={activePluginId}
               statusMsg={statusMsg}
               error={error}
-              onToggleMode={(v) => {
-                setActivePluginId(null)
-                setMode(v)
-              }}
-              onClearPlugin={() => setActivePluginId(null)}
-              onClosePlugin={() => {
-                setActivePluginId(null)
-                setMode('chat')
-              }}
-              onDismissStatus={() => setStatusMsg(null)}
-              onDismissError={() => setError(null)}
-              onOpenNote={(id) => notes.selectItem(id)}
+              onToggleMode={handleToggleMode}
+              onClearPlugin={handleClearPlugin}
+              onClosePlugin={handleClosePlugin}
+              onDismissStatus={handleDismissStatus}
+              onDismissError={handleDismissError}
+              onOpenNote={handleOpenNote}
               onNewDraft={notes.openPrefilledDraft}
             />
 
@@ -326,7 +441,7 @@ export default function App() {
               <StudyTab
                 section={studySection}
                 onSection={setStudySection}
-                onOpenNote={(id) => notes.selectItem(id)}
+                onOpenNote={handleOpenNote}
                 onNewDraft={notes.openPrefilledDraft}
               />
             )}
@@ -366,58 +481,32 @@ export default function App() {
                 composerRef={composerRef}
                 sessions={chat.sessions}
                 activeSessionId={chat.activeSessionId}
-                onRecheck={() => void providers.recheckLlm()}
-                onAddProvider={providers.openAddProvider}
-                onEditProvider={(p) => {
-                  providers.setEditingProvider(p)
-                  providers.setProviderDialogOpen(true)
-                }}
+                onRecheck={handleRecheck}
+                onAddProvider={handleAddProvider}
+                onEditProvider={handleEditProvider}
                 onError={setError}
-                onDismissSmallHint={() => providers.setSmallHintDismissed(true)}
+                onDismissSmallHint={handleDismissSmallHint}
                 onChatInput={chat.setChatInput}
                 onSelectNote={notes.selectItem}
                 onProfileChange={chat.onProfileChange}
-                onOpenRename={() => {
-                  if (chat.selectedUserProfile) {
-                    chat.setProfileRenameName(chat.selectedUserProfile.name)
-                    chat.setProfileRenameOpen(true)
-                    chat.setProfileSaveOpen(false)
-                  }
-                }}
+                onOpenRename={handleOpenRename}
                 onRenameName={chat.setProfileRenameName}
-                onRename={() => void chat.onRenameProfile()}
-                onRenameCancel={() => chat.setProfileRenameOpen(false)}
-                onDeleteProfile={() => void chat.onDeleteProfile()}
+                onRename={handleRename}
+                onRenameCancel={handleRenameCancel}
+                onDeleteProfile={handleDeleteProfile}
                 onAskCustomize={chat.setAskCustomizeOpen}
-                onChatPrompt={chat.onChatPromptChange}
-                onNotesFrom={chat.onNotesFromChange}
-                onOpenProfileSave={() => {
-                  const prompt = prompts.prompts.find((p) => p.id === chat.selectedPromptId)
-                  const persona = prompt ? personalityDisplayName(prompt) : 'Custom'
-                  const proj = chat.project.trim()
-                  chat.setProfileSaveName(proj ? `${persona} · ${proj}` : persona)
-                  chat.setProfileSaveOpen(true)
-                  chat.setProfileRenameOpen(false)
-                }}
+                onChatPrompt={handleChatPrompt}
+                onNotesFrom={handleNotesFrom}
+                onOpenProfileSave={handleOpenProfileSave}
                 onProfileSaveName={chat.setProfileSaveName}
-                onSaveAsProfile={() => void chat.onSaveAsProfile()}
-                onProfileSaveCancel={() => chat.setProfileSaveOpen(false)}
-                onSend={() => void chat.onSendChat()}
-                onNewChat={() => void chat.onNewChat()}
-                onExportCitationPack={() => void chat.onExportCitationPack()}
-                onSaveAsNote={(content, cites) => {
-                  const title = (content.trim().split(/[?!.\n]/)[0] || 'Saved answer').slice(0, 60)
-                  notes.openPrefilledDraft({
-                    title,
-                    body: provenanceHeader({ citedIds: cites.map((c) => c.id) }) + content,
-                    kind: 'note',
-                    para: 'resources',
-                    status: AI_DRAFT_STATUS,
-                    project: chat.project.trim() || null,
-                  })
-                }}
-                onSelectSession={(id) => void chat.onSelectSession(id)}
-                onDeleteSession={(id) => void chat.onDeleteSession(id)}
+                onSaveAsProfile={handleSaveAsProfile}
+                onProfileSaveCancel={handleProfileSaveCancel}
+                onSend={handleSend}
+                onNewChat={handleNewChat}
+                onExportCitationPack={handleExportCitationPack}
+                onSaveAsNote={handleSaveAsNote}
+                onSelectSession={handleSelectSession}
+                onDeleteSession={handleDeleteSession}
               />
             )}
 
@@ -435,14 +524,11 @@ export default function App() {
                 onDraft={prompts.setPromptDraft}
                 onDirty={prompts.setPromptDirty}
                 onBodyOpen={prompts.setPromptBodyOpen}
-                onUseInAsk={(promptId) => {
-                  chat.onChatPromptChange(promptId)
-                  setMode('chat')
-                }}
-                onDeletePrompt={() => void prompts.onDeletePrompt()}
-                onSavePrompt={() => void prompts.onSavePrompt()}
-                onExportPrompt={(target) => void prompts.onExportPrompt(target)}
-                onImportPrompt={() => void prompts.onImportPrompt()}
+                onUseInAsk={handleUseInAsk}
+                onDeletePrompt={handleDeletePrompt}
+                onSavePrompt={handleSavePrompt}
+                onExportPrompt={handleExportPrompt}
+                onImportPrompt={handleImportPrompt}
                 shareNotice={prompts.shareNotice}
               />
             )}
@@ -507,12 +593,9 @@ export default function App() {
           llmStatus={providers.llmStatus}
           llmChecking={providers.llmChecking}
           onClose={() => providers.setAiSettingsOpen(false)}
-          onRefresh={() => void providers.recheckLlm()}
-          onAddProvider={providers.openAddProvider}
-          onEditProvider={(p) => {
-            providers.setEditingProvider(p)
-            providers.setProviderDialogOpen(true)
-          }}
+          onRefresh={handleRecheck}
+          onAddProvider={handleAddProvider}
+          onEditProvider={handleEditProvider}
           onError={setError}
           onUseAdvanced={() => ui.setUiModePersist('advanced')}
         />

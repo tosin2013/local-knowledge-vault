@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createM3Theme } from '../theme/m3Theme'
 import {
   applyTheme,
@@ -17,16 +17,17 @@ export function useUi() {
 
   const advanced = uiMode === 'advanced'
 
-  const setUiModePersist = (next: UiMode) => {
+  // Stable identities: they are passed into memoized children (#293).
+  const setUiModePersist = useCallback((next: UiMode) => {
     setUiMode(next)
     try {
       localStorage.setItem(UI_MODE_KEY, next)
     } catch {
       /* ignore */
     }
-  }
+  }, [])
 
-  const setThemePersist = (next: ThemeMode) => {
+  const setThemePersist = useCallback((next: ThemeMode) => {
     setTheme(next)
     applyTheme(next)
     try {
@@ -34,7 +35,7 @@ export function useUi() {
     } catch {
       /* ignore */
     }
-  }
+  }, [])
 
   useEffect(() => {
     applyTheme(theme)

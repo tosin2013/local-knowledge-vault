@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #293 (typing re-renders the whole app). The perf numbers (p95 keystroke < 30 ms) need the real app; CI-verifiable proxies: a renderer test that counts NotesRail commits during keystrokes in the Ask composer, top search and note editor and fails if the rail renders (the issue's Profiler criterion), plus the existing suites. The test file is new, so the check fails today.",
+  "authority_id": "293",
+  "criteria": [
+    { "check": "command_exit", "target": "npx vitest run tests/renderer/AppRailMemo.test.tsx" },
+    { "check": "command_exit", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

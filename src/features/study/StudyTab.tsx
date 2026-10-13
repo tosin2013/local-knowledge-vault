@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, memo } from 'react'
 import { Box, Stack, Tab, Tabs, Typography } from '@mui/material'
 import SchoolIcon from '@mui/icons-material/School'
 import type { Item } from '../../../electron/types'
@@ -21,7 +21,7 @@ export interface StudyTabProps {
  * One project picker is shared by every section and remembered across
  * section and tab switches (#262).
  */
-export function StudyTab({ section, onSection, onOpenNote, onNewDraft }: StudyTabProps) {
+export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote, onNewDraft }: StudyTabProps) {
   const [project, setProjectState] = useState(loadStudyProject)
   const setProject = useCallback((next: string) => {
     setProjectState(next)
@@ -76,4 +76,4 @@ export function StudyTab({ section, onSection, onOpenNote, onNewDraft }: StudyTa
       </Box>
     </Box>
   )
-}
+})

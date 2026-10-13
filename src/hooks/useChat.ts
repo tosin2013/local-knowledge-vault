@@ -185,7 +185,7 @@ export function useChat(deps: UseChatDeps) {
     setAskCustomizeOpen(advanced)
   }, [advanced])
 
-  const onNewChat = async () => {
+  const onNewChat = useCallback(async () => {
     if (!window.lkv) return
     setError(null)
     try {
@@ -209,32 +209,38 @@ export function useChat(deps: UseChatDeps) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-  }
+  }, [selectedPromptId, project, prompts, persistProfile, refreshSessions, setMode, setError])
 
-  const onSelectSession = async (id: string) => {
-    setActiveSessionId(id)
-    setChatOffline(false)
-    setMode('chat')
-    await loadMessages(id)
-  }
+  const onSelectSession = useCallback(
+    async (id: string) => {
+      setActiveSessionId(id)
+      setChatOffline(false)
+      setMode('chat')
+      await loadMessages(id)
+    },
+    [setMode, loadMessages],
+  )
 
-  const onDeleteSession = async (id: string) => {
-    if (!window.lkv) return
-    if (!confirm('Delete this chat session?')) return
-    setError(null)
-    try {
-      await window.lkv.chat.deleteSession(id)
-      if (activeSessionId === id) {
-        setActiveSessionId(null)
-        setMessages([])
+  const onDeleteSession = useCallback(
+    async (id: string) => {
+      if (!window.lkv) return
+      if (!confirm('Delete this chat session?')) return
+      setError(null)
+      try {
+        await window.lkv.chat.deleteSession(id)
+        if (activeSessionId === id) {
+          setActiveSessionId(null)
+          setMessages([])
+        }
+        await refreshSessions()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
       }
-      await refreshSessions()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
+    },
+    [activeSessionId, refreshSessions, setError],
+  )
 
-  const onExportCitationPack = async () => {
+  const onExportCitationPack = useCallback(async () => {
     if (!window.lkv || !activeSessionId) return
     if (messages.length === 0) {
       setError('This chat has no messages to export yet.')
@@ -267,9 +273,9 @@ export function useChat(deps: UseChatDeps) {
     } finally {
       setBusy(false)
     }
-  }
+  }, [activeSessionId, messages, selectedProfileId, prompts, userProfiles, setBusy, setError, setStatusMsg])
 
-  const onSendChat = async () => {
+  const onSendChat = useCallback(async () => {
     if (!window.lkv || !chatInput.trim() || sending) return
     const text = chatInput.trim()
     let sessionId = activeSessionId
@@ -348,52 +354,70 @@ export function useChat(deps: UseChatDeps) {
       setSending(false)
       setBusy(false)
     }
-  }
+  }, [
+    chatInput,
+    sending,
+    activeSessionId,
+    sessions,
+    project,
+    selectedPromptId,
+    prompts,
+    messages,
+    persistProfile,
+    refreshSessions,
+    setError,
+  ])
 
   const gorgiasReaderSelected = isGorgiasReaderPrompt(selectedPromptId, prompts)
   const projectIsGorgias = project.trim() === GORGIAS_PROJECT
   const stayingInGorgias = gorgiasReaderSelected && projectIsGorgias
 
-  const applyPromptAndProject = (promptId: string, projectValue: string, profileId?: ChatProfileId) => {
-    const nextPrompt =
-      promptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    const nextProject = projectValue ?? ''
-    setSelectedPromptId(nextPrompt)
-    setProject(nextProject)
-    const matched =
-      profileId ?? matchProfileId(nextPrompt, nextProject, prompts, userProfiles)
-    persistProfile(matched, nextPrompt, nextProject)
-  }
+  const applyPromptAndProject = useCallback(
+    (promptId: string, projectValue: string, profileId?: ChatProfileId) => {
+      const nextPrompt =
+        promptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
+      const nextProject = projectValue ?? ''
+      setSelectedPromptId(nextPrompt)
+      setProject(nextProject)
+      const matched =
+        profileId ?? matchProfileId(nextPrompt, nextProject, prompts, userProfiles)
+      persistProfile(matched, nextPrompt, nextProject)
+    },
+    [prompts, userProfiles, persistProfile],
+  )
 
-  const onProfileChange = (profileId: string) => {
-    if (profileId === 'custom') {
-      const nextProject = project
-      const promptId =
-        selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-      persistProfile('custom', promptId, nextProject)
-      return
-    }
-    const builtin = listBuiltinProfiles(prompts).find((p) => p.id === profileId)
-    if (builtin) {
-      const promptId = resolveProfilePromptId(builtin, prompts) || ''
-      applyPromptAndProject(promptId, builtin.project, builtin.id)
-      return
-    }
-    const user = userProfiles.find((p) => p.id === profileId)
-    if (!user) return
-    const promptOk = prompts.some((p) => p.id === user.prompt_id)
-    const promptId = promptOk
-      ? user.prompt_id
-      : findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    if (!promptOk) {
-      setStatusMsg(`Profile “${user.name}” personality missing — using default.`)
-    }
-    applyPromptAndProject(promptId, user.project, user.id)
-  }
+  const onProfileChange = useCallback(
+    (profileId: string) => {
+      if (profileId === 'custom') {
+        const nextProject = project
+        const promptId =
+          selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
+        persistProfile('custom', promptId, nextProject)
+        return
+      }
+      const builtin = listBuiltinProfiles(prompts).find((p) => p.id === profileId)
+      if (builtin) {
+        const promptId = resolveProfilePromptId(builtin, prompts) || ''
+        applyPromptAndProject(promptId, builtin.project, builtin.id)
+        return
+      }
+      const user = userProfiles.find((p) => p.id === profileId)
+      if (!user) return
+      const promptOk = prompts.some((p) => p.id === user.prompt_id)
+      const promptId = promptOk
+        ? user.prompt_id
+        : findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
+      if (!promptOk) {
+        setStatusMsg(`Profile “${user.name}” personality missing — using default.`)
+      }
+      applyPromptAndProject(promptId, user.project, user.id)
+    },
+    [project, selectedPromptId, prompts, userProfiles, persistProfile, applyPromptAndProject, setStatusMsg],
+  )
 
   const selectedUserProfile = userProfiles.find((p) => p.id === selectedProfileId)
 
-  const onSaveAsProfile = async () => {
+  const onSaveAsProfile = useCallback(async () => {
     if (!window.lkv?.profiles || profileBusy) return
     const name = profileSaveName.trim()
     if (!name) {
@@ -428,9 +452,20 @@ export function useChat(deps: UseChatDeps) {
     } finally {
       setProfileBusy(false)
     }
-  }
+  }, [
+    profileSaveName,
+    profileBusy,
+    selectedPromptId,
+    prompts,
+    project,
+    refreshProfiles,
+    applyPromptAndProject,
+    setBusy,
+    setError,
+    setStatusMsg,
+  ])
 
-  const onRenameProfile = async () => {
+  const onRenameProfile = useCallback(async () => {
     if (!window.lkv?.profiles || !selectedUserProfile || profileBusy) return
     const name = profileRenameName.trim()
     if (!name) {
@@ -456,9 +491,9 @@ export function useChat(deps: UseChatDeps) {
     } finally {
       setProfileBusy(false)
     }
-  }
+  }, [profileRenameName, profileBusy, selectedUserProfile, refreshProfiles, setError, setStatusMsg])
 
-  const onDeleteProfile = async () => {
+  const onDeleteProfile = useCallback(async () => {
     if (!window.lkv?.profiles || !selectedUserProfile || profileBusy) return
     const name = selectedUserProfile.name
     if (!window.confirm(`Delete profile “${name}”?`)) return
@@ -477,13 +512,26 @@ export function useChat(deps: UseChatDeps) {
     } finally {
       setProfileBusy(false)
     }
-  }
+  }, [
+    profileBusy,
+    selectedUserProfile,
+    refreshProfiles,
+    prompts,
+    selectedPromptId,
+    applyPromptAndProject,
+    setBusy,
+    setError,
+    setStatusMsg,
+  ])
 
-  const onChatPromptChange = (promptId: string) => {
-    // Keep Project independent when only Personality changes (avoid surprising scope jumps).
-    const nextProject = project
-    applyPromptAndProject(promptId, nextProject)
-  }
+  const onChatPromptChange = useCallback(
+    (promptId: string) => {
+      // Keep Project independent when only Personality changes (avoid surprising scope jumps).
+      const nextProject = project
+      applyPromptAndProject(promptId, nextProject)
+    },
+    [project, applyPromptAndProject],
+  )
 
   /** Short hint when Personality / Profile would or did affect note scope. */
   const scopeCoupleHint = useMemo(() => {
@@ -515,11 +563,14 @@ export function useChat(deps: UseChatDeps) {
     project,
   ])
 
-  const onNotesFromChange = (projectValue: string) => {
-    const promptId =
-      selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
-    applyPromptAndProject(promptId, projectValue)
-  }
+  const onNotesFromChange = useCallback(
+    (projectValue: string) => {
+      const promptId =
+        selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
+      applyPromptAndProject(promptId, projectValue)
+    },
+    [selectedPromptId, prompts, applyPromptAndProject],
+  )
 
   const chatPlaceholder = projectIsGorgias
     ? 'Ask about Gorgias… (Enter to send, Shift+Enter for newline)'
@@ -538,15 +589,18 @@ export function useChat(deps: UseChatDeps) {
   )
 
   /** Re-pick the active profile after the currently-selected prompt is deleted. */
-  const handlePromptDeleted = (deletedId: string) => {
-    if (selectedPromptId !== deletedId) return
-    const remaining = prompts.filter((p) => p.id !== deletedId)
-    const grounded = findGroundedDefaultPrompt(remaining)
-    const nextId = grounded?.id || remaining[0]?.id || ''
-    const nextProject = project.trim()
-    setSelectedPromptId(nextId)
-    persistProfile(matchProfileId(nextId, nextProject, remaining), nextId, nextProject)
-  }
+  const handlePromptDeleted = useCallback(
+    (deletedId: string) => {
+      if (selectedPromptId !== deletedId) return
+      const remaining = prompts.filter((p) => p.id !== deletedId)
+      const grounded = findGroundedDefaultPrompt(remaining)
+      const nextId = grounded?.id || remaining[0]?.id || ''
+      const nextProject = project.trim()
+      setSelectedPromptId(nextId)
+      persistProfile(matchProfileId(nextId, nextProject, remaining), nextId, nextProject)
+    },
+    [selectedPromptId, prompts, project, persistProfile],
+  )
 
   return {
     sessions,

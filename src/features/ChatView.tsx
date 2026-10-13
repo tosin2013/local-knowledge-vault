@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import type { RefObject } from 'react'
 import {
   Alert,
@@ -113,7 +114,98 @@ export interface ChatViewProps {
   onDeleteSession: (id: string) => void
 }
 
-export function ChatView(props: ChatViewProps) {
+interface MessageBubbleProps {
+  m: ChatMessage
+  advanced: boolean
+  onSelectNote: (id: string) => void
+  onSaveAsNote: (content: string, cites: Citation[]) => void
+}
+
+/**
+ * One thread message, memoized. Citations are parsed once per message instead
+ * of on every list render, and a composer keystroke (which re-renders ChatView
+ * with new input text) no longer re-renders any existing bubble (#293).
+ */
+const MessageBubble = memo(function MessageBubble({
+  m,
+  advanced,
+  onSelectNote,
+  onSaveAsNote,
+}: MessageBubbleProps) {
+  const cites = useMemo(
+    () => (m.role === 'assistant' ? parseCitations(m.citations_json) : []),
+    [m],
+  )
+  const isUser = m.role === 'user'
+  const isSystem = m.role === 'system'
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: isUser ? 'flex-end' : 'flex-start',
+        opacity: isSystem ? 0.85 : 1,
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, textTransform: 'capitalize' }}>
+        {m.role}
+      </Typography>
+      <Paper
+        sx={{
+          px: 2,
+          py: 1.25,
+          maxWidth: '85%',
+          borderRadius: 4,
+          bgcolor: isUser
+            ? 'primary.main'
+            : isSystem
+              ? 'action.selected'
+              : 'background.paper',
+          color: isUser ? 'primary.contrastText' : 'text.primary',
+          border: isUser ? 0 : 1,
+          borderColor: 'divider',
+        }}
+      >
+        {m.role === 'assistant' ? (
+          <AnswerText text={m.content} citations={cites} onSelectCitation={onSelectNote} />
+        ) : (
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+            {m.content}
+          </Typography>
+        )}
+        {cites.length > 0 && (
+          <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 1 }}>
+            {cites.map((c, i) => (
+              <Chip
+                key={c.id}
+                size="small"
+                label={`[${i + 1}] ${c.title}`}
+                color="primary"
+                variant={isUser ? 'filled' : 'outlined'}
+                onClick={() => onSelectNote(c.id)}
+                title={advanced ? c.id : c.project && !c.title.includes(c.project) ? `${c.title} — ${c.project}` : c.title}
+                sx={isUser ? { bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' } : undefined}
+              />
+            ))}
+          </Stack>
+        )}
+        {m.role === 'assistant' && <AnswerProviderChip providerJson={m.provider_json} />}
+        {m.role === 'assistant' && <UncitedAnswerChip uncited={m.uncited} />}
+        {m.role === 'assistant' && (
+          <Button
+            size="small"
+            sx={{ mt: 1, ml: -0.5 }}
+            onClick={() => onSaveAsNote(m.content, cites)}
+          >
+            Save as note
+          </Button>
+        )}
+      </Paper>
+    </Box>
+  )
+})
+
+export const ChatView = memo(function ChatView(props: ChatViewProps) {
   const {
     advanced,
     busy,
@@ -255,77 +347,15 @@ export function ChatView(props: ChatViewProps) {
               </Paper>
             </Box>
           )}
-          {messages.map((m) => {
-            const cites = m.role === 'assistant' ? parseCitations(m.citations_json) : []
-            const isUser = m.role === 'user'
-            const isSystem = m.role === 'system'
-            return (
-              <Box
-                key={m.id}
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: isUser ? 'flex-end' : 'flex-start',
-                  opacity: isSystem ? 0.85 : 1,
-                }}
-              >
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, textTransform: 'capitalize' }}>
-                  {m.role}
-                </Typography>
-                <Paper
-                  sx={{
-                    px: 2,
-                    py: 1.25,
-                    maxWidth: '85%',
-                    borderRadius: 4,
-                    bgcolor: isUser
-                      ? 'primary.main'
-                      : isSystem
-                        ? 'action.selected'
-                        : 'background.paper',
-                    color: isUser ? 'primary.contrastText' : 'text.primary',
-                    border: isUser ? 0 : 1,
-                    borderColor: 'divider',
-                  }}
-                >
-                  {m.role === 'assistant' ? (
-                    <AnswerText text={m.content} citations={cites} onSelectCitation={onSelectNote} />
-                  ) : (
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
-                      {m.content}
-                    </Typography>
-                  )}
-                  {cites.length > 0 && (
-                    <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 1 }}>
-                      {cites.map((c, i) => (
-                        <Chip
-                          key={c.id}
-                          size="small"
-                          label={`[${i + 1}] ${c.title}`}
-                          color="primary"
-                          variant={isUser ? 'filled' : 'outlined'}
-                          onClick={() => onSelectNote(c.id)}
-                          title={advanced ? c.id : c.project && !c.title.includes(c.project) ? `${c.title} — ${c.project}` : c.title}
-                          sx={isUser ? { bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' } : undefined}
-                        />
-                      ))}
-                    </Stack>
-                  )}
-                  {m.role === 'assistant' && <AnswerProviderChip providerJson={m.provider_json} />}
-                  {m.role === 'assistant' && <UncitedAnswerChip uncited={m.uncited} />}
-                  {m.role === 'assistant' && (
-                    <Button
-                      size="small"
-                      sx={{ mt: 1, ml: -0.5 }}
-                      onClick={() => onSaveAsNote(m.content, cites)}
-                    >
-                      Save as note
-                    </Button>
-                  )}
-                </Paper>
-              </Box>
-            )
-          })}
+          {messages.map((m) => (
+            <MessageBubble
+              key={m.id}
+              m={m}
+              advanced={advanced}
+              onSelectNote={onSelectNote}
+              onSaveAsNote={onSaveAsNote}
+            />
+          ))}
           {sending && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, textTransform: 'capitalize' }}>
@@ -692,4 +722,4 @@ export function ChatView(props: ChatViewProps) {
       </Paper>
     </Box>
   )
-}
+})
