@@ -39,6 +39,13 @@ export function initDb(dbPath: string): Database.Database {
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
+  // Hot-query tuning (#299): the library defaults are a 2 MB page cache and no
+  // memory mapping, so every rail refresh paged a vault that reaches ~150 MB
+  // at 5k notes through a tiny cache. 64 MB of page cache plus 256 MB of
+  // memory-mapped reads keeps lists, counts and search off the disk.
+  db.pragma('cache_size = -65536') // 64 MB (negative = KiB)
+  db.pragma('mmap_size = 268435456') // 256 MB
+  db.pragma('temp_store = MEMORY') // sorts/groups for the rail never hit disk
   // Was this vault created before the seeded flag existed? An existing vault
   // must never get sample notes re-injected on launch (#41).
   const alreadyExisting = tableExists(db, 'items')
@@ -51,6 +58,9 @@ export function initDb(dbPath: string): Database.Database {
 
 export function closeDb(): void {
   if (db) {
+    // PRAGMA optimize runs ANALYZE on tables where the planner would benefit —
+    // cheap on close, keeps the #299 indexes well-statistics'd as the vault grows.
+    db.pragma('optimize')
     db.close()
     db = null
   }
@@ -63,7 +73,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 10
+export const SCHEMA_VERSION = 11
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -99,7 +109,23 @@ function migrate(database: Database.Database): void {
   if (version < 10) {
     migrateV10(database)
   }
+  if (version < 11) {
+    migrateV11(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v11 (#299): indexes for the hot list/count/sort queries. `items` previously
+ * had only `PRIMARY KEY(id)`, so the rail refresh (listProjects + countItems +
+ * listTrashedItems on startup and after every save) scanned the whole table
+ * and sorted through a temp b-tree. Both statements are idempotent.
+ */
+function migrateV11(database: Database.Database): void {
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_items_status_updated ON items(status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_items_project ON items(project, status);
+  `)
 }
 
 /**
