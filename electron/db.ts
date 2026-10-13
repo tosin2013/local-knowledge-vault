@@ -736,6 +736,23 @@ export function listProjectCounts(): Array<{ project: string; noteCount: number 
   return rows.map((row) => ({ project: row.project, noteCount: Number(row.note_count) }))
 }
 
+/** Find transcript projects whose source marker contains the requested source. */
+export function listProjectsBySource(source: { sourcePath?: string; sourceUrl?: string }): Array<{ project: string; noteCount: number }> {
+  const value = source.sourcePath ?? source.sourceUrl
+  if (!value) return []
+  const rows = getDb()
+    .prepare(
+      `SELECT project, COUNT(*) AS note_count
+       FROM items
+       WHERE status != 'trashed' AND kind = 'transcript'
+         AND project IS NOT NULL AND TRIM(project) != ''
+         AND instr(body, ?) > 0
+       GROUP BY project`,
+    )
+    .all(value) as Array<{ project: string; note_count: number }>
+  return rows.map((row) => ({ project: row.project, noteCount: Number(row.note_count) }))
+}
+
 /**
  * Exact project match. Media ingest/replace uses this to distinguish
  * "intro" from "intro (2)" — listItems is also exact now, but this helper

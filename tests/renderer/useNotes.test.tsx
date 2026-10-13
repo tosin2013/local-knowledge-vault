@@ -239,16 +239,17 @@ describe('useNotes', () => {
       makeItem('itm_1', { title: 'Alpha note' }),
       makeItem('itm_2', { title: 'Beta note' }),
     ]
-    lkv.items.list.mockImplementation((input) =>
-      Promise.resolve(input?.query ? items.filter((item) => item.title.toLowerCase().includes(input.query.toLowerCase())) : items),
-    )
+    lkv.items.list.mockImplementation((input) => {
+      const query = input?.query?.toLowerCase() ?? ''
+      return Promise.resolve(query ? items.filter((item) => item.title.toLowerCase().includes(query)) : items)
+    })
     const { result } = renderHook(() => useNotes(makeDeps()))
     await act(async () => {
       await result.current.refreshList()
     })
     act(() => result.current.setRailQuery('alpha'))
     await waitFor(() => expect(lkv.items.list).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'alpha' })))
-    expect(result.current.visibleItems.map((i) => i.id)).toEqual(['itm_1'])
+    await waitFor(() => expect(result.current.visibleItems.map((i) => i.id)).toEqual(['itm_1']))
   })
 
   it('bulk-trashes selected notes', async () => {

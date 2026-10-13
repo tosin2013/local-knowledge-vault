@@ -27,6 +27,7 @@ import {
   listItems,
   listItemSummaries,
   listItemsByProjectExact,
+  listProjectsBySource,
   listPrompts,
   runInTransaction,
   updateChatProfile,
@@ -166,20 +167,9 @@ export interface ExistingMediaProject {
  * (#124). A project only matches when its notes carry this exact source marker.
  */
 export function findExistingProjectBySource(source: MediaSource): ExistingMediaProject | null {
-  const byProject = new Map<string, Item[]>()
-  for (const it of listItems({ kind: 'transcript' })) {
-    if (matchesSource(it, source) !== true) continue
-    const p = (it.project ?? '').trim()
-    if (!p) continue
-    const list = byProject.get(p) ?? []
-    list.push(it)
-    byProject.set(p, list)
-  }
-  let best: ExistingMediaProject | null = null
-  for (const [project, list] of byProject) {
-    if (!best || list.length > best.noteCount) best = { project, noteCount: list.length }
-  }
-  return best
+  const projects = listProjectsBySource(source)
+  const best = projects.sort((a, b) => b.noteCount - a.noteCount)[0]
+  return best ? { project: best.project, noteCount: best.noteCount } : null
 }
 
 /**
