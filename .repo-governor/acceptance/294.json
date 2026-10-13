@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #294 (rail renders every note). The 5k-vault timings need Playwright on a real build; CI-verifiable proxies: a NotesRail test that renders hundreds of notes and asserts only a bounded window is in the DOM (the issue's <2000 DOM-node criterion, functionally), that scrolling extends the window, and that the total count label still shows the true total. The test file is new, so the check fails today.",
+  "authority_id": "294",
+  "criteria": [
+    { "check": "command_exit", "target": "npx vitest run tests/renderer/NotesRail.test.tsx" },
+    { "check": "command_exit", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

@@ -1,4 +1,4 @@
-import { useState, memo } from 'react'
+import { useState, memo, useCallback, useEffect, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
   Box,
@@ -74,6 +74,108 @@ export interface NotesRailProps {
   onSelect: (id: string, opts?: { edit?: boolean }) => void
 }
 
+/**
+ * How many notes the rail renders initially and per extension. Rendering every
+ * note made startup and typing scale linearly with the vault (a 5,000-note
+ * vault spent seconds per keystroke, #294); the window keeps the DOM bounded
+ * and extends as the reader reaches the bottom of the list.
+ */
+export const INITIAL_NOTES_SHOWN = 100
+export const NOTES_SHOWN_STEP = 200
+/** Extend the window when the reader is within this many pixels of the bottom. */
+const EXTEND_THRESHOLD_PX = 600
+
+interface NoteRowProps {
+  it: Item
+  selected: boolean
+  bulkSelected: boolean
+  onSelect: NotesRailProps['onSelect']
+  onDeleteItem: NotesRailProps['onDeleteItem']
+  onToggleBulk: NotesRailProps['onToggleBulk']
+}
+
+/**
+ * One row of the notes list, memoized: with stable callbacks the parent passes
+ * per-row primitives, so a selection or bulk toggle re-renders only the rows
+ * whose state actually changed (#293, #294).
+ */
+const NoteRow = memo(function NoteRow({
+  it,
+  selected,
+  bulkSelected,
+  onSelect,
+  onDeleteItem,
+  onToggleBulk,
+}: NoteRowProps) {
+  return (
+    <ListItemButton
+      selected={selected}
+      onClick={() => onSelect(it.id)}
+      onDoubleClick={() => onSelect(it.id, { edit: true })}
+      onKeyDown={(e) => {
+        if (e.key === 'F2') {
+          e.preventDefault()
+          onSelect(it.id, { edit: true })
+        }
+      }}
+      aria-keyshortcuts="Enter F2"
+      sx={{
+        mb: 0.5,
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        borderRadius: 3,
+        borderLeft: selected ? 3 : 0,
+        borderColor: 'primary.main',
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+        <Checkbox
+          size="small"
+          checked={bulkSelected}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggleBulk(it.id)}
+          inputProps={{ 'aria-label': `Select ${it.title}` }}
+          sx={{ p: 0, mr: 0.5, mt: -0.25 }}
+        />
+        <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, mt: 0.25 }}>
+          {it.title}
+        </Typography>
+        <IconButton
+          size="small"
+          aria-label={`Delete ${it.title}`}
+          title="Delete note"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDeleteItem(it.id)
+          }}
+          sx={{ ml: 0.5, mt: -0.25, mr: -0.5 }}
+        >
+          <DeleteOutlineIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
+        <Chip
+          size="small"
+          label={paraLabel(it.para)}
+          color="primary"
+          variant="outlined"
+          title={`Group: ${paraLabel(it.para)}`}
+        />
+        <Chip size="small" label={it.kind} variant="outlined" />
+        {it.project && (
+          <Chip
+            size="small"
+            icon={<FolderOutlinedIcon />}
+            label={it.project}
+            variant="outlined"
+            title={`Project: ${it.project}`}
+          />
+        )}
+      </Stack>
+    </ListItemButton>
+  )
+})
+
 export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
   const {
     advanced,
@@ -117,6 +219,29 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
 
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  // How many of `items` are in the DOM right now (#294).
+  const [shownCount, setShownCount] = useState(INITIAL_NOTES_SHOWN)
+  const listRef = useRef<HTMLDivElement | null>(null)
+
+  // A new filtered list (rail filter keystroke, sort change, refresh) starts a
+  // fresh window so the reader always sees the top of the list they asked for.
+  useEffect(() => {
+    setShownCount(INITIAL_NOTES_SHOWN)
+  }, [items])
+
+  const extendWindow = useCallback(() => {
+    setShownCount((c) => Math.min(c + NOTES_SHOWN_STEP, items.length))
+  }, [items.length])
+
+  // The rail list is the scroll container (.note-list); extend as it nears the
+  // bottom. jsdom reports zero dimensions, so tests can fire the event directly.
+  const handleListScroll = useCallback(() => {
+    const el = listRef.current
+    if (!el) return
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - EXTEND_THRESHOLD_PX) {
+      extendWindow()
+    }
+  }, [extendWindow])
 
   const submitNewProject = () => {
     const name = newProjectName.trim()
@@ -452,7 +577,13 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
         </Typography>
       </Stack>
 
-      <Box className="note-list" sx={{ p: 1 }}>
+      <Box
+        className="note-list"
+        data-testid="note-list"
+        ref={listRef}
+        onScroll={handleListScroll}
+        sx={{ p: 1 }}
+      >
         {items.length === 0 &&
           (isEmpty ? (
             <Stack spacing={1} alignItems="center" sx={{ textAlign: 'center', p: 2 }}>
@@ -477,73 +608,16 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
             </Typography>
           ))}
         <List dense disablePadding aria-label="Notes">
-          {items.map((it) => (
-            <ListItemButton
+          {items.slice(0, shownCount).map((it) => (
+            <NoteRow
               key={it.id}
+              it={it}
               selected={selectedId === it.id}
-              onClick={() => onSelect(it.id)}
-              onDoubleClick={() => onSelect(it.id, { edit: true })}
-              onKeyDown={(e) => {
-                if (e.key === 'F2') {
-                  e.preventDefault()
-                  onSelect(it.id, { edit: true })
-                }
-              }}
-              aria-keyshortcuts="Enter F2"
-              sx={{
-                mb: 0.5,
-                flexDirection: 'column',
-                alignItems: 'stretch',
-                borderRadius: 3,
-                borderLeft: selectedId === it.id ? 3 : 0,
-                borderColor: 'primary.main',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
-                <Checkbox
-                  size="small"
-                  checked={bulkSelected.has(it.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={() => onToggleBulk(it.id)}
-                  inputProps={{ 'aria-label': `Select ${it.title}` }}
-                  sx={{ p: 0, mr: 0.5, mt: -0.25 }}
-                />
-                <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, mt: 0.25 }}>
-                  {it.title}
-                </Typography>
-                <IconButton
-                  size="small"
-                  aria-label={`Delete ${it.title}`}
-                  title="Delete note"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDeleteItem(it.id)
-                  }}
-                  sx={{ ml: 0.5, mt: -0.25, mr: -0.5 }}
-                >
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </Box>
-              <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
-                <Chip
-                  size="small"
-                  label={paraLabel(it.para)}
-                  color="primary"
-                  variant="outlined"
-                  title={`Group: ${paraLabel(it.para)}`}
-                />
-                <Chip size="small" label={it.kind} variant="outlined" />
-                {it.project && (
-                  <Chip
-                    size="small"
-                    icon={<FolderOutlinedIcon />}
-                    label={it.project}
-                    variant="outlined"
-                    title={`Project: ${it.project}`}
-                  />
-                )}
-              </Stack>
-            </ListItemButton>
+              bulkSelected={bulkSelected.has(it.id)}
+              onSelect={onSelect}
+              onDeleteItem={onDeleteItem}
+              onToggleBulk={onToggleBulk}
+            />
           ))}
         </List>
       </Box>
