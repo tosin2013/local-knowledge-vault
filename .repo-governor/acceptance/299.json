@@ -1,0 +1,9 @@
+{
+  "$comment": "Completion bar for #299 (SQLite runs on defaults). The CI-checkable proxies for the acceptance criteria: a new smoke script builds a synthetic multi-thousand-note vault, asserts EXPLAIN QUERY PLAN for listTrashedItems/listProjects/countItems uses the new items indexes (no plain SCAN items), times the three hot queries under the 3 ms combined budget and listItems under the 30%-faster budget vs restored library defaults, and re-inits the DB twice to prove the v11 migration is idempotent. The script does not exist yet, so its check fails today; the other two are regression guards.",
+  "authority_id": "299",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run test:sqlite-perf" },
+    { "check": "command_exit", "target": "npm run test:mvp" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
