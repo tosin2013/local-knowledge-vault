@@ -11,7 +11,7 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { askGrounded } from './generate'
-import { getPrompt, listItems } from './db'
+import { getPrompt, listProjectCounts } from './db'
 import { listMediaProjects } from './media-ingest'
 import { resolveUserDataDir } from './user-data'
 import { encryptSecret, decryptSecret } from './secret-store'
@@ -231,14 +231,7 @@ function listProjectsSummary(): Array<{ project: string; noteCount: number; sour
     /* fall through */
   }
   // Fallback: distinct project values from vault items
-  const items = listItems()
-  const counts = new Map<string, number>()
-  for (const it of items) {
-    const proj = (it.project ?? '').trim()
-    if (!proj) continue
-    counts.set(proj, (counts.get(proj) ?? 0) + 1)
-  }
-  return [...counts.entries()].map(([project, noteCount]) => ({
+  return listProjectCounts().map(({ project, noteCount }) => ({
     project,
     noteCount,
     source: 'vault',

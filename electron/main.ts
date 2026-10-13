@@ -24,6 +24,7 @@ import {
   initDb,
   listChatProfiles,
   listItems,
+  listItemSummaries,
   listMessages,
   listPrompts,
   listSessions,
@@ -461,7 +462,7 @@ let currentIngestController: AbortController | null = null
 
 function registerIpc(): void {
   ipcMain.handle('items:list', (_e, input?: ListItemsInput) => {
-    return listItems(input?.filters)
+    return listItemSummaries(input?.filters, input?.query)
   })
 
   ipcMain.handle('items:create', (_e, input: CreateItemInput) => {

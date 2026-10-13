@@ -22,8 +22,10 @@ import {
   createItem,
   createPrompt,
   deleteItem,
+  getItem,
   listChatProfiles,
   listItems,
+  listItemSummaries,
   listItemsByProjectExact,
   listPrompts,
   runInTransaction,
@@ -879,9 +881,9 @@ function sourceMetaFromItems(items: Item[]): {
 }
 
 export function listMediaProjects(): MediaProjectInfo[] {
-  const items = listItems({ kind: 'transcript' })
+  const summaries = listItemSummaries({ kind: 'transcript' })
   const byProject = new Map<string, Item[]>()
-  for (const it of items) {
+  for (const it of summaries) {
     const p = (it.project ?? '').trim() || 'Untitled media'
     const list = byProject.get(p) ?? []
     list.push(it)
@@ -889,7 +891,9 @@ export function listMediaProjects(): MediaProjectInfo[] {
   }
   const out: MediaProjectInfo[] = []
   for (const [project, list] of byProject) {
-    const meta = sourceMetaFromItems(list)
+    // Source markers live in the body; load only one representative note.
+    const representative = list[0]?.id ? getItem(list[0].id) : null
+    const meta = representative ? sourceMetaFromItems([representative]) : { sourceType: 'unknown' as const }
     const updatedAt = list
       .map((i) => i.updated_at)
       .sort()

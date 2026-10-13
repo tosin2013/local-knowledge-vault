@@ -704,6 +704,38 @@ export function listItems(filters?: ItemFilters): Item[] {
   return rows.map(rowToItem)
 }
 
+/** Lightweight rows for list views. Bodies are loaded separately by items:get. */
+export function listItemSummaries(filters?: ItemFilters, query?: string): Item[] {
+  const database = getDb()
+  const { sql, params } = buildFilterClause(filters)
+  const text = query?.trim()
+  const textSql = text ? ' AND (title LIKE ? OR summary LIKE ? OR project LIKE ?)' : ''
+  const textParam = text ? `%${text}%` : null
+  const rows = database
+    .prepare(
+      `SELECT id, title, substr(summary, 1, 200) AS summary, '' AS body,
+              para, kind, status, project, created_at, updated_at
+       FROM items
+       WHERE status != 'trashed'${sql}${textSql}
+       ORDER BY updated_at DESC`,
+    )
+    .all(...params, ...(textParam ? [textParam, textParam, textParam] : [])) as Record<string, unknown>[]
+  return rows.map(rowToItem)
+}
+
+/** Project counts without loading note bodies. */
+export function listProjectCounts(): Array<{ project: string; noteCount: number }> {
+  const rows = getDb()
+    .prepare(
+      `SELECT project, COUNT(*) AS note_count
+       FROM items
+       WHERE status != 'trashed' AND project IS NOT NULL AND TRIM(project) != ''
+       GROUP BY project`,
+    )
+    .all() as Array<{ project: string; note_count: number }>
+  return rows.map((row) => ({ project: row.project, noteCount: Number(row.note_count) }))
+}
+
 /**
  * Exact project match. Media ingest/replace uses this to distinguish
  * "intro" from "intro (2)" — listItems is also exact now, but this helper
