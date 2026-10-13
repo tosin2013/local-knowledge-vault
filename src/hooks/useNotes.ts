@@ -50,6 +50,8 @@ export function useNotes(deps: UseNotesDeps) {
   // Rail display: hide transcript (source) chunks by default (#120), filter-as-you-type, sort.
   const [showTranscripts, setShowTranscripts] = useState(false)
   const [railQuery, setRailQuery] = useState('')
+  const railQueryRef = useRef(railQuery)
+  railQueryRef.current = railQuery
   const [railSort, setRailSort] = useState<'updated' | 'title' | 'created'>('updated')
   // Find "show more" pagination.
   const [findLimit, setFindLimit] = useState(20)

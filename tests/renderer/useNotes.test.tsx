@@ -247,7 +247,9 @@ describe('useNotes', () => {
     await act(async () => {
       await result.current.refreshList()
     })
+    const refreshList = result.current.refreshList
     act(() => result.current.setRailQuery('alpha'))
+    expect(result.current.refreshList).toBe(refreshList)
     await waitFor(() => expect(lkv.items.list).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'alpha' })))
     await waitFor(() => expect(result.current.visibleItems.map((i) => i.id)).toEqual(['itm_1']))
   })
