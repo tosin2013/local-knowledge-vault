@@ -736,20 +736,31 @@ export function listProjectCounts(): Array<{ project: string; noteCount: number 
   return rows.map((row) => ({ project: row.project, noteCount: Number(row.note_count) }))
 }
 
-/** Find transcript projects whose source marker contains the requested source. */
+/**
+ * Find transcript projects whose source marker line matches the requested
+ * source — the SQL form of `matchesSource` (#295): the writer emits
+ * `source_path: <v>` / `source_url: <v>` lines (media-captions.ts), and each
+ * present field is checked independently, like the JS version did.
+ */
 export function listProjectsBySource(source: { sourcePath?: string; sourceUrl?: string }): Array<{ project: string; noteCount: number }> {
-  const value = source.sourcePath ?? source.sourceUrl
-  if (!value) return []
   const rows = getDb()
     .prepare(
       `SELECT project, COUNT(*) AS note_count
        FROM items
        WHERE status != 'trashed' AND kind = 'transcript'
          AND project IS NOT NULL AND TRIM(project) != ''
-         AND instr(body, ?) > 0
+         AND (
+           (? IS NOT NULL AND instr(body, 'source_path: ' || ?) > 0) OR
+           (? IS NOT NULL AND instr(body, 'source_url: ' || ?) > 0)
+         )
        GROUP BY project`,
     )
-    .all(value) as Array<{ project: string; note_count: number }>
+    .all(
+      source.sourcePath ?? null,
+      source.sourcePath ?? null,
+      source.sourceUrl ?? null,
+      source.sourceUrl ?? null,
+    ) as Array<{ project: string; note_count: number }>
   return rows.map((row) => ({ project: row.project, noteCount: Number(row.note_count) }))
 }
 

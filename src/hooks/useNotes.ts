@@ -50,8 +50,6 @@ export function useNotes(deps: UseNotesDeps) {
   // Rail display: hide transcript (source) chunks by default (#120), filter-as-you-type, sort.
   const [showTranscripts, setShowTranscripts] = useState(false)
   const [railQuery, setRailQuery] = useState('')
-  const railQueryRef = useRef(railQuery)
-  railQueryRef.current = railQuery
   const [railSort, setRailSort] = useState<'updated' | 'title' | 'created'>('updated')
   // Find "show more" pagination.
   const [findLimit, setFindLimit] = useState(20)
@@ -78,8 +76,14 @@ export function useNotes(deps: UseNotesDeps) {
     }
   }, [filters])
 
-  // Rail filter-as-you-type: debounce the SQL query by 150 ms (#295).
+  // Rail filter-as-you-type: debounce the SQL query by 150 ms (#295). The
+  // startup refresh covers mount, and a refreshList identity change (filter
+  // edits) is re-fetched by App's startup effect — so only an actual
+  // railQuery change schedules the debounced query (#292: refresh once).
+  const lastRailQuery = useRef('')
   useEffect(() => {
+    if (lastRailQuery.current === railQuery) return
+    lastRailQuery.current = railQuery
     const timer = window.setTimeout(() => void refreshList(), 150)
     return () => window.clearTimeout(timer)
   }, [railQuery, refreshList])
