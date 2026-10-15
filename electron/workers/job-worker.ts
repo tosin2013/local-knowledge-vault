@@ -47,14 +47,15 @@ if (!parentPort) {
 
 initDb(String(workerData.dbPath))
 
-parentPort.on('message', (msg: JobMessage & { type?: string }) => {
+parentPort.on('message', (msg: { jobId: number; type?: string; payload: Record<string, unknown> }) => {
   // Graceful shutdown lets this thread's V8 coverage flush (c8/#298) and
   // commits nothing — jobs are already complete.
   if (msg.type === 'shutdown') process.exit(0)
   const { jobId, type, payload } = msg
-  const progress = emitProgress(type, jobId)
+  const jobType = type as JobMessage['type']
+  const progress = emitProgress(jobType, jobId)
   try {
-    switch (type) {
+    switch (jobType) {
       case 'import-markdown': {
         const result = importMarkdownFolder(String(payload.dir), progress)
         post({ jobId, ok: true, result })
