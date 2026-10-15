@@ -22,9 +22,12 @@ import {
   createItem,
   createPrompt,
   deleteItem,
+  getItem,
   listChatProfiles,
   listItems,
+  listItemSummaries,
   listItemsByProjectExact,
+  listProjectsBySource,
   listPrompts,
   runInTransaction,
   updateChatProfile,
@@ -164,20 +167,9 @@ export interface ExistingMediaProject {
  * (#124). A project only matches when its notes carry this exact source marker.
  */
 export function findExistingProjectBySource(source: MediaSource): ExistingMediaProject | null {
-  const byProject = new Map<string, Item[]>()
-  for (const it of listItems({ kind: 'transcript' })) {
-    if (matchesSource(it, source) !== true) continue
-    const p = (it.project ?? '').trim()
-    if (!p) continue
-    const list = byProject.get(p) ?? []
-    list.push(it)
-    byProject.set(p, list)
-  }
-  let best: ExistingMediaProject | null = null
-  for (const [project, list] of byProject) {
-    if (!best || list.length > best.noteCount) best = { project, noteCount: list.length }
-  }
-  return best
+  const projects = listProjectsBySource(source)
+  const best = projects.sort((a, b) => b.noteCount - a.noteCount)[0]
+  return best ? { project: best.project, noteCount: best.noteCount } : null
 }
 
 /**
@@ -879,9 +871,9 @@ function sourceMetaFromItems(items: Item[]): {
 }
 
 export function listMediaProjects(): MediaProjectInfo[] {
-  const items = listItems({ kind: 'transcript' })
+  const summaries = listItemSummaries({ kind: 'transcript' })
   const byProject = new Map<string, Item[]>()
-  for (const it of items) {
+  for (const it of summaries) {
     const p = (it.project ?? '').trim() || 'Untitled media'
     const list = byProject.get(p) ?? []
     list.push(it)
@@ -889,7 +881,10 @@ export function listMediaProjects(): MediaProjectInfo[] {
   }
   const out: MediaProjectInfo[] = []
   for (const [project, list] of byProject) {
-    const meta = sourceMetaFromItems(list)
+    // Source markers live in the body; load only one representative note.
+    // An empty list yields the 'unknown' source type (#295).
+    const representative = list[0]?.id ? getItem(list[0].id) : null
+    const meta = sourceMetaFromItems(representative ? [representative] : [])
     const updatedAt = list
       .map((i) => i.updated_at)
       .sort()

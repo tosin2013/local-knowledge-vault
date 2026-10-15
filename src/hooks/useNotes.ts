@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AskGroundedResult, Item, ItemFilters, ProjectSummary, SearchHit } from '../../electron/types'
 import {
   emptyFilters,
@@ -61,14 +61,32 @@ export function useNotes(deps: UseNotesDeps) {
   // Total non-trashed notes (drives the genuinely-empty rail state, #189).
   const [count, setCount] = useState(0)
 
+  // The rail query rides a ref so refreshList's identity stays stable per
+  // keystroke — a `railQuery` dep here would re-run App's startup effect and
+  // refetch everything on every key (#292, #295).
+  const railQueryRef = useRef(railQuery)
+  railQueryRef.current = railQuery
+
   const refreshList = useCallback(async () => {
     if (!window.lkv) return
-    const list = await window.lkv.items.list({ filters })
+    const list = await window.lkv.items.list({ filters, query: railQueryRef.current })
     setItems(list)
     if (window.lkv.items.count) {
       setCount(await window.lkv.items.count())
     }
   }, [filters])
+
+  // Rail filter-as-you-type: debounce the SQL query by 150 ms (#295). The
+  // startup refresh covers mount, and a refreshList identity change (filter
+  // edits) is re-fetched by App's startup effect — so only an actual
+  // railQuery change schedules the debounced query (#292: refresh once).
+  const lastRailQuery = useRef('')
+  useEffect(() => {
+    if (lastRailQuery.current === railQuery) return
+    lastRailQuery.current = railQuery
+    const timer = window.setTimeout(() => void refreshList(), 150)
+    return () => window.clearTimeout(timer)
+  }, [railQuery, refreshList])
 
   /** DB-backed project list (exact names + note counts) — the single source of truth. */
   const refreshProjects = useCallback(async () => {
@@ -587,46 +605,18 @@ export function useNotes(deps: UseNotesDeps) {
   const projectOptions = useMemo(() => projects.map((p) => p.name), [projects])
 
   /**
-   * Lowercase search index for the rail filter, rebuilt only when the items
-   * change — a filter keystroke then re-filters without lowercasing every body
-   * again (#294: filter typing p95 on large vaults).
+   * Rail list: hide transcript chunks by default; filter-as-you-type happens in
+   * SQLite (`items.list({ filters, query })`, #295), sort stays local.
    */
-  const railSearchIndex = useMemo(() => {
-    const idx = new Map<string, { title: string; body: string; summary: string; project: string }>()
-    for (const it of items) {
-      idx.set(it.id, {
-        title: it.title.toLowerCase(),
-        body: (it.body ?? '').toLowerCase(),
-        summary: (it.summary ?? '').toLowerCase(),
-        project: (it.project ?? '').toLowerCase(),
-      })
-    }
-    return idx
-  }, [items])
-
-  /** Rail list: hide transcript chunks by default, filter-as-you-type, sort. */
   const visibleItems = useMemo(() => {
     let list = items
     if (!showTranscripts) list = list.filter((it) => it.kind !== 'transcript')
-    const q = railQuery.trim().toLowerCase()
-    if (q) {
-      list = list.filter((it) => {
-        const e = railSearchIndex.get(it.id)
-        return (
-          (e?.title.includes(q) ||
-            e?.body.includes(q) ||
-            e?.summary.includes(q) ||
-            e?.project.includes(q)) ??
-          false
-        )
-      })
-    }
     const sorted = [...list]
     if (railSort === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title))
     else if (railSort === 'created') sorted.sort((a, b) => a.created_at.localeCompare(b.created_at))
     else sorted.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     return sorted
-  }, [items, showTranscripts, railQuery, railSort, railSearchIndex])
+  }, [items, showTranscripts, railSort])
 
   return {
     items,

@@ -239,6 +239,60 @@ async function main(): Promise<void> {
     'reopening keeps both indexes (CREATE IF NOT EXISTS)'
   )
   assert(db.countItems() >= NOTE_COUNT - TRASHED_COUNT, 'reopening keeps the data intact')
+
+  console.log('lightweight rail listing (#295)')
+  // itm_500 is active (only itm_0..itm_199 are trashed) with an unambiguous
+  // title. A summary long enough to prove the 200-char cap.
+  reopened
+    .prepare('UPDATE items SET summary = ? WHERE id = ?')
+    .run('S'.repeat(500), 'itm_500')
+  const summaries = db.listItemSummaries()
+  assert(summaries.every((it) => it.body === ''), 'summaries never carry bodies')
+  const capped = summaries.find((it) => it.id === 'itm_500')
+  assert(!!capped && capped.summary !== null && capped.summary.length === 200, 'summaries are capped at 200 chars')
+
+  const byTitle = db.listItemSummaries(undefined, 'Note 500')
+  assert(byTitle.some((it) => it.id === 'itm_500'), 'the query matches titles')
+  // 'Project 37' is not a substring of any other seeded project name.
+  const byProject = db.listItemSummaries(undefined, 'Project 37')
+  assert(byProject.length > 0 && byProject.every((it) => it.project === 'Project 37'), 'the query matches projects')
+  assert(db.listItemSummaries(undefined, 'zzz-no-such-note').length === 0, 'a non-match returns nothing')
+
+  const counts = db.listProjectCounts()
+  const project0 = counts.find((c) => c.project === 'Project 0')
+  assert(counts.length >= PROJECT_COUNT && !!project0 && project0.noteCount > 0, 'listProjectCounts groups without bodies')
+
+  // Transcript source matching: marker lines only — a URL mentioned in the
+  // body text must NOT match (#295).
+  const tInsert = reopened.prepare(
+    `INSERT INTO items (id, title, summary, body, para, kind, status, project, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, 'resources', 'transcript', 'active', ?, ?, ?)`,
+  )
+  const tBase = Date.parse('2026-02-01T00:00:00.000Z')
+  const seedTranscript = (id: string, project: string, body: string) =>
+    tInsert.run(id, `Transcript ${id}`, body, project, new Date(tBase).toISOString(), new Date(tBase).toISOString())
+  seedTranscript('trk_a', 'Talk A', 'intro\nsource_path: /media/a.mp4\nbody text')
+  seedTranscript('trk_b', 'Talk B', 'intro\nsource_url: https://example.com/talk\nbody text')
+  seedTranscript(
+    'trk_c',
+    'Talk C',
+    'intro\nmentions https://example.com/other in prose without a marker line',
+  )
+  const byPath = db.listProjectsBySource({ sourcePath: '/media/a.mp4' })
+  assert(byPath.length === 1 && byPath[0].project === 'Talk A', 'a source_path marker finds its project')
+  const byUrl = db.listProjectsBySource({ sourceUrl: 'https://example.com/talk' })
+  assert(byUrl.length === 1 && byUrl[0].project === 'Talk B', 'a source_url marker finds its project')
+  const byUnseenUrl = db.listProjectsBySource({ sourceUrl: 'https://example.com/other' })
+  assert(
+    byUnseenUrl.length === 0,
+    'a URL mentioned in content without a marker line does not match'
+  )
+  const ingest = require('../electron/media-ingest') as typeof import('../electron/media-ingest')
+  const best = ingest.findExistingProjectBySource({ sourceUrl: 'https://example.com/talk' })
+  assert(!!best && best.project === 'Talk B', 'findExistingProjectBySource picks the marker project')
+  const media = ingest.listMediaProjects()
+  assert(media.some((m) => m.project === 'Talk C' && m.sourceType === 'unknown'), 'a marker-less transcript project lists as unknown source')
+
   db.closeDb()
   fs.rmSync(dir, { recursive: true, force: true })
 

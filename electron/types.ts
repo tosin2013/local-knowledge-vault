@@ -128,6 +128,7 @@ export interface OllamaHealth {
 
 export interface ListItemsInput {
   filters?: ItemFilters
+  query?: string
 }
 
 /* ---- Chat sessions / messages ---- */

@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #295 (notes list loads full bodies over IPC; rail filter scans them per key), executed via PR #310 reconciled with the merged #293/#294/#299 work. CI-checkable: a new renderer test asserts items.list is called with the SQL-side rail query and that the rail renders without note bodies crossing IPC (fails today: the file does not exist and the contract is not implemented); regression guards for the touched main-process areas (bridge, media ingest) and typecheck.",
+  "authority_id": "295",
+  "criteria": [
+    { "check": "command_exit", "target": "npx vitest run tests/renderer/useNotesRailQuery.test.tsx" },
+    { "check": "command_exit", "target": "npm run test:mvp" },
+    { "check": "command_exit", "target": "npm run test:media-ingest" },
+    { "check": "command_exit", "target": "npm run test:bridge" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
