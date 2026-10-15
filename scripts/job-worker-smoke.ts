@@ -60,6 +60,11 @@ function writeMarkdownVault(dir: string): void {
     ].join('\n')
     fs.writeFileSync(path.join(dir, `note-${String(i).padStart(4, '0')}.md`), body)
   }
+  // Error branches: a too-large file (cap 2 MB) and an unparsable one (#298).
+  const huge = path.join(dir, 'huge.md')
+  fs.writeFileSync(huge, 'x')
+  fs.truncateSync(huge, 2 * 1024 * 1024 + 1)
+  fs.writeFileSync(path.join(dir, 'empty.md'), '')
 }
 
 interface JobDone {
@@ -126,7 +131,8 @@ async function main(): Promise<void> {
   const importResult = (await runJob<import('../electron/types').MarkdownImportResult>('import-markdown', { dir: mdDir }, (p) => importProgressEvents.push(p)))
   clearInterval(heartbeat)
   assert(importResult.imported === FILE_COUNT, `imported all ${FILE_COUNT} files (${importResult.imported})`)
-  assert(importResult.errors.length === 0, 'no import errors')
+  assert(importResult.errors.length === 1, 'the oversized file is reported as an error')
+  assert(importResult.skipped === 2, 'the oversized and unparsable files are skipped')
   assert(importResult.itemIds.length === FILE_COUNT, 'one id per imported note')
 
   // Responsiveness is proven by the max heartbeat GAP (a frozen main thread
@@ -136,8 +142,8 @@ async function main(): Promise<void> {
   const importProgress = importProgressEvents
   assert(importProgress.length >= 1, 'progress events arrived during the import')
   assert(
-    importProgress[importProgress.length - 1]?.done === FILE_COUNT,
-    'progress reaches the full count'
+    importProgress[importProgress.length - 1]?.done === FILE_COUNT + 2,
+    'progress reaches the full file count (imported + skipped)'
   )
 
   console.log('main-thread visibility (WAL)')
@@ -163,12 +169,16 @@ async function main(): Promise<void> {
   assert(enrolled.length === tail.length, 'the last imported notes are all enrolled')
 
   db.closeDb()
-  worker.terminate()
+  // Graceful shutdown: the worker exits itself so its V8 coverage flushes.
+  worker.postMessage({ type: 'shutdown' })
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, 5000)
+    worker.on('exit', () => { clearTimeout(timeout); resolve() })
+  })
   fs.rmSync(dir, { recursive: true, force: true })
 
   console.log(`\n${passed} passed, ${failed} failed\n`)
-  if (failed > 0) process.exit(1)
-  process.exit(0)
+  process.exitCode = failed > 0 ? 1 : 0
 }
 
 main().catch((e) => {

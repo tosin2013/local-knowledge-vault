@@ -35,10 +35,7 @@ export function getDb(): Database.Database {
   return db
 }
 
-let dbFile: string | null = null
-
 export function initDb(dbPath: string): Database.Database {
-  dbFile = dbPath
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
@@ -70,14 +67,7 @@ export function closeDb(): void {
     db.pragma('optimize')
     db.close()
     db = null
-    dbFile = null
   }
-}
-
-/** The path initDb was given — the job worker opens the same file (#298). */
-export function getDbPath(): string {
-  if (!dbFile) throw new Error('Database not initialized. Call initDb first.')
-  return dbFile
 }
 
 /**

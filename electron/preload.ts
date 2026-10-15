@@ -370,3 +370,5 @@ const api = {
 contextBridge.exposeInMainWorld('lkv', api)
 
 export type LkvApi = typeof api
+/** Named export so smokes can exercise the API object directly. */
+export { api }

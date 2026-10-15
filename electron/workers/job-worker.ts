@@ -47,7 +47,10 @@ if (!parentPort) {
 
 initDb(String(workerData.dbPath))
 
-parentPort.on('message', (msg: JobMessage) => {
+parentPort.on('message', (msg: JobMessage & { type?: string }) => {
+  // Graceful shutdown lets this thread's V8 coverage flush (c8/#298) and
+  // commits nothing — jobs are already complete.
+  if (msg.type === 'shutdown') process.exit(0)
   const { jobId, type, payload } = msg
   const progress = emitProgress(type, jobId)
   try {
