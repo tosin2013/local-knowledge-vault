@@ -42,7 +42,13 @@ export default defineConfig({
     tailwindcss(),
     electron({
       main: {
-        entry: 'electron/main.ts',
+        // Two entries: the app itself and the job worker (#298), which
+        // job-worker-client.ts spawns from dist-electron/workers/. Emitting
+        // them in one lib build keeps one watcher and one app restart (#314).
+        entry: {
+          main: 'electron/main.ts',
+          'workers/job-worker': 'electron/workers/job-worker.ts',
+        },
         vite: {
           build: {
             outDir: 'dist-electron',

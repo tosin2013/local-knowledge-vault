@@ -86,6 +86,15 @@ async function main(): Promise<void> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-298-'))
   const dbPath = path.join(dir, 'vault.sqlite')
 
+  // Regression guard for #314: the electron build must emit the worker file
+  // the app spawns (dist-electron/workers/job-worker.js). The smoke otherwise
+  // runs the TS source through tsx, so a missing emit was invisible to CI.
+  const builtWorker = path.join(__dirname, '..', 'dist-electron', 'workers', 'job-worker.js')
+  assert(
+    fs.existsSync(builtWorker),
+    'the electron build emitted dist-electron/workers/job-worker.js (run `npm run build` if missing)'
+  )
+
   // Main thread owns the first connection (#292 startup order).
   db.initDb(dbPath)
 

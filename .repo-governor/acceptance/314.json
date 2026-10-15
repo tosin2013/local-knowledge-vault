@@ -1,0 +1,8 @@
+{
+  "$comment": "Issue #314: the electron build must emit dist-electron/workers/job-worker.js so runJob callers (book/markdown import, enrollment) can spawn it in dev and packaged builds. test:job-worker asserts the emitted file exists — a check that fails against the pre-#314 build (verified before implementation). `npm run build` is deliberately not a criterion: vite-plugin-electron launches Electron after building, which hangs the engine.",
+  "authority_id": "314",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run test:job-worker" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}
