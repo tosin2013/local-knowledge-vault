@@ -311,6 +311,30 @@ async function main(): Promise<void> {
   })
   assert(withPrompt.messages.length >= 2, 'send with promptId still persists turns')
 
+  // --- Stale session (#315): a deleted session must surface the recognizable
+  // --- error, never a raw FOREIGN KEY constraint failure.
+  console.log('\nStale session (#315)')
+  const deadSes = createSession()
+  assert(deleteSession(deadSes.id), 'stale session deleted')
+  let staleErr: Error | null = null
+  try {
+    await sendChatTurn({ sessionId: deadSes.id, text: 'hello again', filters: {}, limit: 5 })
+  } catch (e) {
+    staleErr = e as Error
+  }
+  assert(
+    !!staleErr && /Session not found/.test(staleErr.message),
+    `send to a deleted session throws the stale-session error (got ${staleErr?.message ?? 'no error'})`
+  )
+  assert(
+    !/FOREIGN KEY|SQLITE/i.test(staleErr?.message ?? ''),
+    'the error is the friendly one, not a raw constraint error'
+  )
+  assert(
+    !getSession(deadSes.id) && listMessages(deadSes.id).length === 0,
+    'a rejected stale send leaves no orphan rows'
+  )
+
   // --- LLM settings merge + key file ---
   console.log('\nLLM settings')
   const llmTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-llm-'))

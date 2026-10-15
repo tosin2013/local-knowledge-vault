@@ -1,0 +1,9 @@
+{
+  "$comment": "Issue #315: a chat send against a deleted/stale session must surface the recognizable 'Session not found' error and self-heal in the renderer, never a raw FOREIGN KEY constraint failure. The renderer recovery tests fail against the pre-#315 code (verified before implementation).",
+  "authority_id": "315",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run test:mvp" },
+    { "check": "command_exit", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

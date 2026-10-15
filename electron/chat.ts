@@ -189,6 +189,13 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     hitList: SearchHit[],
     extra?: { offline?: boolean; error?: string; provider?: AnswerProvider; uncited?: boolean }
   ): ChatSendResult => {
+    // The session can be deleted while the model is composing (Manage chats,
+    // or a second window on the same profile). Re-check before appending so
+    // the learner sees the recognizable stale-session error instead of a raw
+    // FOREIGN KEY constraint failure (#315).
+    if (!getSession(session.id)) {
+      throw new Error('Session not found: this chat was deleted while the answer was being composed')
+    }
     const assistant = appendMessage({
       session_id: session.id,
       role: 'assistant',
