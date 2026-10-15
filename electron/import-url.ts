@@ -483,13 +483,19 @@ async function autoTag(
 /**
  * Fetch URL → extract → auto-tag → createItem.
  * Does not log secrets. Stores URL provenance in body only (no schema change).
+ * An explicit `project` (chosen in the import project picker, #276) wins over
+ * the auto-tagged / hostname-derived project; omit it for the old behaviour.
  */
-export async function importFromUrl(rawUrl: string): Promise<ImportFromUrlResult> {
+export async function importFromUrl(
+  rawUrl: string,
+  project?: string | null,
+): Promise<ImportFromUrlResult> {
   const allowed = isAllowedUrl(rawUrl)
   if (!allowed.ok) {
     throw new Error(allowed.error)
   }
   const startUrl = allowed.url.href
+  const explicitProject = project?.trim() || null
 
   const { html, finalUrl } = await fetchPageHtml(startUrl)
   const extracted = extractFromHtml(html)
@@ -508,7 +514,7 @@ export async function importFromUrl(rawUrl: string): Promise<ImportFromUrlResult
     para: tags.para,
     kind: tags.kind,
     status: tags.status,
-    project: tags.project,
+    project: explicitProject ?? tags.project,
   })
 
   return { item, tagsSource, warning }

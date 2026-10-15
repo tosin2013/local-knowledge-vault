@@ -3,7 +3,7 @@ import { Box, CssBaseline, Paper, ThemeProvider, Typography } from '@mui/materia
 import { listPlugins } from './plugins/registry'
 import { ProviderDialog } from './components/ai/ProviderDialog'
 import { aiChipLabel } from './components/ai/FirstRunLocalCard'
-import { personalityDisplayName, AI_DRAFT_STATUS, provenanceHeader, type Mode } from './domain'
+import { personalityDisplayName, AI_DRAFT_STATUS, provenanceHeader, type ImportStatusAction, type Mode } from './domain'
 import type { Citation, ProviderConfig } from '../electron/types'
 import { useUi } from './hooks/useUi'
 import { useProviders } from './hooks/useProviders'
@@ -32,9 +32,18 @@ export default function App() {
   const [pluginsMenuAnchor, setPluginsMenuAnchor] = useState<null | HTMLElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [statusMsg, setStatusMsgState] = useState<string | null>(null)
+  // Post-import "Move N notes" offer (#276); rendered inside the status toast.
+  const [statusAction, setStatusAction] = useState<ImportStatusAction | null>(null)
   const [manageProjectsOpen, setManageProjectsOpen] = useState(false)
   const [trashOpen, setTrashOpen] = useState(false)
+
+  // One stable status setter for every caller (notes/chat hooks, job progress):
+  // clearing the status line also clears a stale move offer (#276).
+  const setStatusMsg = useCallback((msg: string | null) => {
+    setStatusMsgState(msg)
+    if (!msg) setStatusAction(null)
+  }, [])
 
   // Focus targets for the app menu / keyboard shortcuts (⌘F search, ⌘K ask).
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -51,6 +60,7 @@ export default function App() {
     setBusy,
     setError,
     setStatusMsg,
+    setStatusAction,
     advanced: ui.advanced,
     setMode,
   })
@@ -233,6 +243,23 @@ export default function App() {
   const handleImport = useCallback(() => void notes.onImportFromUrl(), [notes.onImportFromUrl])
   const handleImportMarkdown = useCallback(() => void notes.onImportMarkdown(), [notes.onImportMarkdown])
   const handleImportBook = useCallback(() => void notes.onImportBook(), [notes.onImportBook])
+  const handleImportProject = useCallback(
+    (project: string) => notes.setImportProject(project),
+    [notes.setImportProject],
+  )
+  const handleBulkMove = useCallback(
+    (project: string) => void notes.bulkMove(project),
+    [notes.bulkMove],
+  )
+  // The toast's Move button (the move itself already happened in MoveNotesAction).
+  const handleMoveNotes = useCallback(
+    (project: string, count: number) => {
+      setStatusMsg(`Moved ${count} note${count === 1 ? '' : 's'} to "${project}"`)
+      void notes.refreshList()
+      void notes.refreshProjects()
+    },
+    [notes.refreshList, notes.refreshProjects, setStatusMsg],
+  )
   const handleToggleMode = useCallback(
     (v: Mode) => {
       setActivePluginId(null)
@@ -382,6 +409,7 @@ export default function App() {
             filterSummary={notes.filterSummary}
             filtersOpen={notes.filtersOpen}
             importUrl={notes.importUrl}
+            importProject={notes.importProject}
             importBusy={notes.importBusy}
             importMarkdownBusy={notes.importMarkdownBusy}
             importBookBusy={notes.importBookBusy}
@@ -392,6 +420,7 @@ export default function App() {
             onNewNote={notes.onNewNote}
             onNewProject={notes.onNewProject}
             onImportUrl={notes.setImportUrl}
+            onImportProject={handleImportProject}
             onImport={handleImport}
             onImportMarkdown={handleImportMarkdown}
             onImportBook={handleImportBook}
@@ -407,6 +436,7 @@ export default function App() {
             bulkSelected={notes.bulkSelected}
             onToggleBulk={notes.toggleBulkSelect}
             onBulkTrash={handleBulkTrash}
+            onBulkMove={handleBulkMove}
             onFilters={notes.setFilters}
             onFiltersOpen={notes.setFiltersOpen}
             onSelect={notes.selectItem}
@@ -421,6 +451,8 @@ export default function App() {
               mode={mode}
               activePluginId={activePluginId}
               statusMsg={statusMsg}
+              statusAction={statusAction}
+              onMoveNotes={handleMoveNotes}
               error={error}
               onToggleMode={handleToggleMode}
               onClearPlugin={handleClearPlugin}

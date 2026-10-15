@@ -262,13 +262,19 @@ export interface ImportProgress {
  * holds a write lock for its whole duration, #298); `onProgress`, when given,
  * fires after each batch. Returns counts and per-file errors; never throws on
  * an unreadable file.
+ *
+ * An explicit `project` (chosen in the import project picker, #276) puts every
+ * imported note in that project, overriding frontmatter / folder derivation;
+ * omit it to keep resolving each note's project from its own metadata.
  */
 export function importMarkdownFolder(
   dir: string,
   onProgress?: (progress: ImportProgress) => void,
+  project?: string | null,
 ): MarkdownImportResult {
   const root = path.resolve(dir)
   const rootName = path.basename(root)
+  const explicitProject = project?.trim() || null
   const files = listMarkdownFiles(root)
   const errors: string[] = []
   const itemIds: string[] = []
@@ -310,7 +316,7 @@ export function importMarkdownFolder(
           para: parsed.para,
           kind: parsed.kind,
           status: parsed.status,
-          project: parsed.project,
+          project: explicitProject ?? parsed.project,
         })
         itemIds.push(item.id)
         imported++

@@ -1,8 +1,9 @@
 import { memo } from 'react'
 import { Alert, Box, Chip, IconButton, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
-import type { Mode } from '../domain'
+import type { ImportStatusAction, Mode } from '../domain'
 import { getPlugin } from '../plugins/registry'
+import { MoveNotesAction } from './MoveNotesAction'
 
 /** The three primary tabs, in display order: Ask → Find → Study. */
 export type PrimaryMode = 'chat' | 'search' | 'study'
@@ -17,6 +18,9 @@ export interface ContentChromeProps {
   mode: Mode
   activePluginId: string | null
   statusMsg: string | null
+  /** Post-import "Move N notes" offer rendered under the status message (#276). */
+  statusAction?: ImportStatusAction | null
+  onMoveNotes?: (project: string, count: number) => void
   error: string | null
   onToggleMode: (v: PrimaryMode) => void
   onClearPlugin: () => void
@@ -32,6 +36,8 @@ export const ContentChrome = memo(function ContentChrome(props: ContentChromePro
     mode,
     activePluginId,
     statusMsg,
+    statusAction,
+    onMoveNotes,
     error,
     onToggleMode,
     onClearPlugin,
@@ -87,6 +93,11 @@ export const ContentChrome = memo(function ContentChrome(props: ContentChromePro
             }
           >
             {statusMsg}
+            {/* After an auto-project import, offer to move the new notes
+                into a project without re-importing (#276). */}
+            {statusAction && onMoveNotes && statusAction.itemIds.length > 0 && (
+              <MoveNotesAction itemIds={statusAction.itemIds} onMoved={onMoveNotes} />
+            )}
           </Alert>
         </Box>
       )}

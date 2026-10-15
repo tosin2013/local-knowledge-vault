@@ -497,12 +497,17 @@ export async function parseEpub(buf: Buffer, fileName: string): Promise<ParsedBo
   return { title, chapters }
 }
 
-function importEpub(fileName: string, buf: Buffer): Promise<BookImportResult> {
+function importEpub(
+  fileName: string,
+  buf: Buffer,
+  explicitProject: string | null,
+): Promise<BookImportResult> {
   return parseEpub(buf, fileName)
     .then(({ title, chapters }) => {
       const itemIds: string[] = []
       let imported = 0
       let skipped = 0
+      const project = explicitProject ?? title
       runInTransaction(() => {
         for (const chapter of chapters) {
           if (!chapter.text) {
@@ -518,14 +523,14 @@ function importEpub(fileName: string, buf: Buffer): Promise<BookImportResult> {
               para: 'resources',
               kind: 'book',
               status: 'active',
-              project: title,
+              project,
             })
             itemIds.push(item.id)
             imported++
           })
         }
       })
-      return { format: 'epub' as const, project: title, imported, skipped, itemIds, errors: [] }
+      return { format: 'epub' as const, project, imported, skipped, itemIds, errors: [] }
     })
     .catch((e) => ({
       format: 'epub' as const,
@@ -561,7 +566,11 @@ export async function pdfText(buf: Buffer): Promise<string> {
   }
 }
 
-async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResult> {
+async function importPdf(
+  fileName: string,
+  buf: Buffer,
+  explicitProject: string | null,
+): Promise<BookImportResult> {
   let destroy: (() => Promise<void>) | null = null
   try {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
@@ -620,7 +629,7 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
           para: 'resources',
           kind: 'book',
           status: 'active',
-          project: title,
+          project: explicitProject ?? title,
         })
         itemIds.push(item.id)
         imported++
@@ -628,7 +637,7 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
     })
     return {
       format: 'pdf',
-      project: title,
+      project: explicitProject ?? title,
       imported,
       skipped,
       emptyPages,
@@ -656,10 +665,16 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
   }
 }
 
-/** Detect the format from `filePath`, read it and import its notes. */
+/** Detect the format from `filePath`, read it and import its notes.
+ *
+ * An explicit `project` (chosen in the import project picker, #276) puts every
+ * imported note in that project instead of the book/PDF title; omit it to keep
+ * deriving the project from the file.
+ */
 export async function importBookFromPath(
   filePath: string,
   onProgress?: (progress: { done: number; total: number; label: string }) => void,
+  project?: string | null,
 ): Promise<BookImportResult> {
   const fileName = path.basename(filePath)
   const format = detectBookFormat(fileName)
@@ -676,5 +691,8 @@ export async function importBookFromPath(
   }
 
   onProgress?.({ done: 2, total: 3, label: `Parsing ${fileName}` })
-  return format === 'epub' ? importEpub(fileName, buf) : importPdf(fileName, buf)
+  const explicitProject = project?.trim() || null
+  return format === 'epub'
+    ? importEpub(fileName, buf, explicitProject)
+    : importPdf(fileName, buf, explicitProject)
 }

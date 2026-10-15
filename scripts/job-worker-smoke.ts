@@ -149,6 +149,14 @@ async function main(): Promise<void> {
   console.log('main-thread visibility (WAL)')
   assert(db.countItems() >= NOTE_COUNT, `the main connection sees the imported notes immediately (${db.countItems()} counted)`)
 
+  console.log('project payload threading (#276)')
+  const mdDir3 = path.join(dir, 'notes-pinned')
+  writeMarkdownVault(mdDir3)
+  const pinned = (await runJob<import('../electron/types').MarkdownImportResult>('import-markdown', { dir: mdDir3, project: 'WorkerPinned' }))
+  assert(pinned.imported === FILE_COUNT, `the pinned-project run imported all files (${pinned.imported})`)
+  const pinnedItems = db.listItemsByProjectExact('WorkerPinned')
+  assert(pinnedItems.length === FILE_COUNT, `every worker-imported note landed in the pinned project (${pinnedItems.length})`)
+
   console.log('enrollment in the worker')
   const enrollProgressEvents: Array<{ done: number; total: number; label: string }> = []
   const enrollResult = (await runJob<import('../electron/types').EnrollProjectResult>('enroll-project', { project: 'Bulk', pairs: true }, (p) => enrollProgressEvents.push(p)))

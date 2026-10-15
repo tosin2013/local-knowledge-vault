@@ -72,6 +72,50 @@ describe('MediaChatView', () => {
     await waitFor(() => expect(lkv.media.ingestLocal).toHaveBeenCalled())
   })
 
+  it('defaults the ingest project to the last used import project (#276)', async () => {
+    const lkv = seedMedia()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 0 }])
+    window.localStorage.setItem('lkv.import.project', 'Biology')
+    render(<MediaChatView />)
+    expect(await screen.findByRole('combobox', { name: 'Project' })).toHaveTextContent('Biology')
+  })
+
+  it('ingests a YouTube URL into the chosen project (#276)', async () => {
+    const lkv = seedMedia()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 0 }])
+    render(<MediaChatView />)
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Biology' }))
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    await screen.findByText(/Ingested 10 transcript notes/)
+    expect(window.lkv.media.ingestYoutube).toHaveBeenCalledWith({
+      url: 'https://youtube.com/watch?v=abc123',
+      project: 'Biology',
+    })
+  })
+
+  it('offers to move ingested notes when "Use file name" was kept (#276)', async () => {
+    const lkv = seedMedia()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 0 }])
+    render(<MediaChatView />)
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    await screen.findByText(/Ingested 10 transcript notes/)
+    // The status toast carries a move offer for the fresh transcript notes.
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Move to project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Biology' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move 1 note' }))
+    await waitFor(() =>
+      expect(window.lkv.items.update).toHaveBeenCalledWith('itm_1', { project: 'Biology' }),
+    )
+    expect(await screen.findByText(/Moved 1 transcript note to "Biology"/)).toBeInTheDocument()
+  })
+
   it('errors when local ingest lacks captions', async () => {
     const lkv = seedMedia()
     lkv.media.pickLocal.mockResolvedValue({ canceled: false, mediaPath: '/tmp/video.mp4' })

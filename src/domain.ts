@@ -19,6 +19,40 @@ export const UI_MODE_KEY = 'lkv.uiMode'
 export const THEME_KEY = 'lkv.theme'
 export const LAST_PROFILE_KEY = 'lkv.lastProfile'
 
+/** localStorage key for the last project an import was filed into (#276). */
+export const IMPORT_PROJECT_KEY = 'lkv.import.project'
+
+/** Read the last project an import was filed into ('' = derive from source). */
+export function loadImportProject(): string {
+  try {
+    return window.localStorage?.getItem(IMPORT_PROJECT_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** Remember the project an import was filed into ('' = derive from source). */
+export function saveImportProject(project: string): void {
+  try {
+    if (project) window.localStorage?.setItem(IMPORT_PROJECT_KEY, project)
+    else window.localStorage?.removeItem(IMPORT_PROJECT_KEY)
+  } catch {
+    /* storage unavailable: the choice lasts for this session only */
+  }
+}
+
+/**
+ * Offer shown after an import that ran on "Use file/folder name" (or that the
+ * main process filed somewhere other than the chosen project): lets the
+ * learner move the freshly imported notes into a project without re-importing
+ * (#276).
+ */
+export interface ImportStatusAction {
+  /** Notes from this import that can be moved in one go. */
+  itemIds: string[]
+  count: number
+}
+
 /** Built-in chat profiles: Personality + Project (+ optional bind). */
 export type BuiltinChatProfileId = 'grounded-helper' | 'gorgias'
 /** Builtins, Custom, or a user profile id (`prf_…`). */

@@ -1,0 +1,14 @@
+{
+  "$comment": "Issue #276: a project chooser on every import path, with last-used/Study defaults, a post-import move toast and a bulk move action. Each command runs a suite whose new assertions exercise exactly that behaviour and fail against the pre-#276 code (verified before implementation).",
+  "authority_id": "276",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run test:url-import" },
+    { "check": "command_exit", "target": "npm run test:markdown-import" },
+    { "check": "command_exit", "target": "npm run test:books" },
+    { "check": "command_exit", "target": "npm run test:media-ingest" },
+    { "check": "command_exit", "target": "npm run test:practice-test" },
+    { "check": "command_exit", "target": "npm run test:job-worker" },
+    { "check": "command_exit", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

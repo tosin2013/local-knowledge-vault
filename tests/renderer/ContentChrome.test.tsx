@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ContentChrome, type ContentChromeProps } from '../../src/features/ContentChrome'
+import { lkvMock } from './lkv'
 
 function makeProps(overrides: Partial<ContentChromeProps> = {}): ContentChromeProps {
   return {
@@ -88,5 +89,31 @@ describe('ContentChrome', () => {
   it('shows an unknown-plugin warning for a bogus plugin id', () => {
     render(<ContentChrome {...makeProps({ activePluginId: 'does-not-exist' })} />)
     expect(screen.getByText('Unknown plugin')).toBeInTheDocument()
+  })
+
+  it('offers to move freshly imported notes from the status toast (#276)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Bio', count: 2 }])
+    const props = makeProps({
+      statusMsg: 'Imported 2 Markdown notes',
+      statusAction: { itemIds: ['itm_1', 'itm_2'], count: 2 },
+      onMoveNotes: vi.fn(),
+    })
+    render(<ContentChrome {...props} />)
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Move to project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Bio' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move 2 notes' }))
+    await waitFor(() =>
+      expect(window.lkv.items.update).toHaveBeenCalledWith('itm_1', { project: 'Bio' }),
+    )
+    await waitFor(() =>
+      expect(window.lkv.items.update).toHaveBeenCalledWith('itm_2', { project: 'Bio' }),
+    )
+    await waitFor(() => expect(props.onMoveNotes).toHaveBeenCalledWith('Bio', 2))
+  })
+
+  it('renders no move offer without a status action', () => {
+    render(<ContentChrome {...makeProps({ statusMsg: 'Imported' })} />)
+    expect(screen.queryByRole('combobox', { name: 'Move to project' })).not.toBeInTheDocument()
   })
 })

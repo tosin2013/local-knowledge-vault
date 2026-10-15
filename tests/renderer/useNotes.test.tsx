@@ -1,13 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useNotes, type UseNotesDeps } from '../../src/hooks/useNotes'
-import { lkvMock, makeHit, makeImportResult, makeItem } from './lkv'
+import { lkvMock, makeHit, makeImportResult, makeItem, makeMarkdownImportResult } from './lkv'
 
 function makeDeps(overrides: Partial<UseNotesDeps> = {}): UseNotesDeps {
   return {
     setBusy: vi.fn(),
     setError: vi.fn(),
     setStatusMsg: vi.fn(),
+    setStatusAction: vi.fn(),
     advanced: false,
     setMode: vi.fn(),
     ...overrides,
@@ -15,6 +16,11 @@ function makeDeps(overrides: Partial<UseNotesDeps> = {}): UseNotesDeps {
 }
 
 describe('useNotes', () => {
+  beforeEach(() => {
+    // Import-project choice persists in localStorage; keep tests independent.
+    window.localStorage.clear()
+  })
+
   it('refreshes the list', async () => {
     const lkv = lkvMock()
     lkv.items.list.mockResolvedValue([makeItem('itm_1')])
@@ -98,8 +104,66 @@ describe('useNotes', () => {
     await act(async () => {
       await result.current.onImportFromUrl()
     })
-    expect(lkv.import.fromUrl).toHaveBeenCalledWith('https://example.com/article')
+    expect(lkv.import.fromUrl).toHaveBeenCalledWith('https://example.com/article', undefined)
     expect(deps.setStatusMsg).toHaveBeenCalled()
+  })
+
+  it('pins a URL import to the chosen project (#276)', async () => {
+    const lkv = lkvMock()
+    lkv.import.fromUrl.mockResolvedValue(makeImportResult())
+    const deps = makeDeps()
+    const { result } = renderHook(() => useNotes(deps))
+    act(() => result.current.setImportProject('Biology'))
+    act(() => result.current.setImportUrl('https://example.com/article'))
+    await act(async () => {
+      await result.current.onImportFromUrl()
+    })
+    expect(lkv.import.fromUrl).toHaveBeenCalledWith('https://example.com/article', 'Biology')
+    // An explicitly chosen project lands where it was sent: no move offer.
+    expect(deps.setStatusAction).not.toHaveBeenCalled()
+    // The choice is remembered as the "last project used".
+    expect(window.localStorage.getItem('lkv.import.project')).toBe('Biology')
+  })
+
+  it('offers a move when a URL import ran on "Use file/folder name" (#276)', async () => {
+    const lkv = lkvMock()
+    lkv.import.fromUrl.mockResolvedValue(makeImportResult())
+    const deps = makeDeps()
+    const { result } = renderHook(() => useNotes(deps))
+    act(() => result.current.setImportUrl('https://example.com/article'))
+    await act(async () => {
+      await result.current.onImportFromUrl()
+    })
+    expect(deps.setStatusAction).toHaveBeenCalledWith({ itemIds: ['itm_imported'], count: 1 })
+  })
+
+  it('passes the chosen project to Markdown and book imports (#276)', async () => {
+    const lkv = lkvMock()
+    lkv.import.fromMarkdown.mockResolvedValue(makeMarkdownImportResult())
+    lkv.import.fromBook.mockResolvedValue({ imported: 1, skipped: 0, itemIds: ['itm_book'], errors: [] })
+    const deps = makeDeps()
+    const { result } = renderHook(() => useNotes(deps))
+    act(() => result.current.setImportProject('Biology'))
+    await act(async () => {
+      await result.current.onImportMarkdown()
+    })
+    await act(async () => {
+      await result.current.onImportBook()
+    })
+    expect(lkv.import.fromMarkdown).toHaveBeenCalledWith('Biology')
+    expect(lkv.import.fromBook).toHaveBeenCalledWith('Biology')
+    expect(deps.setStatusAction).not.toHaveBeenCalled()
+  })
+
+  it('offers a move after an auto Markdown import (#276)', async () => {
+    const lkv = lkvMock()
+    lkv.import.fromMarkdown.mockResolvedValue(makeMarkdownImportResult())
+    const deps = makeDeps()
+    const { result } = renderHook(() => useNotes(deps))
+    await act(async () => {
+      await result.current.onImportMarkdown()
+    })
+    expect(deps.setStatusAction).toHaveBeenCalledWith({ itemIds: ['itm_1', 'itm_2'], count: 2 })
   })
 
   it('rejects an invalid import URL', async () => {
@@ -268,6 +332,23 @@ describe('useNotes', () => {
     expect(lkv.items.trash).toHaveBeenCalledWith('itm_1')
     expect(lkv.items.trash).toHaveBeenCalledWith('itm_2')
     expect(result.current.bulkSelected.size).toBe(0)
+  })
+
+  it('bulk-moves selected notes to a project (#276)', async () => {
+    const lkv = lkvMock()
+    const deps = makeDeps()
+    const { result } = renderHook(() => useNotes(deps))
+    act(() => {
+      result.current.toggleBulkSelect('itm_1')
+      result.current.toggleBulkSelect('itm_2')
+    })
+    await act(async () => {
+      await result.current.bulkMove('Biology')
+    })
+    expect(lkv.items.update).toHaveBeenCalledWith('itm_1', { project: 'Biology' })
+    expect(lkv.items.update).toHaveBeenCalledWith('itm_2', { project: 'Biology' })
+    expect(result.current.bulkSelected.size).toBe(0)
+    expect(deps.setStatusMsg).toHaveBeenCalledWith('Moved 2 notes to "Biology"')
   })
 
   it('restores a trashed note and empties the trash', async () => {

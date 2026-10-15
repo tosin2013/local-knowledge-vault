@@ -3,15 +3,20 @@ import type { AskGroundedResult, Item, ItemFilters, ProjectSummary, SearchHit } 
 import {
   emptyFilters,
   isValidHttpUrl,
+  loadImportProject,
   makeNewDraftItem,
   NEW_DRAFT_ID,
   paraLabel,
+  saveImportProject,
 } from '../domain'
+import type { ImportStatusAction } from '../domain'
 
 export interface UseNotesDeps {
   setBusy: (busy: boolean) => void
   setError: (error: string | null) => void
   setStatusMsg: (msg: string | null) => void
+  /** Sets the post-import "Move N notes" offer; App renders it in the toast (#276). */
+  setStatusAction?: (action: ImportStatusAction | null) => void
   advanced: boolean
   setMode: (mode: 'search' | 'chat' | 'prompts') => void
 }
@@ -26,7 +31,7 @@ export interface UseNotesDeps {
  * `searchText`; one in the Ask composer only `chatInput`.
  */
 export function useNotes(deps: UseNotesDeps) {
-  const { setBusy, setError, setStatusMsg, advanced, setMode } = deps
+  const { setBusy, setError, setStatusMsg, setStatusAction, advanced, setMode } = deps
 
   const [items, setItems] = useState<Item[]>([])
   const [filters, setFilters] = useState<ItemFilters>(emptyFilters)
@@ -42,6 +47,9 @@ export function useNotes(deps: UseNotesDeps) {
   const [hits, setHits] = useState<SearchHit[]>([])
   const [askResult, setAskResult] = useState<AskGroundedResult | null>(null)
   const [importUrl, setImportUrl] = useState('')
+  // Target project for the next import ('' = "Use file/folder name", #276).
+  // Defaults to the last project an import was filed into.
+  const [importProject, setImportProjectState] = useState<string>(loadImportProject)
   const [importBusy, setImportBusy] = useState(false)
   const [importMarkdownBusy, setImportMarkdownBusy] = useState(false)
   const [importBookBusy, setImportBookBusy] = useState(false)
@@ -239,6 +247,12 @@ export function useNotes(deps: UseNotesDeps) {
     [openPrefilledDraft],
   )
 
+  /** Pick the target project for the next import; remembered as "last used" (#276). */
+  const setImportProject = useCallback((project: string) => {
+    setImportProjectState(project)
+    saveImportProject(project)
+  }, [])
+
   const onImportFromUrl = useCallback(async () => {
     if (!window.lkv?.import?.fromUrl) return
     const url = importUrl.trim()
@@ -250,7 +264,7 @@ export function useNotes(deps: UseNotesDeps) {
     setError(null)
     setStatusMsg(null)
     try {
-      const res = await window.lkv.import.fromUrl(url)
+      const res = await window.lkv.import.fromUrl(url, importProject || undefined)
       setImportUrl('')
       await refreshList()
       void refreshProjects()
@@ -258,6 +272,11 @@ export function useNotes(deps: UseNotesDeps) {
       const para = paraLabel(res.item.para)
       const kind = res.item.kind || 'article'
       setStatusMsg(`Imported · tagged as ${para} / ${kind}`)
+      // On "Use file/folder name" the note landed wherever the auto-tag put
+      // it — offer a one-click move into a project (#276).
+      if (!importProject) {
+        setStatusAction?.({ itemIds: [res.item.id], count: 1 })
+      }
       if (res.warning && advanced) {
         setError(res.warning)
       }
@@ -270,7 +289,17 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setImportBusy(false)
     }
-  }, [importUrl, advanced, refreshList, refreshProjects, selectItem, setError, setStatusMsg])
+  }, [
+    importUrl,
+    importProject,
+    advanced,
+    refreshList,
+    refreshProjects,
+    selectItem,
+    setError,
+    setStatusMsg,
+    setStatusAction,
+  ])
 
   /** Import Markdown / Obsidian notes from a folder chosen in a native dialog. */
   const onImportMarkdown = useCallback(async () => {
@@ -279,13 +308,16 @@ export function useNotes(deps: UseNotesDeps) {
     setError(null)
     setStatusMsg(null)
     try {
-      const res = await window.lkv.import.fromMarkdown()
+      const res = await window.lkv.import.fromMarkdown(importProject || undefined)
       if (res.canceled) return
       await refreshList()
       void refreshProjects()
       if (res.imported > 0) {
         const skipped = res.skipped > 0 ? ` · ${res.skipped} skipped` : ''
         setStatusMsg(`Imported ${res.imported} Markdown note${res.imported === 1 ? '' : 's'}${skipped}`)
+        if (!importProject && res.itemIds.length > 0) {
+          setStatusAction?.({ itemIds: res.itemIds, count: res.imported })
+        }
       } else {
         setStatusMsg('No Markdown notes found to import.')
       }
@@ -298,7 +330,7 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setImportMarkdownBusy(false)
     }
-  }, [advanced, refreshList, refreshProjects, setError, setStatusMsg])
+  }, [advanced, importProject, refreshList, refreshProjects, setError, setStatusMsg, setStatusAction])
 
   /** Import a local EPUB / text-layer PDF as book notes (native file picker). */
   const onImportBook = useCallback(async () => {
@@ -307,7 +339,7 @@ export function useNotes(deps: UseNotesDeps) {
     setError(null)
     setStatusMsg(null)
     try {
-      const res = await window.lkv.import.fromBook()
+      const res = await window.lkv.import.fromBook(importProject || undefined)
       if (res.canceled) return
       await refreshList()
       void refreshProjects()
@@ -317,6 +349,9 @@ export function useNotes(deps: UseNotesDeps) {
         setStatusMsg(
           `Imported ${res.imported} note${res.imported === 1 ? '' : 's'} from ${project}${skipped}`,
         )
+        if (!importProject && res.itemIds.length > 0) {
+          setStatusAction?.({ itemIds: res.itemIds, count: res.imported })
+        }
       } else {
         setStatusMsg(`No readable text found in ${project}.`)
       }
@@ -335,7 +370,7 @@ export function useNotes(deps: UseNotesDeps) {
     } finally {
       setImportBookBusy(false)
     }
-  }, [advanced, refreshList, refreshProjects, setError, setStatusMsg])
+  }, [advanced, importProject, refreshList, refreshProjects, setError, setStatusMsg, setStatusAction])
 
   const onSave = useCallback(async () => {
     if (!window.lkv || !draft) return
@@ -504,6 +539,24 @@ export function useNotes(deps: UseNotesDeps) {
     void refreshTrashed()
   }, [bulkSelected, refreshList, refreshProjects, refreshTrashed])
 
+  /** Re-file every selected note into `project` (bulk "Move to project", #276). */
+  const bulkMove = useCallback(
+    async (project: string) => {
+      const target = project.trim()
+      if (!window.lkv?.items?.update || !target || bulkSelected.size === 0) return
+      for (const id of bulkSelected) {
+        await window.lkv.items.update(id, { project: target })
+      }
+      setStatusMsg(
+        `Moved ${bulkSelected.size} note${bulkSelected.size === 1 ? '' : 's'} to "${target}"`,
+      )
+      setBulkSelected(new Set())
+      await refreshList()
+      void refreshProjects()
+    },
+    [bulkSelected, refreshList, refreshProjects, setStatusMsg],
+  )
+
   /** Restore a trashed note. */
   const restoreItem = useCallback(
     async (id: string) => {
@@ -647,6 +700,8 @@ export function useNotes(deps: UseNotesDeps) {
     askResult,
     importUrl,
     setImportUrl,
+    importProject,
+    setImportProject,
     importBusy,
     importMarkdownBusy,
     importBookBusy,
@@ -677,6 +732,7 @@ export function useNotes(deps: UseNotesDeps) {
     bulkSelected,
     toggleBulkSelect,
     bulkTrash,
+    bulkMove,
     restoreItem,
     emptyTrash,
     renameProject,

@@ -32,6 +32,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import SearchIcon from '@mui/icons-material/Search'
 import type { Item, ItemFilters, Para } from '../../electron/types'
 import { isValidHttpUrl, KIND_OPTIONS, PARA_OPTIONS, paraLabel, STATUS_OPTIONS } from '../domain'
+import { ProjectSelect } from './ProjectSelect'
 
 export interface NotesRailProps {
   advanced: boolean
@@ -44,6 +45,8 @@ export interface NotesRailProps {
   filterSummary: string
   filtersOpen: boolean
   importUrl: string
+  /** Target project for the next import ('' = "Use file/folder name", #276). */
+  importProject: string
   importBusy: boolean
   importMarkdownBusy: boolean
   importBookBusy: boolean
@@ -54,6 +57,7 @@ export interface NotesRailProps {
   onNewNote: () => void
   onNewProject: (name: string) => void
   onImportUrl: (v: string) => void
+  onImportProject: (project: string) => void
   onImport: () => void
   onImportMarkdown: () => void
   onImportBook: () => void
@@ -69,6 +73,8 @@ export interface NotesRailProps {
   bulkSelected: Set<string>
   onToggleBulk: (id: string) => void
   onBulkTrash: () => void
+  /** Re-file every selected note into the given project (#276). */
+  onBulkMove: (project: string) => void
   onFilters: Dispatch<SetStateAction<ItemFilters>>
   onFiltersOpen: (open: boolean) => void
   onSelect: (id: string, opts?: { edit?: boolean }) => void
@@ -187,6 +193,7 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
     filterSummary,
     filtersOpen,
     importUrl,
+    importProject,
     importBusy,
     importMarkdownBusy,
     importBookBusy,
@@ -197,6 +204,7 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
     onNewNote,
     onNewProject,
     onImportUrl,
+    onImportProject,
     onImport,
     onImportMarkdown,
     onImportBook,
@@ -212,6 +220,7 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
     bulkSelected,
     onToggleBulk,
     onBulkTrash,
+    onBulkMove,
     onFilters,
     onFiltersOpen,
     onSelect,
@@ -219,6 +228,8 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
 
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  // Target project for the rail's bulk "Move to project" action (#276).
+  const [bulkMoveTarget, setBulkMoveTarget] = useState('')
   // How many of `items` are in the DOM right now (#294).
   const [shownCount, setShownCount] = useState(INITIAL_NOTES_SHOWN)
   const listRef = useRef<HTMLDivElement | null>(null)
@@ -310,6 +321,17 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
           </Stack>
         )}
 
+        {/* #276: every rail import files into this project; the default
+            ("Use file/folder name") keeps deriving it from the source. The
+            rail's own project list feeds the picker (no second fetch). */}
+        <ProjectSelect
+          value={importProject}
+          onChange={onImportProject}
+          label="Import into project"
+          allLabel="Use file/folder name"
+          projects={projectOptions.map((name) => ({ name }))}
+        />
+
         <Button
           fullWidth
           variant="outlined"
@@ -346,16 +368,39 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
         )}
 
         {bulkSelected.size > 0 ? (
-          <Button
-            fullWidth
-            size="small"
-            color="error"
-            variant="contained"
-            startIcon={<DeleteOutlineIcon />}
-            onClick={onBulkTrash}
-          >
-            Trash {bulkSelected.size} selected
-          </Button>
+          <>
+            <Button
+              fullWidth
+              size="small"
+              color="error"
+              variant="contained"
+              startIcon={<DeleteOutlineIcon />}
+              onClick={onBulkTrash}
+            >
+              Trash {bulkSelected.size} selected
+            </Button>
+            {/* #276: bulk "Move to project" for an existing import. */}
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <ProjectSelect
+                value={bulkMoveTarget}
+                onChange={setBulkMoveTarget}
+                label="Move to project"
+                allLabel="Choose project…"
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={!bulkMoveTarget}
+                onClick={() => {
+                  onBulkMove(bulkMoveTarget)
+                  setBulkMoveTarget('')
+                }}
+                title={`Move ${bulkSelected.size} selected note${bulkSelected.size === 1 ? '' : 's'} to "${bulkMoveTarget || '…'}"`}
+              >
+                Move
+              </Button>
+            </Stack>
+          </>
         ) : (
           <Button
             fullWidth

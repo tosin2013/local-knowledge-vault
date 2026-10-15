@@ -20,6 +20,7 @@ import SaveIcon from '@mui/icons-material/Save'
 import FileOpenIcon from '@mui/icons-material/FileOpen'
 import SchoolIcon from '@mui/icons-material/School'
 import type { VaultPluginRenderProps } from '../../plugins/types'
+import { saveImportProject } from '../../domain'
 import { ProjectSelect } from '../ProjectSelect'
 import { useStudyProject, type StudyProjectProps } from './useStudyProject'
 import type { PracticeTestImportResult, TestToNotesItem, TestToNotesSuggestion } from '../../../electron/types'
@@ -202,6 +203,9 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
         includeCorrect,
         questionTexts: texts,
       })
+      // This import's project becomes the "last used" default for the other
+      // import paths (#276).
+      if (project) saveImportProject(project)
       setImported(res)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
