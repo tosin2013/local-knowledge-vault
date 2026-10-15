@@ -70,6 +70,10 @@ function MockBrowserWindow(opts?: Record<string, unknown>) {
       loadURL: (url: string) => {},
       loadFile: (file: string) => {},
       openDevTools: (opts?: unknown) => {},
+      /** Captures jobs:progress forwarding (#298). */
+      send: (channel: string, payload?: unknown) => {
+        webContentsSent.push({ channel, payload })
+      },
     },
     on: (event: string, listener: () => void) => {
       if (event === 'closed') closeWindow = listener
@@ -82,6 +86,8 @@ function MockBrowserWindow(opts?: Record<string, unknown>) {
 }
 MockBrowserWindow.getAllWindows = () => []
 const mockBrowserWindow = MockBrowserWindow
+/** Everything the (single) window's webContents sent — jobs:progress lands here (#298). */
+const webContentsSent: Array<{ channel: string; payload: unknown }> = []
 
 // Mutable dialog results so tests can exercise the post-dialog (bless/install/export) paths.
 const dialogState = {
@@ -95,11 +101,21 @@ const mockDialog = {
   showSaveDialog: async (opts: unknown) => ({ ...dialogState.save }),
 }
 
+const ipcRendererSent: Array<{ channel: string; listener: (...args: unknown[]) => void }> = []
 const ipcRendererMock = {
   invoke: async (channel: string, ...args: unknown[]) => {
     const handler = ipcHandlers.get(channel)
     if (!handler) return { error: `No handler for ${channel}` }
     return handler({} as Electron.IpcMainInvokeEvent, ...args)
+  },
+  /** jobs:progress and media:ingestProgress subscribe here (#295/#298). */
+  on: (channel: string, listener: (...args: unknown[]) => void) => {
+    ipcRendererSent.push({ channel, listener })
+    return () => {}
+  },
+  removeListener: (channel: string, listener: (...args: unknown[]) => void) => {
+    const i = ipcRendererSent.findIndex((s) => s.listener === listener)
+    if (i >= 0) ipcRendererSent.splice(i, 1)
   },
 }
 
@@ -320,6 +336,54 @@ async function main(): Promise<void> {
   // The rail query passes through the IPC boundary (#295).
   const queried = await ipcRendererMock.invoke('items:list', { query: 'Test' }) as unknown[]
   assert(Array.isArray(queried), 'items:list accepts a rail query')
+
+  // Long jobs run in the worker thread; their progress is forwarded through
+  // main to the renderer's webContents (#298).
+  webContentsSent.length = 0
+  const enrolledProject = (await ipcRendererMock.invoke('review:enqueueProject', 'Vault guide')) as {
+    project: string
+  }
+  assert(enrolledProject.project === 'Vault guide', 'review:enqueueProject runs in the worker')
+  await new Promise((r) => setTimeout(r, 300))
+  assert(
+    webContentsSent.some((s) => s.channel === 'jobs:progress'),
+    'worker progress is forwarded to the renderer'
+  )
+
+  // import:markdown through the worker — the dialog mock hands back a real folder (#298).
+  const mdDir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-ipc-md-')), 'md')
+  fs.mkdirSync(mdDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(mdDir, 'one.md'),
+    '---\ntitle: One\npara: resources\nproject: MdImport\n---\n\nOne body',
+  )
+  fs.writeFileSync(
+    path.join(mdDir, 'two.md'),
+    '---\ntitle: Two\npara: resources\nproject: MdImport\n---\n\nTwo body',
+  )
+  dialogState.open = { canceled: false, filePaths: [mdDir] }
+  const mdImport = (await ipcRendererMock.invoke('import:markdown')) as { imported: number }
+  assert(mdImport.imported === 2, 'import:markdown runs in the worker and imports the folder')
+
+  // import:book through the worker — a corrupt EPUB yields a per-file error, not a crash.
+  const badEpub = path.join(mdDir, 'bad.epub')
+  fs.writeFileSync(badEpub, 'definitely not a zip')
+  dialogState.open = { canceled: false, filePaths: [badEpub] }
+  const bookImport = (await ipcRendererMock.invoke('import:book')) as { errors: string[] }
+  assert(bookImport.errors.length >= 1, 'import:book surfaces parse errors through the worker')
+  // Restore dismissed-dialog state for the later dialog-based tests.
+  dialogState.open = { canceled: true, filePaths: [] }
+
+  // The preload jobs API is callable directly (renderer subscription shape).
+  const { api: preloadApi } = require('../electron/preload') as typeof import('../electron/preload')
+  const seen: unknown[] = []
+  const offJobs = preloadApi.jobs.onJobProgress((p) => seen.push(p))
+  assert(typeof offJobs === 'function', 'jobs.onJobProgress returns an unsubscribe')
+  assert(
+    ipcRendererSent.some((s) => s.channel === 'jobs:progress'),
+    'jobs.onJobProgress subscribes to jobs:progress'
+  )
+  offJobs()
 
   const created = await ipcRendererMock.invoke('items:create', { title: 'Test', body: 'Body', kind: 'note', project: '' }) as { id: string }
   assert(created && typeof created.id === 'string', 'items:create returns item with id')

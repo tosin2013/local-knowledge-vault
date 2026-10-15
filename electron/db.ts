@@ -39,6 +39,10 @@ export function initDb(dbPath: string): Database.Database {
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
+  // Long jobs run in a worker thread with their own connection (#298); a busy
+  // timeout turns rare writer collisions into a short wait instead of
+  // SQLITE_BUSY errors.
+  db.pragma('busy_timeout = 5000')
   // Hot-query tuning (#299): the library defaults are a 2 MB page cache and no
   // memory mapping, so every rail refresh paged a vault that reaches ~150 MB
   // at 5k notes through a tiny cache. 64 MB of page cache plus 256 MB of

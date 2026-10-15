@@ -131,6 +131,14 @@ export interface ListItemsInput {
   query?: string
 }
 
+/** Long-job progress, streamed from the job worker to the renderer (#298). */
+export interface JobProgressEvent {
+  job: 'import-markdown' | 'import-book' | 'enroll-project'
+  done: number
+  total: number
+  label: string
+}
+
 /* ---- Chat sessions / messages ---- */
 
 export type ChatMode = 'grounded' | 'brainstorm'

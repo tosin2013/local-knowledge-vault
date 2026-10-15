@@ -606,6 +606,9 @@ export function createLkvMock(): LkvMock {
       onIngestProgress: vi.fn().mockReturnValue(() => {}),
       cancelIngest: vi.fn().mockResolvedValue(true),
     },
+    jobs: {
+      onJobProgress: vi.fn().mockReturnValue(() => {}),
+    },
     mcp: {
       listServers: vi.fn().mockResolvedValue([]),
       addServer: vi.fn().mockImplementation((input: { name: string; url: string }) =>

@@ -585,7 +585,11 @@ export type EnrollProjectResult = StudyEnrollResult
  * unit. Idempotent: notes that already have cards are counted, not touched.
  * Trashed notes are ignored; skipped notes come back with a reason.
  */
-export function enrollProject(project: string, options: CreateNoteCardsOptions = {}): EnrollProjectResult {
+export function enrollProject(
+  project: string,
+  options: CreateNoteCardsOptions = {},
+  onProgress?: (progress: { done: number; total: number; label: string }) => void,
+): EnrollProjectResult {
   const name = (project ?? '').trim()
   if (!name) throw new Error('Pick a project to study')
   const database = getDb()
@@ -618,10 +622,15 @@ export function enrollProject(project: string, options: CreateNoteCardsOptions =
     pairCards: 0,
   }
   const pairsOn = options.pairs !== false
-  database.transaction(() => {
-    for (const row of rows) {
-      // A practice test's cards are its own; it is never enrolled as a note.
-      if (row.kind === 'practice-test') {
+  // Cards are committed in batches so progress can be reported between them
+  // and a long enrollment never holds the write lock end-to-end (#298).
+  const BATCH = 200
+  for (let start = 0; start < rows.length; start += BATCH) {
+    const batch = rows.slice(start, start + BATCH)
+    database.transaction(() => {
+      for (const row of batch) {
+        // A practice test's cards are its own; it is never enrolled as a note.
+        if (row.kind === 'practice-test') {
         result.skipped.push({ itemId: row.id, title: row.title, reason: PRACTICE_TEST_SKIP })
         continue
       }
@@ -654,6 +663,12 @@ export function enrollProject(project: string, options: CreateNoteCardsOptions =
         result.pairCards += pairCards
       }
     }
-  })()
+    })()
+    onProgress?.({
+      done: Math.min(start + BATCH, rows.length),
+      total: rows.length,
+      label: 'Enrolling notes',
+    })
+  }
   return result
 }

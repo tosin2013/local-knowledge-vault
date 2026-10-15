@@ -17,6 +17,7 @@ import type {
   CreateItemInput,
   MediaIngestLocalInput,
   MediaIngestProgress,
+  JobProgressEvent,
   MediaIngestResult,
   MediaIngestYoutubeInput,
   MediaNotesNearInput,
@@ -324,6 +325,15 @@ const api = {
     },
     cancelIngest: (): Promise<boolean> => ipcRenderer.invoke('media:cancelIngest'),
   },
+  jobs: {
+    /** Long-job progress streamed from the worker via main (#298). */
+    onJobProgress: (callback: (progress: JobProgressEvent) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, progress: JobProgressEvent) =>
+        callback(progress)
+      ipcRenderer.on('jobs:progress', listener)
+      return () => ipcRenderer.removeListener('jobs:progress', listener)
+    },
+  },
   updates: {
     /** Launch check: honors the setting and skips dev builds and the snap. */
     checkOnLaunch: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:checkOnLaunch'),
@@ -360,3 +370,5 @@ const api = {
 contextBridge.exposeInMainWorld('lkv', api)
 
 export type LkvApi = typeof api
+/** Named export so smokes can exercise the API object directly. */
+export { api }
