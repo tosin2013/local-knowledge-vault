@@ -882,8 +882,9 @@ export function listMediaProjects(): MediaProjectInfo[] {
   const out: MediaProjectInfo[] = []
   for (const [project, list] of byProject) {
     // Source markers live in the body; load only one representative note.
+    // An empty list yields the 'unknown' source type (#295).
     const representative = list[0]?.id ? getItem(list[0].id) : null
-    const meta = representative ? sourceMetaFromItems([representative]) : { sourceType: 'unknown' as const }
+    const meta = sourceMetaFromItems(representative ? [representative] : [])
     const updatedAt = list
       .map((i) => i.updated_at)
       .sort()
