@@ -317,6 +317,9 @@ async function main(): Promise<void> {
   console.log('\nIPC handler invocations')
   const result = await ipcRendererMock.invoke('items:list') as unknown[]
   assert(Array.isArray(result), 'items:list returns array')
+  // The rail query passes through the IPC boundary (#295).
+  const queried = await ipcRendererMock.invoke('items:list', { query: 'Test' }) as unknown[]
+  assert(Array.isArray(queried), 'items:list accepts a rail query')
 
   const created = await ipcRendererMock.invoke('items:create', { title: 'Test', body: 'Body', kind: 'note', project: '' }) as { id: string }
   assert(created && typeof created.id === 'string', 'items:create returns item with id')
