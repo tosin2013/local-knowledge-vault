@@ -657,12 +657,16 @@ async function importPdf(fileName: string, buf: Buffer): Promise<BookImportResul
 }
 
 /** Detect the format from `filePath`, read it and import its notes. */
-export async function importBookFromPath(filePath: string): Promise<BookImportResult> {
+export async function importBookFromPath(
+  filePath: string,
+  onProgress?: (progress: { done: number; total: number; label: string }) => void,
+): Promise<BookImportResult> {
   const fileName = path.basename(filePath)
   const format = detectBookFormat(fileName)
   if (!format) {
     return { imported: 0, skipped: 0, itemIds: [], errors: [`Unsupported book format: ${fileName}`] }
   }
+  onProgress?.({ done: 1, total: 3, label: `Reading ${fileName}` })
 
   let buf: Buffer
   try {
@@ -671,5 +675,6 @@ export async function importBookFromPath(filePath: string): Promise<BookImportRe
     return { format, imported: 0, skipped: 0, itemIds: [], errors: [errorMessage(e)] }
   }
 
+  onProgress?.({ done: 2, total: 3, label: `Parsing ${fileName}` })
   return format === 'epub' ? importEpub(fileName, buf) : importPdf(fileName, buf)
 }

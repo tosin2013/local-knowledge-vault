@@ -107,6 +107,15 @@ export default function App() {
     return () => clearInterval(t)
   }, [hasApi, providers.refreshLlm])
 
+  // Long-job progress (imports, enrollment — #298) shows in the status line so
+  // the UI proves it is alive while the worker churns.
+  useEffect(() => {
+    if (!hasApi) return
+    return window.lkv.jobs.onJobProgress((p) => {
+      setStatusMsg(`${p.label}: ${p.done} / ${p.total}`)
+    })
+  }, [hasApi])
+
   // When left-rail filters change while Find is showing an active query, re-run search.
   useEffect(() => {
     if (mode !== 'search') return

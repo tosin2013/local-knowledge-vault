@@ -250,7 +250,23 @@ export function listMarkdownFiles(dir: string): string[] {
  * Import every Markdown file under `dir` as a note, in a single transaction.
  * Returns counts and per-file errors; never throws on an unreadable file.
  */
-export function importMarkdownFolder(dir: string): MarkdownImportResult {
+export interface ImportProgress {
+  done: number
+  total: number
+  label: string
+}
+
+/**
+ * Import every Markdown file under `dir` as notes. Files are committed in
+ * batches so progress can be reported between them (and a long import never
+ * holds a write lock for its whole duration, #298); `onProgress`, when given,
+ * fires after each batch. Returns counts and per-file errors; never throws on
+ * an unreadable file.
+ */
+export function importMarkdownFolder(
+  dir: string,
+  onProgress?: (progress: ImportProgress) => void,
+): MarkdownImportResult {
   const root = path.resolve(dir)
   const rootName = path.basename(root)
   const files = listMarkdownFiles(root)
@@ -259,43 +275,53 @@ export function importMarkdownFolder(dir: string): MarkdownImportResult {
   let imported = 0
   let skipped = 0
 
-  runInTransaction(() => {
-    for (const file of files) {
-      let content: string
-      try {
-        const stat = fs.statSync(file)
-        if (stat.size > MAX_FILE_BYTES) {
+  const BATCH = 200
+  for (let start = 0; start < files.length || start === 0; start += BATCH) {
+    const batch = files.slice(start, start + BATCH)
+    if (batch.length === 0) break
+    runInTransaction(() => {
+      for (const file of batch) {
+        let content: string
+        try {
+          const stat = fs.statSync(file)
+          if (stat.size > MAX_FILE_BYTES) {
+            skipped++
+            errors.push(`${path.basename(file)}: too large (${stat.size} bytes)`)
+            continue
+          }
+          content = fs.readFileSync(file, 'utf8')
+        } catch (e) {
           skipped++
-          errors.push(`${path.basename(file)}: too large (${stat.size} bytes)`)
+          errors.push(`${file}: ${e instanceof Error ? e.message : String(e)}`)
           continue
         }
-        content = fs.readFileSync(file, 'utf8')
-      } catch (e) {
-        skipped++
-        errors.push(`${file}: ${e instanceof Error ? e.message : String(e)}`)
-        continue
-      }
 
-      const relDir = path.relative(root, path.dirname(file))
-      const parsed = parseMarkdownNote(path.basename(file), content, { rootName, relDir })
-      if (!parsed) {
-        skipped++
-        continue
-      }
+        const relDir = path.relative(root, path.dirname(file))
+        const parsed = parseMarkdownNote(path.basename(file), content, { rootName, relDir })
+        if (!parsed) {
+          skipped++
+          continue
+        }
 
-      const item = createItem({
-        title: parsed.title,
-        summary: parsed.summary,
-        body: parsed.body,
-        para: parsed.para,
-        kind: parsed.kind,
-        status: parsed.status,
-        project: parsed.project,
-      })
-      itemIds.push(item.id)
-      imported++
-    }
-  })
+        const item = createItem({
+          title: parsed.title,
+          summary: parsed.summary,
+          body: parsed.body,
+          para: parsed.para,
+          kind: parsed.kind,
+          status: parsed.status,
+          project: parsed.project,
+        })
+        itemIds.push(item.id)
+        imported++
+      }
+    })
+    onProgress?.({
+      done: Math.min(start + BATCH, files.length),
+      total: files.length,
+      label: 'Importing notes',
+    })
+  }
 
   return { imported, skipped, itemIds, errors }
 }

@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #298 (long jobs freeze the main thread). The real-app event-loop p99 (<50 ms) needs a profiling run; CI-checkable proxies: a new job-worker smoke that runs the actual worker entry over worker_threads against a seeded vault, asserts import/enroll results match the direct-call results, asserts progress events arrive during the job, and asserts the main thread stays responsive (a heartbeat timer on the main thread fires while the worker works). Regression guards: the import and enrollment smokes must be unchanged, plus typecheck. The worker smoke does not exist yet, so its check fails today.",
+  "authority_id": "298",
+  "criteria": [
+    { "check": "command_exit", "target": "npm run test:job-worker" },
+    { "check": "command_exit", "target": "npm run test:markdown-import" },
+    { "check": "command_exit", "target": "npm run test:books" },
+    { "check": "command_exit", "target": "npm run test:study-cards" },
+    { "check": "command_exit", "target": "npm run typecheck" }
+  ]
+}

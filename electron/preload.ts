@@ -17,6 +17,7 @@ import type {
   CreateItemInput,
   MediaIngestLocalInput,
   MediaIngestProgress,
+  JobProgressEvent,
   MediaIngestResult,
   MediaIngestYoutubeInput,
   MediaNotesNearInput,
@@ -323,6 +324,15 @@ const api = {
       return () => ipcRenderer.removeListener('media:ingestProgress', listener)
     },
     cancelIngest: (): Promise<boolean> => ipcRenderer.invoke('media:cancelIngest'),
+  },
+  jobs: {
+    /** Long-job progress streamed from the worker via main (#298). */
+    onJobProgress: (callback: (progress: JobProgressEvent) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, progress: JobProgressEvent) =>
+        callback(progress)
+      ipcRenderer.on('jobs:progress', listener)
+      return () => ipcRenderer.removeListener('jobs:progress', listener)
+    },
   },
   updates: {
     /** Launch check: honors the setting and skips dev builds and the snap. */

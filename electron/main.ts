@@ -60,15 +60,14 @@ import {
   getStudyStats,
   toReviewGrade,
 } from './review'
-import { enrollProject, enrolledItemIds } from './study-cards'
+import { enrolledItemIds } from './study-cards'
+import { onJobProgress, runJob, setJobWorkerDbPath } from './job-worker-client'
 import { answerStudyCard, getCardQuestion, startStudySession, studySessionSummary } from './study-session'
 import { listRecentAttempts, recordStudyAttempt, studyCalibration } from './study'
 import { generateStudyQuestions } from './study-questions'
 import { ollamaHealth } from './ollama'
 import { resolveProvider, testProvider, fetchProviderModels } from './llm'
 import { importFromUrl } from './import-url'
-import { importMarkdownFolder } from './import-markdown'
-import { importBookFromPath } from './book-import'
 import {
   findCompanionCaptions,
   findExistingProjectBySource,
@@ -288,6 +287,8 @@ async function initializeDbWithRecovery(): Promise<boolean> {
   for (;;) {
     try {
       initDb(dbPath())
+      // Long jobs run in the worker thread against the same file (#298).
+      setJobWorkerDbPath(dbPath())
       return true
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -376,6 +377,11 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  // Job progress streams from the worker to the renderer (#298).
+  onJobProgress((event) => {
+    mainWindow?.webContents.send('jobs:progress', event)
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -540,9 +546,10 @@ function registerIpc(): void {
   )
   ipcMain.handle('review:remove', (_e, itemId: string) => removeReview(itemId))
   // Study home (#262): bulk "Study this project" and the project's numbers.
-  ipcMain.handle('review:enqueueProject', (_e, project: string, options?: StudyEnrollOptions) =>
-    enrollProject(String(project ?? ''), { pairs: options?.pairs !== false }),
-  )
+  ipcMain.handle('review:enqueueProject', async (_e, project: string, options?: StudyEnrollOptions) => {
+    // Long job: runs in the worker thread; progress streams to the renderer (#298).
+    return runJob('enroll-project', { project: String(project ?? ''), pairs: options?.pairs !== false })
+  })
   ipcMain.handle('review:stats', (_e, project?: string) => getStudyStats(project ?? undefined))
 
   // Study mode (#215): recall-before-reveal attempts + calibration.
@@ -680,7 +687,8 @@ function registerIpc(): void {
     if (r.canceled || !r.filePaths[0]) {
       return { canceled: true, imported: 0, skipped: 0, itemIds: [], errors: [] }
     }
-    return importMarkdownFolder(r.filePaths[0])
+    // Long job: the worker imports in batches and streams progress (#298).
+    return runJob('import-markdown', { dir: r.filePaths[0] })
   })
 
   // Import a local EPUB / text-layer PDF as book notes (main picks the file)
@@ -699,7 +707,8 @@ function registerIpc(): void {
     if (r.canceled || !r.filePaths[0]) {
       return { canceled: true, imported: 0, skipped: 0, itemIds: [], errors: [] }
     }
-    return importBookFromPath(r.filePaths[0])
+    // Long job: the worker parses (pdfjs) and imports in batches (#298).
+    return runJob('import-book', { filePath: r.filePaths[0] })
   })
 
   // Prompts

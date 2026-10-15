@@ -70,6 +70,10 @@ function MockBrowserWindow(opts?: Record<string, unknown>) {
       loadURL: (url: string) => {},
       loadFile: (file: string) => {},
       openDevTools: (opts?: unknown) => {},
+      /** Captures jobs:progress forwarding (#298). */
+      send: (channel: string, payload?: unknown) => {
+        webContentsSent.push({ channel, payload })
+      },
     },
     on: (event: string, listener: () => void) => {
       if (event === 'closed') closeWindow = listener
@@ -82,6 +86,8 @@ function MockBrowserWindow(opts?: Record<string, unknown>) {
 }
 MockBrowserWindow.getAllWindows = () => []
 const mockBrowserWindow = MockBrowserWindow
+/** Everything the (single) window's webContents sent — jobs:progress lands here (#298). */
+const webContentsSent: Array<{ channel: string; payload: unknown }> = []
 
 // Mutable dialog results so tests can exercise the post-dialog (bless/install/export) paths.
 const dialogState = {
@@ -320,6 +326,19 @@ async function main(): Promise<void> {
   // The rail query passes through the IPC boundary (#295).
   const queried = await ipcRendererMock.invoke('items:list', { query: 'Test' }) as unknown[]
   assert(Array.isArray(queried), 'items:list accepts a rail query')
+
+  // Long jobs run in the worker thread; their progress is forwarded through
+  // main to the renderer's webContents (#298).
+  webContentsSent.length = 0
+  const enrolledProject = (await ipcRendererMock.invoke('review:enqueueProject', 'Vault guide')) as {
+    project: string
+  }
+  assert(enrolledProject.project === 'Vault guide', 'review:enqueueProject runs in the worker')
+  await new Promise((r) => setTimeout(r, 300))
+  assert(
+    webContentsSent.some((s) => s.channel === 'jobs:progress'),
+    'worker progress is forwarded to the renderer'
+  )
 
   const created = await ipcRendererMock.invoke('items:create', { title: 'Test', body: 'Body', kind: 'note', project: '' }) as { id: string }
   assert(created && typeof created.id === 'string', 'items:create returns item with id')
