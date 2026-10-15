@@ -340,6 +340,25 @@ async function main(): Promise<void> {
   assert(!!pdfItems[0]?.body.includes('Page: 1'), 'PDF body has a Page: 1 line')
   assert(!!pdfItems[0]?.body.includes('Hello book page one'), 'PDF body contains the page text')
 
+  // --- Explicit import project (#276): the picker overrides the book title ---
+  console.log('\nExplicit import project (#276)')
+  const pinnedEpub = await importBookFromPath(epubPath, undefined, 'Course A')
+  assert(pinnedEpub.project === 'Course A', 'epub result reports the explicit project')
+  const pinnedEpubItems = listItems().filter((it) => pinnedEpub.itemIds.includes(it.id))
+  assert(
+    pinnedEpubItems.length > 0 && pinnedEpubItems.every((it) => it.project === 'Course A'),
+    'every epub note lands in the explicit project',
+  )
+  const pinnedPdf = await importBookFromPath(pdfPath, undefined, 'Course B')
+  assert(pinnedPdf.project === 'Course B', 'pdf result reports the explicit project')
+  const pinnedPdfItems = listItems().filter((it) => pinnedPdf.itemIds.includes(it.id))
+  assert(
+    pinnedPdfItems.length > 0 && pinnedPdfItems.every((it) => it.project === 'Course B'),
+    'every pdf note lands in the explicit project',
+  )
+  const blankPdf = await importBookFromPath(pdfPath, undefined, '   ')
+  assert(blankPdf.project === 'Minimal PDF Book', 'blank project keeps the title-derived project')
+
   closeDb()
   fs.rmSync(tmp, { recursive: true, force: true })
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { FormControl, InputLabel, MenuItem, Select } from '@mui/material'
 import type { ProjectSummary } from '../../electron/types'
 
@@ -12,6 +12,12 @@ export interface ProjectSelectProps {
   allLabel?: string
   /** Called with the loaded project list (e.g. for empty states). */
   onProjectsLoaded?: (projects: ProjectSummary[]) => void
+  /**
+   * Pre-loaded project list: skips the self-load when the caller already has
+   * one (the notes rail keeps its own list, #276 — avoids a duplicate
+   * projects.list round-trip at startup). Only `name` is read.
+   */
+  projects?: ReadonlyArray<{ name: string }>
 }
 
 /**
@@ -30,10 +36,16 @@ export function ProjectSelect({
   size = 'small',
   allLabel = 'All projects',
   onProjectsLoaded,
+  projects: providedProjects,
 }: ProjectSelectProps) {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
+  // Unique per instance: a hardcoded labelId collided when two pickers were
+  // mounted together (import chooser + move action, #276) and every Select
+  // then resolved its accessible name from the first label on the page.
+  const labelId = useId()
 
   useEffect(() => {
+    if (providedProjects) return // the caller owns the list; nothing to load
     let alive = true
     const list = window.lkv?.projects?.list
     if (!list) return
@@ -53,8 +65,11 @@ export function ProjectSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const known = projects ?? []
-  const stale = projects !== null && value !== '' && !known.some((p) => p.name === value)
+  const known = providedProjects ?? projects ?? []
+  // A saved selection that no longer exists falls back only for a self-loaded
+  // list; a caller-provided list stays authoritative without clearing.
+  const stale =
+    !providedProjects && projects !== null && value !== '' && !known.some((p) => p.name === value)
   useEffect(() => {
     if (stale) onChange('')
   }, [stale, onChange])
@@ -65,11 +80,11 @@ export function ProjectSelect({
 
   return (
     <FormControl size={size} sx={{ minWidth: 180 }}>
-      <InputLabel id="project-select-label" shrink>
+      <InputLabel id={labelId} shrink>
         {label}
       </InputLabel>
       <Select
-        labelId="project-select-label"
+        labelId={labelId}
         label={label}
         value={shown}
         displayEmpty

@@ -670,13 +670,13 @@ function registerIpc(): void {
   ipcMain.handle('chat:listMessages', (_e, sessionId: string) => listMessages(sessionId))
   ipcMain.handle('chat:send', (_e, input: ChatSendInput) => sendChatTurn(input))
 
-  // Import from URL
-  ipcMain.handle('import:fromUrl', (_e, url: string) => {
-    return importFromUrl(url)
+  // Import from URL (#276: the renderer may pin an explicit target project)
+  ipcMain.handle('import:fromUrl', (_e, url: string, project?: string | null) => {
+    return importFromUrl(url, project)
   })
 
   // Import Markdown / Obsidian notes from a folder (main picks the folder)
-  ipcMain.handle('import:markdown', async () => {
+  ipcMain.handle('import:markdown', async (_e, project?: string | null) => {
     const opts: OpenDialogOptions = {
       title: 'Import Markdown / Obsidian notes',
       properties: ['openDirectory'],
@@ -688,11 +688,11 @@ function registerIpc(): void {
       return { canceled: true, imported: 0, skipped: 0, itemIds: [], errors: [] }
     }
     // Long job: the worker imports in batches and streams progress (#298).
-    return runJob('import-markdown', { dir: r.filePaths[0] })
+    return runJob('import-markdown', { dir: r.filePaths[0], project: project ?? null })
   })
 
   // Import a local EPUB / text-layer PDF as book notes (main picks the file)
-  ipcMain.handle('import:book', async () => {
+  ipcMain.handle('import:book', async (_e, project?: string | null) => {
     const opts: OpenDialogOptions = {
       title: 'Import book / PDF',
       properties: ['openFile'],
@@ -708,7 +708,7 @@ function registerIpc(): void {
       return { canceled: true, imported: 0, skipped: 0, itemIds: [], errors: [] }
     }
     // Long job: the worker parses (pdfjs) and imports in batches (#298).
-    return runJob('import-book', { filePath: r.filePaths[0] })
+    return runJob('import-book', { filePath: r.filePaths[0], project: project ?? null })
   })
 
   // Prompts

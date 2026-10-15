@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { INITIAL_NOTES_SHOWN, NOTES_SHOWN_STEP, NotesRail } from '../../src/features/NotesRail'
-import { makeItem } from './lkv'
+import { makeItem, lkvMock } from './lkv'
 import type { Item } from '../../electron/types'
 
 function manyItems(n: number): Item[] {
@@ -10,10 +10,12 @@ function manyItems(n: number): Item[] {
   )
 }
 
-function renderRail(items: Item[]) {
+function renderRail(items: Item[], overrides: Partial<Parameters<typeof NotesRail>[0]> = {}) {
   const onSelect = vi.fn()
   const onToggleBulk = vi.fn()
   const onDeleteItem = vi.fn()
+  const onImportProject = overrides.onImportProject ?? vi.fn()
+  const onBulkMove = overrides.onBulkMove ?? vi.fn()
   const utils = render(
     <NotesRail
       advanced
@@ -25,6 +27,7 @@ function renderRail(items: Item[]) {
       filterSummary="All notes"
       filtersOpen={false}
       importUrl=""
+      importProject=""
       importBusy={false}
       importMarkdownBusy={false}
       importBookBusy={false}
@@ -35,6 +38,7 @@ function renderRail(items: Item[]) {
       onNewNote={vi.fn()}
       onNewProject={vi.fn()}
       onImportUrl={vi.fn()}
+      onImportProject={onImportProject}
       onImport={vi.fn()}
       onImportMarkdown={vi.fn()}
       onImportBook={vi.fn()}
@@ -50,12 +54,14 @@ function renderRail(items: Item[]) {
       bulkSelected={new Set()}
       onToggleBulk={onToggleBulk}
       onBulkTrash={vi.fn()}
+      onBulkMove={onBulkMove}
       onFilters={vi.fn()}
       onFiltersOpen={vi.fn()}
       onSelect={onSelect}
+      {...overrides}
     />,
   )
-  return { ...utils, onSelect, onToggleBulk, onDeleteItem }
+  return { ...utils, onSelect, onToggleBulk, onDeleteItem, onImportProject, onBulkMove }
 }
 
 function renderedRowCount(): number {
@@ -103,6 +109,7 @@ describe('NotesRail windowing (#294)', () => {
         filterSummary="All notes"
         filtersOpen={false}
         importUrl=""
+        importProject=""
         importBusy={false}
         importMarkdownBusy={false}
         importBookBusy={false}
@@ -113,6 +120,7 @@ describe('NotesRail windowing (#294)', () => {
         onNewNote={vi.fn()}
         onNewProject={vi.fn()}
         onImportUrl={vi.fn()}
+        onImportProject={vi.fn()}
         onImport={vi.fn()}
         onImportMarkdown={vi.fn()}
         onImportBook={vi.fn()}
@@ -128,6 +136,7 @@ describe('NotesRail windowing (#294)', () => {
         bulkSelected={new Set()}
         onToggleBulk={vi.fn()}
         onBulkTrash={vi.fn()}
+        onBulkMove={vi.fn()}
         onFilters={vi.fn()}
         onFiltersOpen={vi.fn()}
         onSelect={vi.fn()}
@@ -144,5 +153,48 @@ describe('NotesRail windowing (#294)', () => {
     expect(onToggleBulk).toHaveBeenCalledWith('itm_1')
     fireEvent.click(screen.getByLabelText('Delete Note 2'))
     expect(onDeleteItem).toHaveBeenCalledWith('itm_2')
+  })
+})
+
+describe('NotesRail import project chooser (#276)', () => {
+  beforeEach(() => {
+    // ProjectSelect loads the project list itself (for the stale-value check).
+    lkvMock().projects.list.mockResolvedValue([{ name: 'Bio', count: 2 }])
+  })
+
+  it('shows the chosen import project and reports changes', async () => {
+    const { onImportProject } = renderRail(manyItems(3), { importProject: 'Bio' })
+    // The chooser shows the pinned project, not the "Use file/folder name" default.
+    expect(await screen.findByRole('combobox', { name: 'Import into project' })).toHaveTextContent('Bio')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Import into project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Use file/folder name' }))
+    expect(onImportProject).toHaveBeenCalledWith('')
+  })
+
+  it('defaults the chooser to "Use file/folder name"', () => {
+    renderRail(manyItems(3))
+    expect(screen.getByRole('combobox', { name: 'Import into project' })).toHaveTextContent(
+      'Use file/folder name',
+    )
+  })
+})
+
+describe('NotesRail bulk move (#276)', () => {
+  beforeEach(() => {
+    lkvMock().projects.list.mockResolvedValue([{ name: 'Bio', count: 2 }])
+  })
+
+  it('moves the selected notes to the chosen project', async () => {
+    const { onBulkMove } = renderRail(manyItems(3), { bulkSelected: new Set(['itm_0', 'itm_1']) })
+    expect(screen.getByText('Trash 2 selected')).toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Move to project' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Bio' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+    expect(onBulkMove).toHaveBeenCalledWith('Bio')
+  })
+
+  it('disables Move until a project is chosen', () => {
+    renderRail(manyItems(3), { bulkSelected: new Set(['itm_0']) })
+    expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled()
   })
 })

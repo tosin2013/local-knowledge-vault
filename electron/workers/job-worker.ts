@@ -57,12 +57,20 @@ parentPort.on('message', (msg: { jobId: number; type?: string; payload: Record<s
   try {
     switch (jobType) {
       case 'import-markdown': {
-        const result = importMarkdownFolder(String(payload.dir), progress)
+        const result = importMarkdownFolder(
+          String(payload.dir),
+          progress,
+          payload.project ? String(payload.project) : null,
+        )
         post({ jobId, ok: true, result })
         break
       }
       case 'import-book': {
-        void importBookFromPath(String(payload.filePath), progress).then(
+        void importBookFromPath(
+          String(payload.filePath),
+          progress,
+          payload.project ? String(payload.project) : null,
+        ).then(
           (result) => post({ jobId, ok: true, result }),
           (error: unknown) => post({ jobId, ok: false, error: error instanceof Error ? error.message : String(error) }),
         )

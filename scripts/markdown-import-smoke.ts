@@ -148,6 +148,23 @@ function main(): void {
   const override = byTitle.get('override')
   assert(override?.project === 'My Project', 'explicit project wins over tags')
 
+  // --- explicit import project (#276): the picker overrides every derivation ---
+  console.log('\nimportMarkdownFolder (explicit project)')
+  const pinned = importMarkdownFolder(vault, undefined, 'Biology')
+  assert(pinned.imported === 5, `re-imports all 5 notes (got ${pinned.imported})`)
+  const pinnedItems = listItems().filter((it) => pinned.itemIds.includes(it.id))
+  assert(
+    pinnedItems.every((it) => it.project === 'Biology'),
+    'every note lands in the explicit project, frontmatter included',
+  )
+  const emptyProject = importMarkdownFolder(vault, undefined, '   ')
+  const emptyProjectItems = listItems().filter((it) => emptyProject.itemIds.includes(it.id))
+  assert(
+    emptyProjectItems.some((it) => it.project === 'My Project') &&
+      emptyProjectItems.some((it) => it.project === 'start'),
+    'blank project keeps per-note derivation',
+  )
+
   closeDb()
   fs.rmSync(root, { recursive: true, force: true })
 

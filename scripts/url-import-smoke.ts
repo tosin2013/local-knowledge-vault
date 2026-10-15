@@ -276,6 +276,14 @@ async function main(): Promise<void> {
     assert(success.item.para === 'resources', 'para is resources')
     assert(success.item.kind === 'article', 'kind is article')
 
+    // Explicit project (#276): the import project picker wins over the
+    // heuristic / hostname-derived project.
+    const pinned = await importFromUrl(`${fixture.baseUrl}/simple`, 'Biology')
+    assert(pinned.item.project === 'Biology', 'explicit project overrides derived project')
+    const unpinned = await importFromUrl(`${fixture.baseUrl}/simple`)
+    assert(unpinned.item.project !== 'Biology', 'no explicit project keeps derived project')
+    assert(await importFromUrl(`${fixture.baseUrl}/simple`, '').then((r) => r.item.project !== 'Biology'), 'empty explicit project keeps derived project')
+
     // Redirect
     const redirect = await importFromUrl(`${fixture.baseUrl}/redirect`)
     assert(redirect.item && redirect.item.id, 'follows redirect')

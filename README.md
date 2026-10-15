@@ -129,6 +129,9 @@ accept it, and explains why a broken pack was rejected.
   against your own notes, and export or import it as a file. A personality changes tone and format
   only; the grounding and citation rules always apply. See [docs/personalities.md](docs/personalities.md).
 - **Add from URL.** Fetches a public web page, extracts the text and auto-tags it as a note.
+  Every import (URL, Markdown, book/PDF, media ingest, practice test) first asks which project to
+  file it into — pick one, keep **Use file/folder name** to decide per source, and move any import
+  into another project afterwards from the toast or the rail's bulk **Move** (#276).
 - **Import Markdown / Obsidian notes.** Point Vault at a folder and import its `.md` files as
   notes — title from frontmatter or the first heading, and PARA/project inferred from
   frontmatter, tags, or the folder structure. Obsidian `[[wiki links]]` are normalized to text.

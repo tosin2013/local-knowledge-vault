@@ -23,8 +23,10 @@ import MovieIcon from '@mui/icons-material/Movie'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import type { VaultPluginRenderProps } from '../types'
-import { AI_DRAFT_STATUS, provenanceHeader } from '../../domain'
+import { AI_DRAFT_STATUS, loadImportProject, provenanceHeader, saveImportProject } from '../../domain'
 import { AnswerProviderChip } from '../../components/ai/AnswerProviderChip'
+import { MoveNotesAction } from '../../features/MoveNotesAction'
+import { ProjectSelect } from '../../features/ProjectSelect'
 import type {
   ChatMessage,
   Citation,
@@ -171,6 +173,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [ingestStage, setIngestStage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  // Target project for the next ingest ('' = use the media file name, #276);
+  // defaults to the last project any import was filed into.
+  const [ingestProject, setIngestProject] = useState<string>(loadImportProject)
+  // Post-ingest "Move N notes" offer (#276).
+  const [moveOffer, setMoveOffer] = useState<{ itemIds: string[] } | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [followPlayhead, setFollowPlayhead] = useState(true)
   const [chatInput, setChatInput] = useState('')
@@ -423,13 +430,34 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setStatus(
       `Ingested ${res.noteCount} transcript notes · project “${res.project}” · voice “${voice.name}”`
     )
+    // Offer a move when the ingest ran on "Use file name" or the media layer
+    // filed it somewhere else (its dedupe suffixes), #276.
+    if (res.itemIds.length > 0 && (ingestProject === '' || res.project !== ingestProject)) {
+      setMoveOffer({ itemIds: res.itemIds })
+    } else {
+      setMoveOffer(null)
+    }
     await refreshProjects()
+  }
+
+  /** Post-ingest "Move N notes" (the move itself happens in MoveNotesAction). */
+  const handleMoved = (project: string, count: number) => {
+    setStatus(`Moved ${count} transcript note${count === 1 ? '' : 's'} to "${project}"`)
+    setMoveOffer(null)
+    void refreshProjects()
+  }
+
+  /** Pick the target project for the next ingest; remembered as "last used" (#276). */
+  const onIngestProjectChange = (project: string) => {
+    setIngestProject(project)
+    saveImportProject(project)
   }
 
   const onPickLocal = async () => {
     if (!window.lkv?.media) return
     setError(null)
     setIngestStage(null)
+    setMoveOffer(null)
     setBusy(true)
     try {
       const pick = await window.lkv.media.pickLocal()
@@ -450,6 +478,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       const res = await window.lkv.media.ingestLocal({
         mediaPath: pick.mediaPath,
         captionsPath: pick.captionsPath,
+        project: ingestProject || undefined,
       })
       await applyIngestResult(res)
     } catch (e) {
@@ -471,6 +500,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     }
     setError(null)
     setIngestStage(null)
+    setMoveOffer(null)
     setBusy(true)
     try {
       const existing = await window.lkv.media.findExistingProject?.({ url })
@@ -481,7 +511,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         )
         if (!ok) return
       }
-      const res = await window.lkv.media.ingestYoutube({ url })
+      const res = await window.lkv.media.ingestYoutube({ url, project: ingestProject || undefined })
       await applyIngestResult(res)
       setYtUrl('')
     } catch (e) {
@@ -1069,8 +1099,17 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       </Stack>
 
       {status && (
-        <Alert severity="success" onClose={() => setStatus(null)}>
+        <Alert
+          severity="success"
+          onClose={() => {
+            setStatus(null)
+            setMoveOffer(null)
+          }}
+        >
           {status}
+          {moveOffer && moveOffer.itemIds.length > 0 && (
+            <MoveNotesAction itemIds={moveOffer.itemIds} onMoved={handleMoved} />
+          )}
         </Alert>
       )}
       {error && (
@@ -1089,6 +1128,14 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
             >
               Ingest
             </Typography>
+            {/* #276: file the ingest into a project; "Use file name" keeps
+                deriving it from the media. */}
+            <ProjectSelect
+              value={ingestProject}
+              onChange={onIngestProjectChange}
+              label="Project"
+              allLabel="Use file name"
+            />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
               <Button variant="contained" size="small" disabled={busy} onClick={() => void onPickLocal()}>
                 Local video/audio + captions

@@ -33,6 +33,14 @@ function paste(text: string) {
 }
 
 describe('TestToNotesView', () => {
+  it('defaults the project chooser to the Study project (#276)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 0 }])
+    // StudyTab passes its persisted project down (controlled), like the app does.
+    render(<TestToNotesView project="Biology" onProjectChange={vi.fn()} />)
+    expect(await screen.findByRole('combobox', { name: 'Project' })).toHaveTextContent('Biology')
+  })
+
   it('parses pasted results with the model into a correct/wrong summary', async () => {
     const lkv = lkvMock()
     lkv.testToNotes.parse.mockResolvedValue({ items: ITEMS })

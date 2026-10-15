@@ -246,11 +246,14 @@ const api = {
       ipcRenderer.invoke('chat:send', input),
   },
   import: {
-    fromUrl: (url: string): Promise<ImportFromUrlResult> =>
-      ipcRenderer.invoke('import:fromUrl', url),
-    fromMarkdown: (): Promise<MarkdownImportResult> =>
-      ipcRenderer.invoke('import:markdown'),
-    fromBook: (): Promise<BookImportResult> => ipcRenderer.invoke('import:book'),
+    // #276: `project`, when given, pins the import to that project; omit (or
+    // null) for the pre-#276 behaviour of deriving it from the source.
+    fromUrl: (url: string, project?: string | null): Promise<ImportFromUrlResult> =>
+      ipcRenderer.invoke('import:fromUrl', url, project ?? null),
+    fromMarkdown: (project?: string | null): Promise<MarkdownImportResult> =>
+      ipcRenderer.invoke('import:markdown', project ?? null),
+    fromBook: (project?: string | null): Promise<BookImportResult> =>
+      ipcRenderer.invoke('import:book', project ?? null),
   },
   prompts: {
     list: (): Promise<Prompt[]> => ipcRenderer.invoke('prompts:list'),
