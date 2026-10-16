@@ -37,6 +37,11 @@ and confirm. You only need to do this once. On macOS 14 and earlier, right-click
 If macOS says Vault "is damaged and can't be opened", remove the download quarantine flag and open
 it again: `xattr -dr com.apple.quarantine /Applications/Vault.app`.
 
+**Windows: the installer is not code-signed yet.** SmartScreen may say "Windows protected your PC".
+Click **More info**, then **Run anyway**. You only need to do this once per version.
+
+What changed in each version: **[CHANGELOG.md](CHANGELOG.md)**.
+
 ## Quick start (local first)
 
 New to Vault? The **[getting-started guides](docs/getting-started/README.md)** walk through a first
