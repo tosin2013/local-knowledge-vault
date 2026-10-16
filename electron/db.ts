@@ -581,7 +581,7 @@ const GUIDE_NOTE_IDS_KEY = 'sample_note_ids'
 const GUIDE_VERSION_KEY = 'vault_guide_version'
 
 /** Bump when the guide notes change so existing installs refresh them (#163). */
-const GUIDE_VERSION = 1
+const GUIDE_VERSION = 2
 
 function tableExists(database: Database.Database, name: string): boolean {
   const row = database
@@ -1571,11 +1571,11 @@ Status: active (searchable and used in answers), archived (kept but out of the w
     project: VAULT_GUIDE_PROJECT,
   },
   {
-    title: 'Citations: the [itm_…] badges',
+    title: 'Citations: the numbered [1] links',
     summary: 'How answers cite the notes they used',
-    body: `Answers cite the notes they used with a marker like [itm_abc123]. In the chat these render as numbered links like [1] that open the source note, plus a chip you can click.
+    body: `Every point in an answer ends with a numbered citation like [1] or [2]. Click a number, or the matching numbered chip under the answer, to open the note it came from.
 
-Citations only point at notes that were actually retrieved, so you can trace any claim back to its source.`,
+Citations only point at notes that were actually retrieved, so you can trace any claim back to its source. If nothing in your notes answers the question, Vault says so instead of guessing.`,
     para: 'resources',
     kind: 'note',
     status: 'active',

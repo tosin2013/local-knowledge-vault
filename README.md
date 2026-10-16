@@ -13,9 +13,9 @@ automatically), and you can add a cloud provider or a shareable plugin in a few 
 <p align="center"><a href="docs/media/vault-demo.mp4"><img src="docs/media/vault-demo.gif" alt="Vault demo: ask a question, click a citation, get an honest I don't know" width="860"></a></p>
 -->
 <p align="center">
-  <img src="docs/media/vault-ask-citation.png" alt="Vault answering in three bullets, each ending in a numbered citation [1], [2], [3], with matching source chips below the answer" width="860">
+  <img src="docs/media/vault-ask-citation.png" alt="Asked how photosynthesis and cellular respiration are connected, Vault answers in two bullets ending in numbered citations [1] and [2], with matching chips for the notes photosynthesis - quick notes and Cellular respiration" width="860">
   <br>
-  <sub>Each point cites the note it came from, and the numbered chips open those notes. (Shot with a cloud provider, Groq <code>openai/gpt-oss-20b</code>; new installs use a local model first.)</sub>
+  <sub>Each point cites the note it came from, and the numbered chips open those notes. (Demo biology notes; shot with a cloud provider, Groq <code>openai/gpt-oss-20b</code>. New installs use a local model first.)</sub>
 </p>
 
 ## Download
@@ -93,7 +93,43 @@ notes and a manifest to a folder or zip that you can hand to another LLM or a co
 When the notes search finds don't answer the question, the model is told to say so rather than
 guess. That honest answer has no citations and no warning chip:
 
-<img src="docs/media/vault-honest-idk.png" alt="Asked for the daily dose of vitamin D, Vault answers: I couldn't find that in your notes. No citations and no warning chip." width="720">
+<img src="docs/media/vault-honest-idk.png" alt="Asked who won the 2018 FIFA World Cup, a vault of biology and CompTIA A+ notes answers: I couldn't find that in your notes. No citations and no warning chip." width="720">
+
+### Find
+
+<img src="docs/media/vault-find.png" alt="Find tab: searching mitochondria ATP lists four biology notes with highlighted matches" width="720">
+
+**Find** is plain search over your notes, with no model involved: matching notes, their project and
+group, and the highlighted passage. Click one to open it.
+
+### Study for exams
+
+The toggle at the top reads **Ask · Find · Study**. **Study** turns a project's notes into spaced,
+exam-aware practice.
+
+<img src="docs/media/vault-study-home.png" alt="Study home for the CompTIA A+ project: exam Nov 23, 39 days to go, 4 cards due, 146 cards from 8 of 8 notes, and Study this project / Start session buttons" width="720">
+
+- **Study home.** Pick the project for your course or exam, set its exam date, and see what's due,
+  how many cards there are and how many of the project's notes they cover. **Study this project**
+  enrolls every note.
+- **Study session.** Each card asks one question from a section of your notes: answer from
+  memory (or say you don't know), rate your confidence, reveal the answer with a quote and a
+  link to the note, then grade Missed / Partly / Got it. Cards come back on a spaced schedule
+  anchored to your exam date; the summary flags confident misses.
+- **Quiz me on…** Type a question, write what you remember first, then reveal the grounded,
+  cited answer as feedback, rate your confidence and grade yourself. A calibration strip shows
+  how well your confidence matches your results.
+- **Two-way list cards.** Acronym lists, port tables, command lists and term definitions become
+  cards asked both ways ("What does AES stand for?" and "What is the acronym for Advanced
+  Encryption Standard?"), with no model. Turn it off with **Two-way cards for lists** on Study home.
+- **Import practice test.** Paste or open practice-test results; each missed question becomes a
+  Study card at once (the test's own question and answer), linked to the note that covers it or to a
+  corrective AI draft you confirm in your own words. The test is kept as one **Practice test** note,
+  and **Study this project** skips practice tests and exam papers.
+
+<img src="docs/media/vault-study-session.png" alt="Study session card: What does AES stand for? The learner answered Advanced Encryption Standard at 80% confidence; the revealed answer quotes the A+ acronym list note, with Missed / Partly / Got it grading" width="720">
+
+<img src="docs/media/vault-practice-test-import.png" alt="Import practice test: a pasted Core 2 results page parsed as 10 items, 6 correct and 4 wrong, with Add to Study" width="720">
 
 ### Local model setup that explains itself
 
@@ -143,22 +179,6 @@ accept it, and explains why a broken pack was rejected.
 - **Import books.** **Import book / PDF** turns an EPUB into one note per chapter and a PDF into
   notes by page range, all under a project named after the book. Covers, image-only pages and
   Project Gutenberg licence text are skipped.
-- **Study tab.** The toggle at the top reads **Ask · Find · Study**. **Study** gathers exam prep in
-  one place, with three sections:
-  - **Study session.** Each card asks one question from a section of your notes: answer from
-    memory (or say you don't know), rate your confidence, reveal the answer with a quote and a
-    link to the note, then grade Missed / Partly / Got it. Cards come back on a spaced schedule
-    anchored to your exam date; the summary flags confident misses.
-  - **Quiz me on…** Type a question, write what you remember first, then reveal the grounded,
-    cited answer as feedback, rate your confidence and grade yourself. A calibration strip shows
-    how well your confidence matches your results.
-  - **Two-way list cards.** Acronym lists, port tables, command lists and term definitions become
-    cards asked both ways ("What does AES stand for?" and "What is the acronym for Advanced
-    Encryption Standard?"), with no model. Turn it off with **Two-way cards for lists** on Study home.
-  - **Import practice test.** Paste or open practice-test results; each missed question becomes a
-    Study card at once (the test's own question and answer), linked to the note that covers it or to a
-    corrective AI draft you confirm in your own words. The test is kept as one **Practice test** note,
-    and **Study this project** skips practice tests and exam papers.
 - **AI drafts stay drafts.** Notes written by the model (for example from Import practice test) are saved as
   **AI draft** and rank below your own notes in search. To confirm one, edit it or write a one-line
   summary in your own words.
@@ -173,8 +193,9 @@ accept it, and explains why a broken pack was rejected.
   the cited answer into your current note. See [docs/bridges.md](docs/bridges.md).
 - **Simple and Advanced modes**, light and dark themes.
 
-Retrieval is local keyword search (SQLite FTS5 with BM25 ranking). There are no embeddings, so
-short, focused notes and questions that reuse their words work best.
+Retrieval is local keyword search (SQLite FTS5 with BM25 ranking). Long notes are split into
+passages so a match points at the right section. There are no embeddings, so questions that reuse
+the words in your notes work best.
 
 ## Bring any model
 
