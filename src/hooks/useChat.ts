@@ -345,7 +345,16 @@ export function useChat(deps: UseChatDeps) {
       }
       await refreshSessions()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg)
+      // The chat was deleted out from under this composer (#315): drop the
+      // ghost session id so the next send starts a new session instead of
+      // failing the same way every time.
+      if (/^Session not found/.test(msg) && activeSessionIdRef.current === sessionId) {
+        setActiveSessionId(null)
+        activeSessionIdRef.current = null
+        setMessages([])
+      }
       // A failed send must not lose the question: roll back the optimistic
       // bubble and put the text back in the composer (#128).
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId))

@@ -82,6 +82,39 @@ describe('useChat', () => {
     expect(result.current.messages).toEqual([makeMessage()])
   })
 
+  it('recovers a deleted session on the next send (#315)', async () => {
+    const lkv = lkvMock()
+    // The session list no longer contains the active session id (deleted in
+    // Manage chats or from another window).
+    lkv.chat.listSessions.mockResolvedValue([])
+    lkv.chat.listMessages.mockResolvedValue([])
+    lkv.chat.createSession.mockResolvedValue(makeSession('s_new', 'New chat'))
+    lkv.chat.send
+      .mockRejectedValueOnce(new Error('Session not found: this chat was deleted while the answer was being composed'))
+      .mockResolvedValueOnce(makeSendResult({ messages: [makeMessage()], session: makeSession('s_new'), offline: false }))
+    const { result } = renderHook(() => useChat(makeDeps()))
+    await act(async () => {
+      await result.current.refreshSessions()
+      await result.current.onSelectSession('s_dead')
+    })
+    act(() => result.current.setChatInput('hello'))
+    await act(async () => {
+      await result.current.onSendChat()
+    })
+    // The first send reports the stale session; the composer drops the ghost
+    // id, keeps the question, and shows no leftover messages.
+    expect(result.current.activeSessionId).toBe(null)
+    expect(result.current.messages).toEqual([])
+    expect(result.current.chatInput).toBe('hello')
+    // The retry starts a new session and succeeds.
+    await act(async () => {
+      await result.current.onSendChat()
+    })
+    expect(lkv.chat.createSession).toHaveBeenCalled()
+    expect(lkv.chat.send).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 's_new' }))
+    expect(result.current.activeSessionId).toBe('s_new')
+  })
+
   it('exports a citation pack', async () => {
     const lkv = lkvMock()
     lkv.chat.listSessions.mockResolvedValue([makeSession('s_1')])

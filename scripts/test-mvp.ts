@@ -311,6 +311,85 @@ async function main(): Promise<void> {
   })
   assert(withPrompt.messages.length >= 2, 'send with promptId still persists turns')
 
+  // --- Stale session (#315): a deleted session must surface the recognizable
+  // --- error, never a raw FOREIGN KEY constraint failure.
+  console.log('\nStale session (#315)')
+  const deadSes = createSession()
+  assert(deleteSession(deadSes.id), 'stale session deleted')
+  let staleErr: Error | null = null
+  try {
+    await sendChatTurn({ sessionId: deadSes.id, text: 'hello again', filters: {}, limit: 5 })
+  } catch (e) {
+    staleErr = e as Error
+  }
+  assert(
+    !!staleErr && /Session not found/.test(staleErr.message),
+    `send to a deleted session throws the stale-session error (got ${staleErr?.message ?? 'no error'})`
+  )
+  assert(
+    !/FOREIGN KEY|SQLITE/i.test(staleErr?.message ?? ''),
+    'the error is the friendly one, not a raw constraint error'
+  )
+  assert(
+    !getSession(deadSes.id) && listMessages(deadSes.id).length === 0,
+    'a rejected stale send leaves no orphan rows'
+  )
+
+  // Deletion *during* generation (#315): the session exists at entry, is
+  // deleted while llmGenerate awaits, and finish() must then fail with the
+  // recognizable error — not the raw FOREIGN KEY constraint.
+  console.log('Stale session mid-turn (#315)')
+  const midSes = createSession()
+  // chat.ts's `import { llmGenerate }` transpiles to a getter-only namespace
+  // export, so it cannot be reassigned in place (see url-import-smoke). Reload
+  // chat.ts against a stubbed llm whose generate deletes the session and then
+  // returns an offline failure, so the offline path still reaches finish().
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Module = require('module') as typeof import('module')
+  const realLoad = Module._load
+  const chatPath = require.resolve('../electron/chat')
+  const llmPath = require.resolve('../electron/llm')
+  ;(Module as unknown as { _load: typeof Module._load })._load = function (
+    request: string,
+    parent: unknown,
+    isMain: boolean,
+  ) {
+    if (request === './llm') {
+      return {
+        llmGenerate: async () => {
+          deleteSession(midSes.id)
+          return { ok: false, error: 'stale-session test stub' }
+        },
+      }
+    }
+    return realLoad(request, parent, isMain)
+  }
+  delete require.cache[chatPath]
+  delete require.cache[llmPath]
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const chatFresh = require('../electron/chat') as typeof import('../electron/chat')
+  let midErr: Error | null = null
+  try {
+    await chatFresh.sendChatTurn({
+      sessionId: midSes.id,
+      // A distinctive token that FTS-matches the seeded 'Test note XYZ'
+      // (body 'unique-token-qwerty-lkv') so searchQuery returns a hit and the
+      // turn reaches the (stubbed) llmGenerate instead of the no-hit path.
+      text: 'unique qwerty lkv',
+      filters: {},
+      limit: 5,
+    })
+  } catch (e) {
+    midErr = e as Error
+  } finally {
+    ;(Module as unknown as { _load: typeof Module._load })._load = realLoad
+  }
+  assert(
+    !!midErr && /Session not found/.test(midErr.message),
+    `mid-turn deletion throws the stale-session error (got ${midErr?.message ?? 'no error'})`
+  )
+  assert(!/FOREIGN KEY|SQLITE/i.test(midErr?.message ?? ''), 'mid-turn deletion is not a raw constraint error')
+
   // --- LLM settings merge + key file ---
   console.log('\nLLM settings')
   const llmTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-llm-'))
