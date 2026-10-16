@@ -5,8 +5,8 @@ Cross-platform installers are produced by **electron-builder** via GitHub Action
 Other automation:
 
 - **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, runs
-  `npm ci`, `typecheck`, `build` and the offline smoke tests (`test:mvp`, `test:providers`,
-  `test:media`, `test:citation-pack`).
+  `npm ci`, `typecheck`, `build`, the offline smoke suite and renderer tests under coverage, and the
+  80% main-process coverage gate.
 - **Dependabot** (`.github/dependabot.yml`): weekly npm and GitHub Actions updates. Related
   packages are grouped (React, MUI, Vite toolchain, Electron) so they move together.
 - **Dependabot auto-merge** (`.github/workflows/dependabot-auto-merge.yml`): minor and patch PRs
@@ -16,16 +16,35 @@ Other automation:
 
 ## Cut a release
 
+The tag must match `package.json`: installers are named from `package.json`, so the workflow's
+`verify` job fails fast if they disagree (`scripts/check-release-version.cjs`).
+
 ```bash
-# from main (or the commit you want to ship)
-git tag v0.1.0
-git push origin v0.1.0
-# or: git push --tags
+# 1. Bump the version in a PR and merge it (also updates package-lock.json)
+npm version 0.4.0 --no-git-tag-version
+#    ...add a "## [0.4.0] — Title" section to CHANGELOG.md in the same PR
+# 2. Tag the merged commit on main and push only that tag
+git checkout main && git pull
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
-You can also run the workflow manually: **Actions → Release → Run workflow** (or
-`gh workflow run release.yml`). Manual runs upload installers as workflow artifacts only; a GitHub
-Release is created only for `v*` tags.
+The tag push runs `.github/workflows/release.yml`:
+
+1. **verify**: tag matches `package.json`/`package-lock.json`, then typecheck, the offline smoke
+   suite and the renderer tests. Nothing is built if any of these fail.
+2. **build** (macOS arm64+x64, Windows, Linux): installers, a check that
+   `dist-electron/workers/job-worker.js` is inside `app.asar` (#314), and on Linux a smoke test that
+   runs one import through the job worker with the packaged runtime and starts the app under xvfb.
+3. **publish**: a published (not draft) GitHub Release named `v0.4.0 — <title from CHANGELOG>`, with
+   that CHANGELOG section followed by GitHub's generated PR list, and every installer attached. Tags
+   with a hyphen (`v0.5.0-rc.1`) become pre-releases, which the in-app update check ignores.
+4. **snap**: uploads to the Snap Store edge channel when `SNAPCRAFT_STORE_CREDENTIALS` is set.
+
+If a tag was pushed by mistake (e.g. before the bump), delete it locally and on GitHub, fix, and tag again.
+
+**Dry run:** **Actions → Release → Run workflow** (or `gh workflow run release.yml --ref <branch>`)
+runs verify and build, uploads installers as workflow artifacts, and never publishes, even on a tag ref.
 
 ## Artifacts
 

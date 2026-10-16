@@ -1,5 +1,8 @@
 name: Release
 
+# Push a vX.Y.Z tag that matches package.json to build every installer and publish a GitHub
+# Release. "Run workflow" (workflow_dispatch) builds the same installers as artifacts only and
+# never publishes, whatever ref it runs on. See docs/release.md.
 on:
   push:
     tags: ['v*']
@@ -8,25 +11,16 @@ on:
 permissions:
   contents: read
 
+# One run per ref; never cancel a release half-way through publishing.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build:
-    name: build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            dist: npm run build && npx electron-builder --mac --arm64 --x64 --publish never
-          - os: windows-latest
-            dist: npm run dist:win
-          - os: ubuntu-latest
-            dist: npm run dist:linux
-    env:
-      # Unsigned builds for now; see README for the macOS "Open Anyway" steps.
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  verify:
+    name: verify (version + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
@@ -35,12 +29,53 @@ jobs:
           node-version: 22
           cache: npm
 
-      # rpmbuild for the .rpm target; snapcraft for the .snap target.
+      # Installers are named from package.json, so a tag that disagrees with it ships
+      # mislabeled files. Fail before spending ~6 minutes of runners on the matrix.
+      - name: Tag matches package.json
+        if: github.event_name == 'push'
+        run: node scripts/check-release-version.cjs "$GITHUB_REF_NAME"
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:ci
+      - run: npm run test:renderer
+
+  build:
+    name: build (${{ matrix.os }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            dist: npm run build && npx electron-builder --mac --arm64 --x64 --publish never
+            resources: release/mac-arm64/Vault.app/Contents/Resources
+          - os: windows-latest
+            dist: npm run dist:win
+            resources: release/win-unpacked/resources
+          - os: ubuntu-latest
+            dist: npm run dist:linux
+            resources: release/linux-unpacked/resources
+    env:
+      # Unsigned builds for now; see README for the macOS "Open Anyway" and Windows
+      # SmartScreen steps.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # rpmbuild for the .rpm target; snapcraft for the .snap target; xvfb for the smoke test.
       - name: Install Linux packaging tools
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm
+          sudo apt-get install -y rpm xvfb
           sudo snap install snapcraft --classic
 
       # better-sqlite3 is native, so each OS builds its own copy (postinstall → install-app-deps).
@@ -49,6 +84,29 @@ jobs:
       - name: Build installers
         run: ${{ matrix.dist }}
         shell: bash
+
+      # The job worker (imports, book parsing, enrollment) is a separate entry point; #314
+      # shipped without it once. Check it is inside app.asar on every OS.
+      - name: Job worker is packaged
+        shell: bash
+        run: |
+          npx --yes @electron/asar list "${{ matrix.resources }}/app.asar" | tee /tmp/asar.txt | grep -E '^[/\\]dist-electron[/\\]workers[/\\]job-worker\.js$'
+
+      # Launch the packaged Linux runtime and run one real import job through the worker
+      # from inside app.asar, then start the packaged app headless for a few seconds.
+      - name: Smoke test the packaged Linux app
+        if: runner.os == 'Linux'
+        run: |
+          ELECTRON_RUN_AS_NODE=1 release/linux-unpacked/local-knowledge-vault \
+            scripts/packaged-worker-smoke.cjs release/linux-unpacked/resources
+          export LKV_USER_DATA_DIR="$(mktemp -d)"
+          set +e
+          timeout 20s xvfb-run -a release/linux-unpacked/local-knowledge-vault --no-sandbox > /tmp/app.log 2>&1
+          code=$?
+          set -e
+          cat /tmp/app.log
+          # 124 = still running when timeout stopped it, which is what we want.
+          if [ "$code" != "124" ]; then echo "::error::packaged app exited early ($code)"; exit 1; fi
 
       - uses: actions/upload-artifact@v7
         with:
@@ -65,7 +123,7 @@ jobs:
 
   snap:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     env:
       # Created with `snapcraft export-login`; until this secret exists the upload is skipped.
@@ -86,17 +144,39 @@ jobs:
 
   publish:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Only a real tag push publishes; a manual run on a tag ref stays a dry run.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           path: dist-artifacts
           merge-multiple: true
 
+      # Release notes: this version's CHANGELOG.md section, followed by GitHub's generated
+      # list of merged PRs. Without a section, the generated list alone.
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, "## " v) || index($0, "## v" v)) { found=1; next } }
+            found { print }
+          ' CHANGELOG.md 2>/dev/null > notes.md || true
+          title="$(grep -m1 -E "^## \[?v?${version}\]?" CHANGELOG.md 2>/dev/null | sed -E 's/^## \[?v?[0-9.]+\]?( *[—-] *)?//; s/ *\(?[0-9]{4}-[0-9]{2}-[0-9]{2}\)? *$//')"
+          echo "name=${GITHUB_REF_NAME}${title:+ — $title}" >> "$GITHUB_OUTPUT"
+          wc -l notes.md
+
       - uses: softprops/action-gh-release@v3
         with:
+          name: ${{ steps.notes.outputs.name }}
+          body_path: notes.md
           files: dist-artifacts/*
+          fail_on_unmatched_files: true
           generate_release_notes: true
+          # Published (not draft) so the in-app update check sees it; vX.Y.Z-rc tags are pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
