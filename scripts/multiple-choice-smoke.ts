@@ -216,6 +216,8 @@ async function main(): Promise<void> {
   const c2 = res.cardIds[2]
   const q3 = await session.getCardQuestion(c2)
   assert(q3.mode === 'mc' && q3.options?.map((o) => o.key).join('') === 'ABC', '"All of the above" items are asked unshuffled')
+  session.answerStudyCard({ sessionId: 'ses5', cardId: c2, question: q3.question, mode: 'mc', chosenOption: 'C', grade: 'good' })
+  assert(mc.lastWrongPick(c2, 'C') === null && (await session.getCardQuestion(c2)).lastPick === null, 'only right picks: no "last time you picked" line')
   sqlite.prepare('UPDATE study_cards SET mc_options = NULL, mc_answer = NULL WHERE id = ?').run(res.cardIds[1])
   const schedBefore = JSON.stringify(sqlite.prepare('SELECT * FROM card_schedule ORDER BY card_id').all())
   const again = pt.importPracticeTest({ project: 'A+', name: 'Core 2', date: '2026-10-08', items, includeCorrect: true })
