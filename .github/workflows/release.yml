@@ -37,6 +37,8 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
+      # test:job-worker checks the built dist-electron/workers/job-worker.js, so build first (as CI does).
+      - run: npm run build
       - run: npm run test:ci
       - run: npm run test:renderer
 
