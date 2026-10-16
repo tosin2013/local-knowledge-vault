@@ -29,7 +29,7 @@ import { hashText } from './text-hash'
 import { VISUAL_RE } from './practice-test'
 import { projectMultipleChoice } from './db'
 import { lastWrongPick, listRepeatedPicks, mcMode, nextStreak, parseOptions, shuffleOptions, whyWrongLine } from './multiple-choice'
-import { getCardState, getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
+import { getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
 import { calibrationSummary, clampConfidence, recordStudyAttempt } from './study'
 import type {
   SearchHit,
@@ -374,7 +374,7 @@ function mcFields(row: CardRow): Partial<StudyCardQuestion> {
   const key = row.mc_answer ?? ''
   if (!options || !options.some((o) => o.key === key)) return {}
   if (!projectMultipleChoice(row.project)) return {}
-  const streak = Number(row.mc_streak ?? 0)
+  const streak = Number(row.mc_streak)
   const mode = mcMode(streak, true)
   if (mode === 'recall') return { mode, streak }
   // Why-wrong lines come only from the cited source: the test's explanation,
@@ -565,7 +565,7 @@ export function answerStudyCard(input: StudyAnswerInput): StudyAnswerResult {
   const card = database
     .prepare('SELECT id, item_id, mc_options, mc_answer, mc_streak FROM study_cards WHERE id = ?')
     .get(cardId) as
-    | { id: string; item_id: string; mc_options: string | null; mc_answer: string | null; mc_streak: number | null }
+    | { id: string; item_id: string; mc_options: string | null; mc_answer: string | null; mc_streak: number }
     | undefined
   if (!card) throw new Error('This card no longer exists.')
   let grade = toReviewGrade(String(input.grade))
@@ -582,9 +582,9 @@ export function answerStudyCard(input: StudyAnswerInput): StudyAnswerResult {
     correct = chosen.key === card.mc_answer
     if (!correct) grade = 'again'
     if (!input.dontKnow) attempt = chosen.text
-    streak = nextStreak(Number(card.mc_streak ?? 0), 'mc', grade, correct)
+    streak = nextStreak(Number(card.mc_streak), 'mc', grade, correct)
   } else if (isMc && input.mode === 'recall') {
-    streak = nextStreak(Number(card.mc_streak ?? 0), 'recall', grade, null)
+    streak = nextStreak(Number(card.mc_streak), 'recall', grade, null)
   } else if (isMc && input.mode === 'mc' && input.dontKnow) {
     // "I don't know" on a multiple-choice card: Missed, no pick to log.
     grade = 'again'
@@ -609,7 +609,7 @@ export function answerStudyCard(input: StudyAnswerInput): StudyAnswerResult {
     grade,
   })
   return {
-    state: getCardState(cardId) ?? state,
+    state,
     dueAt: String(due.due_at),
     grade,
     ...(correct !== undefined ? { correct } : {}),

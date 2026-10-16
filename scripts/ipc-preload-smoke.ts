@@ -577,6 +577,18 @@ async function main(): Promise<void> {
   assert(api.media !== undefined, 'preload exposes media API')
   assert(api.bridge !== undefined, 'preload exposes bridge API')
   assert(api.mcp !== undefined, 'preload exposes mcp API')
+  const projApi = api.projects as { setMultipleChoice: (n: string, on: boolean) => Promise<{ multipleChoice: boolean }> }
+  const viaPreload = await projApi.setMultipleChoice('IPC Exam', false)
+  assert(viaPreload.multipleChoice === false, 'preload projects.setMultipleChoice reaches projects:setMultipleChoice (#324)')
+  const defaultOn = await ipcRendererMock.invoke('projects:setMultipleChoice', 'IPC Exam', undefined) as { multipleChoice: boolean }
+  assert(defaultOn.multipleChoice === true, 'projects:setMultipleChoice treats a missing flag as on')
+  let mcNoName = false
+  try {
+    await ipcRendererMock.invoke('projects:setMultipleChoice', undefined, true)
+  } catch {
+    mcNoName = true
+  }
+  assert(mcNoName, 'projects:setMultipleChoice needs a project name')
 
   // Verify a few method signatures
   assert(typeof (api.items as Record<string, unknown>).list === 'function', 'items.list is function')

@@ -101,6 +101,13 @@ async function main(): Promise<void> {
   assert(mc.mcFromItem({ question: 'q', answer: 'x', correct: false, options: ['A. a', 'B. b'] }) === null, 'a wrong item with no key is not multiple choice')
   assert(mc.mcFromItem({ question: 'q', answer: 'A', correct: false, correctAnswer: 'A', options: ['A. only'] }) === null, 'one option is not multiple choice')
   assert(mc.mcFromItem({ question: 'q', answer: 'A', correct: false, correctAnswer: 'Z', options: ['A. a', 'B. b'] }) === null, 'an unresolvable key is not multiple choice')
+  assert(mc.mcFromItem({ question: 'q', answer: '', correct: false } as never) === null && mc.mcFromItem({ question: 'q', answer: 'A', correct: false, correctAnswer: 'A', options: [null as never, 'A. a', 'B. b'] })?.options.length === 2, 'missing or null options are tolerated')
+  assert(mc.mcFromItem({ question: 'q', answer: 'A', correct: false, correctAnswer: 'B', options: ['A. a', 'A. again', 'C. c'] })?.options[1].key === 'B', 'a repeated label falls back to its position')
+  assert(mc.mcFromItem({ question: 'q', answer: 'A', correct: false, correctAnswer: 'A', options: ['A. a', 'B.'] }) === null, 'an option with no text is not multiple choice')
+  assert(mc.mcFromItem({ question: 'q', answer: '1', correct: false, correctAnswer: 'A.', options: ['(1) x', '(2) y'] }) === null, 'a letter key that matches no numbered option is not resolved')
+  assert(mc.parseOptions('{"key":"A"}') === null && mc.parseOptions(null) === null, 'a non-array or missing value is not options')
+  const longWhy = mc.whyWrongLine('Phishing', [`Phishing ${'is a very long explanation about email '.repeat(10)}end.`]) ?? ''
+  assert(longWhy.length === 218 && longWhy.endsWith('…'), 'a long why-wrong line is cut to one line')
   const bio = parse.parseTestResults(BIO)
   assert(mc.mcFromItem(bio[0])?.answer === '2' && mc.mcFromItem(bio[1]) === null, '(1)–(4) options with a correct answer resolve; a wrong item without a key does not')
   const opts = [{ key: 'A', text: 'a' }, { key: 'B', text: 'b' }, { key: 'C', text: 'c' }, { key: 'D', text: 'd' }]
@@ -149,6 +156,11 @@ async function main(): Promise<void> {
   const repeated = review.getStudyStats('A+').repeatedPicks ?? []
   assert(repeated.length === 1 && repeated[0].picked === 'Shoulder surfing' && repeated[0].answer === 'Tailgating' && repeated[0].times === 2, '"Answers you keep picking" lists a wrong answer picked twice')
   assert((session.studySessionSummary('ses1', 'A+').repeatedPicks ?? []).length === 1, 'the session summary lists it too')
+  // Options edited after the picks (the picked key no longer exists): skipped, not shown wrong.
+  const keepOpts = sqlite.prepare('SELECT mc_options FROM study_cards WHERE id = ?').get(c0) as { mc_options: string }
+  sqlite.prepare('UPDATE study_cards SET mc_options = ? WHERE id = ?').run(JSON.stringify([{ key: 'C', text: 'Tailgating' }, { key: 'D', text: 'Whaling' }]), c0)
+  assert(mc.listRepeatedPicks({ project: 'A+' }).length === 0, 'a pick whose option is gone is left out')
+  sqlite.prepare('UPDATE study_cards SET mc_options = ? WHERE id = ?').run(keepOpts.mc_options, c0)
   assert(mc.listRepeatedPicks({ cardIds: [] }).length === 0 && mc.listRepeatedPicks({ project: 'Nope' }).length === 0, 'scopes with no cards list nothing')
 
   console.log('\nPromotion and demotion')
@@ -188,6 +200,17 @@ async function main(): Promise<void> {
     threw = true
   }
   assert(threw, 'a project is required')
+  threw = false
+  try {
+    db.setProjectMultipleChoice(undefined as never, true)
+  } catch {
+    threw = true
+  }
+  assert(threw && db.projectMultipleChoice(null) === true && db.projectMultipleChoice('No such project') === true, 'no project, or one with no settings row, defaults to on')
+  db.setProjectMultipleChoice('Merged away', false)
+  db.createItem({ title: 'tmp', body: 'x', kind: 'note', project: 'Merged away', para: 'resources' })
+  db.mergeProject('Merged away', 'Fresh target')
+  assert(db.getProjectSettings('Fresh target').multipleChoice === false, 'a merge into a project with no settings carries the setting')
 
   console.log('\nRe-import and other cards')
   const c2 = res.cardIds[2]

@@ -853,9 +853,9 @@ export function getProjectSettings(name: string): ProjectSettings {
   const n = (name ?? '').trim()
   if (!n) return { name: '', examDate: null, multipleChoice: true }
   const row = getDb().prepare('SELECT exam_date, mc_mode FROM project_settings WHERE name = ?').get(n) as
-    | { exam_date: string | null; mc_mode: number | null }
+    | { exam_date: string | null; mc_mode: number }
     | undefined
-  return { name: n, examDate: row?.exam_date ? String(row.exam_date) : null, multipleChoice: row ? Number(row.mc_mode ?? 1) !== 0 : true }
+  return { name: n, examDate: row?.exam_date ? String(row.exam_date) : null, multipleChoice: row ? Number(row.mc_mode) !== 0 : true }
 }
 
 /** Set (or clear, with null/'') a project's exam date. */
@@ -901,7 +901,7 @@ export function projectMultipleChoice(name: string | null | undefined): boolean 
  */
 function moveProjectSettings(database: Database.Database, from: string, to: string): void {
   const src = database.prepare('SELECT * FROM project_settings WHERE name = ?').get(from) as
-    | { exam_date: string | null; mc_mode: number | null; created_at: string }
+    | { exam_date: string | null; mc_mode: number; created_at: string }
     | undefined
   if (!src) return
   const dst = database.prepare('SELECT exam_date FROM project_settings WHERE name = ?').get(to) as
@@ -911,7 +911,7 @@ function moveProjectSettings(database: Database.Database, from: string, to: stri
   if (!dst) {
     database
       .prepare('INSERT INTO project_settings (name, exam_date, mc_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-      .run(to, src.exam_date, src.mc_mode ?? 1, src.created_at, ts)
+      .run(to, src.exam_date, src.mc_mode, src.created_at, ts)
   } else if (!dst.exam_date && src.exam_date) {
     database.prepare('UPDATE project_settings SET exam_date = ?, updated_at = ? WHERE name = ?').run(src.exam_date, ts, to)
   }

@@ -31,7 +31,7 @@ export const MC_PROMOTE_AFTER = 2
 const LETTERS = 'ABCDEFGH'
 
 function norm(s: string): string {
-  return (s ?? '')
+  return s
     .toLowerCase()
     .replace(/\(correct(?: answer)?\)/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
@@ -214,7 +214,7 @@ export function listRepeatedPicks(opts: { project?: string; cardIds?: string[]; 
     out.push({
       cardId: String(r.card_id),
       itemId: String(r.item_id),
-      question: String(r.question ?? ''),
+      question: String(r.question),
       picked: chosen.text,
       answer: answer.text,
       times: Number(r.times),
