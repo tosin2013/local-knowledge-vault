@@ -10,6 +10,7 @@
  * FSRS is deliberately out of scope — this is a first, explainable pass.
  */
 import { getDb, newId } from './db'
+import { listRepeatedPicks } from './multiple-choice'
 import { createNoteCards, type CreateNoteCardsOptions } from './study-cards'
 import type {
   ReviewEnqueueResult,
@@ -551,7 +552,7 @@ export function examDateForCard(cardId: string): string | null {
 export function rateReview(
   cardOrItemId: string,
   grade: ReviewGrade,
-  opts: { targetDate?: string | null } = {},
+  opts: { targetDate?: string | null; chosenOption?: string | null } = {},
 ): ReviewState {
   const database = getDb()
   const isCard = !!database.prepare('SELECT 1 FROM study_cards WHERE id = ?').get(cardOrItemId)
@@ -599,10 +600,10 @@ export function rateReview(
       })
     database
       .prepare(
-        `INSERT INTO review_log (id, card_id, grade, reviewed_at, interval_days, ease, due_at, migrated)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+        `INSERT INTO review_log (id, card_id, grade, reviewed_at, interval_days, ease, due_at, migrated, chosen_option)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
       )
-      .run(newId('rvl'), cardId, grade, ts, state.intervalDays, state.ease, dueAt)
+      .run(newId('rvl'), cardId, grade, ts, state.intervalDays, state.ease, dueAt, opts.chosenOption ?? null)
   })()
   return state
 }
@@ -719,5 +720,6 @@ export function getStudyStats(project?: string, now: Date = new Date()): StudySt
     newPerDay: budget.perDay,
     newLeftToday: budget.leftToday,
     unreachable: budget.unreachable,
+    repeatedPicks: listRepeatedPicks({ project: name || undefined }),
   }
 }

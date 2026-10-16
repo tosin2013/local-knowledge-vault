@@ -29,7 +29,7 @@ describe('ReviewView', () => {
   it('shows the project exam date and starts the session in that project', async () => {
     const lkv = lkvMock()
     lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 2, examDate: '2099-06-01' }])
-    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01' })
+    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01', multipleChoice: true })
     render(<ReviewView />)
 
     // All projects has no exam date.
@@ -67,7 +67,7 @@ describe('ReviewView', () => {
   it('shows a validation error from the main process', async () => {
     const lkv = lkvMock()
     lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 2, examDate: '2099-06-01' }])
-    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01' })
+    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01', multipleChoice: true })
     lkv.projects.setExamDate.mockRejectedValue(new Error('2026-02-30 is not a real date'))
     render(<ReviewView />)
 
@@ -79,7 +79,7 @@ describe('ReviewView', () => {
     expect(await screen.findByText('2026-02-30 is not a real date')).toBeInTheDocument()
 
     // Clear removes the date.
-    lkv.projects.setExamDate.mockResolvedValue({ name: 'Biology', examDate: null })
+    lkv.projects.setExamDate.mockResolvedValue({ name: 'Biology', examDate: null, multipleChoice: true })
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
     await waitFor(() => expect(lkv.projects.setExamDate).toHaveBeenLastCalledWith('Biology', null))
     expect(await screen.findByText('No exam date for Biology')).toBeInTheDocument()

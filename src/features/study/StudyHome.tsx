@@ -18,6 +18,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import type { ProjectSummary, StudyEnrollResult, StudyStats } from '../../../electron/types'
 import { ProjectSelect } from '../ProjectSelect'
 import { ExamDateControl } from './ExamDateControl'
+import { MultipleChoiceSetting } from './MultipleChoiceSetting'
+import { RepeatedPicks } from './RepeatedPicks'
 import { NEW_CARDS_PER_DAY_MAX, daysToExam, daysToGoLabel, formatExamDate } from './examDate'
 import { readPairsPref, writePairsPref } from './pairsPref'
 
@@ -26,6 +28,8 @@ export interface StudyHomeProps {
   onProjectChange: (project: string) => void
   /** Switch to the Study session section. */
   onStartReview: () => void
+  /** Open a note (the practice test behind an answer you keep picking). */
+  onOpenNote?: (id: string) => void
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -66,7 +70,7 @@ function Stat({ label, value, detail }: { label: string; value: string; detail?:
  * exam date, days to go, cards due, total cards, last session — and enroll
  * the whole project with one click.
  */
-export function StudyHome({ project, onProjectChange, onStartReview }: StudyHomeProps) {
+export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote }: StudyHomeProps) {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
   const [stats, setStats] = useState<StudyStats | null>(null)
   const [enrolling, setEnrolling] = useState(false)
@@ -126,6 +130,7 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
           onProjectsLoaded={setProjects}
         />
         <ExamDateControl project={project} onChange={() => void refresh()} />
+        <MultipleChoiceSetting project={project} />
       </Stack>
 
       {noProjects && (
@@ -178,6 +183,8 @@ export function StudyHome({ project, onProjectChange, onStartReview }: StudyHome
           />
         </Stack>
       )}
+
+      <RepeatedPicks picks={stats?.repeatedPicks} onOpenNote={onOpenNote} />
 
       {stats && stats.unreachable > 0 && (
         <Alert severity="warning" data-testid="coverage-warning">

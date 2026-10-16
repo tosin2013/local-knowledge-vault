@@ -39,6 +39,8 @@ export interface ProjectSummary {
 export interface ProjectSettings {
   name: string
   examDate: string | null
+  /** "Ask multiple-choice questions as multiple choice" (#324); on by default. */
+  multipleChoice: boolean
 }
 
 /** Result of a project rename/merge/delete (count of notes affected). */
@@ -1055,6 +1057,8 @@ export interface StudyStats {
   newLeftToday: number
   /** New cards the daily maximum can't reach before the exam (0 = all reachable). */
   unreachable: number
+  /** "Answers you keep picking" (#324): wrong options picked more than once. */
+  repeatedPicks?: RepeatedPick[]
 }
 
 /** What enrolling a note produced. */
@@ -1190,6 +1194,39 @@ export interface StudyCardQuestion {
   linkedNote?: { id: string; title: string; confirmed: boolean } | null
   /** Diagram / graph items: recall or sketch, then open the test to check. */
   openSource?: boolean
+  /**
+   * Multiple-choice practice-test cards (#324): `mc` = asked with its options,
+   * `recall` = promoted to free recall (options hidden). Absent for every
+   * other card.
+   */
+  mode?: 'mc' | 'recall'
+  /** The options in the order to show them (shuffled on each review); only when `mode` is `mc`. */
+  options?: McOption[]
+  /** The correct option's key; only when `mode` is `mc`. */
+  answerKey?: string
+  /** One line from the cited source on why each wrong option is wrong, by key, when one exists. */
+  whyWrong?: Record<string, string>
+  /** The last wrong pick on this card; `latest` = it was the last multiple-choice attempt. */
+  lastPick?: { key: string; text: string; latest: boolean } | null
+  /** Correct multiple-choice answers in a row (2 = asked as free recall next). */
+  streak?: number
+}
+
+/** One multiple-choice option (#324): the test's own label and its text. */
+export interface McOption {
+  key: string
+  text: string
+}
+
+/** A wrong answer picked more than once on the same card (#324). */
+export interface RepeatedPick {
+  cardId: string
+  /** The practice test the card came from. */
+  itemId: string
+  question: string
+  picked: string
+  answer: string
+  times: number
 }
 
 export interface StudySessionStartInput {
@@ -1219,12 +1256,22 @@ export interface StudyAnswerInput {
   grade: ReviewGrade | StudySelfGrade
   /** The answer key shown on reveal. */
   answer?: string | null
+  /** How a multiple-choice card was asked (#324). */
+  mode?: 'mc' | 'recall'
+  /** The option key picked, when it was asked as multiple choice. A wrong pick is graded Missed. */
+  chosenOption?: string
 }
 
 export interface StudyAnswerResult {
   state: ReviewState
   /** When the card is due again. */
   dueAt: string
+  /** The grade that was applied (a wrong multiple-choice pick is always Missed). */
+  grade?: ReviewGrade
+  /** Multiple choice: whether the pick was right. */
+  correct?: boolean
+  /** Multiple choice: correct answers in a row after this one. */
+  streak?: number
 }
 
 /** One card in the session summary. */
@@ -1258,4 +1305,6 @@ export interface StudySessionReport {
   nextDueAt: string | null
   /** Cards due by the end of tomorrow in this scope. */
   dueByTomorrow: number
+  /** "Answers you keep picking" among this session's cards (#324). */
+  repeatedPicks?: RepeatedPick[]
 }

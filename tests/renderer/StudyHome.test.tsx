@@ -36,7 +36,7 @@ describe('StudyHome (#262)', () => {
   it('shows the project stats: exam date, days to go, due, cards and last session', async () => {
     const lkv = lkvMock()
     lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 20, examDate: '2099-06-01' }])
-    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01' })
+    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01', multipleChoice: true })
     lkv.review.stats.mockResolvedValue(BIO_STATS)
     const { onStartReview } = renderHome()
 

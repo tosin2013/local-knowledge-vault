@@ -292,6 +292,9 @@ const api = {
     /** Set or clear (null / '') a project's exam date (`YYYY-MM-DD`). */
     setExamDate: (name: string, examDate: string | null): Promise<ProjectSettings> =>
       ipcRenderer.invoke('projects:setExamDate', name, examDate),
+    /** "Ask multiple-choice questions as multiple choice" for a project (#324). */
+    setMultipleChoice: (name: string, on: boolean): Promise<ProjectSettings> =>
+      ipcRenderer.invoke('projects:setMultipleChoice', name, on),
   },
   citationPack: {
     export: (input: CitationPackExportInput): Promise<CitationPackExportResult> =>

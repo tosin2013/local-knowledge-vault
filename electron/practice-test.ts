@@ -24,6 +24,10 @@
  * - Diagram and graph items become "open the source" cards; a PBQ becomes one
  *   walk-through-the-steps card.
  * - Re-importing the same test (same project, name and date) is idempotent.
+ * - Multiple-choice items (2+ options and a resolvable answer) also keep their
+ *   options and key on the card (#324), so Study can ask them as multiple
+ *   choice; the stored question stays the recall form for promoted reviews.
+ *   Re-importing fills in options on older cards without touching schedules.
  */
 import fs from 'fs'
 import path from 'path'
@@ -36,6 +40,7 @@ import {
   runInTransaction,
   updateItem,
 } from './db'
+import { mcFromItem } from './multiple-choice'
 import { searchQuery } from './search'
 import { sectionWords } from './study-cards'
 import { hashText } from './text-hash'
@@ -258,9 +263,13 @@ export function importPracticeTest(input: PracticeTestImportInput): PracticeTest
     const insertCard = database.prepare(
       `INSERT OR IGNORE INTO study_cards
          (id, item_id, chunk_index, origin, question, answer, quote, explanation, source_test, source_test_date,
-          source_key, priority, status, q_kind, q_at, link_item_id, created_at, updated_at)
+          source_key, priority, status, q_kind, q_at, link_item_id, mc_options, mc_answer, created_at, updated_at)
        VALUES (@id, @item_id, NULL, 'practice-test', @question, @answer, NULL, @explanation, @source_test,
-               @source_test_date, @source_key, @priority, 'active', 'test', @ts, @link, @ts, @ts)`,
+               @source_test_date, @source_key, @priority, 'active', 'test', @ts, @link, @mc_options, @mc_answer, @ts, @ts)`,
+    )
+    // Older cards (before #324) gain their options on re-import; nothing else changes.
+    const fillOptions = database.prepare(
+      `UPDATE study_cards SET mc_options = ?, mc_answer = ?, updated_at = ? WHERE id = ? AND mc_options IS NULL`,
     )
     const insertSchedule = database.prepare(
       `INSERT OR IGNORE INTO card_schedule
@@ -277,7 +286,9 @@ export function importPracticeTest(input: PracticeTestImportInput): PracticeTest
       const existing = database.prepare('SELECT id FROM study_cards WHERE source_key = ?').get(sourceKey) as
         | { id: string }
         | undefined
+      const mc = kind === 'question' ? mcFromItem(item) : null
       if (existing) {
+        if (mc) fillOptions.run(JSON.stringify(mc.options), mc.answer, ts, existing.id)
         result.alreadyAdded++
         result.cardIds[index] = existing.id
         continue
@@ -316,6 +327,8 @@ export function importPracticeTest(input: PracticeTestImportInput): PracticeTest
         priority: item.correct ? CORRECT_ITEM_PRIORITY : WRONG_ITEM_PRIORITY,
         ts,
         link,
+        mc_options: mc ? JSON.stringify(mc.options) : null,
+        mc_answer: mc?.answer ?? null,
       })
       if (item.correct) {
         insertSchedule.run({ card_id: id, ts, ease: DEFAULT_EASE, lapses: 0, last_grade: null, last_reviewed_at: null })

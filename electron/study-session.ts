@@ -27,7 +27,9 @@ import { isRateLimited, retryAfterMs, formatWait } from './providers/http'
 import { buildGroundedMessages, citationsFromIds, extractCitedIds, validateCitations } from './generate'
 import { hashText } from './text-hash'
 import { VISUAL_RE } from './practice-test'
-import { getCardState, getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
+import { projectMultipleChoice } from './db'
+import { lastWrongPick, listRepeatedPicks, mcMode, nextStreak, parseOptions, shuffleOptions, whyWrongLine } from './multiple-choice'
+import { getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
 import { calibrationSummary, clampConfidence, recordStudyAttempt } from './study'
 import type {
   SearchHit,
@@ -282,6 +284,10 @@ interface CardRow {
   link_item_id: string | null
   link_title: string | null
   link_status: string | null
+  link_body?: string | null
+  mc_options?: string | null
+  mc_answer?: string | null
+  mc_streak?: number | null
 }
 
 function loadCard(cardId: string): CardRow | null {
@@ -290,7 +296,8 @@ function loadCard(cardId: string): CardRow | null {
       `SELECT c.id, c.item_id, c.chunk_index, c.origin, c.question, c.answer, c.quote,
               c.q_kind, c.q_source_hash, c.q_model, c.q_note,
               c.explanation, c.source_test, c.source_test_date, c.link_item_id,
-              li.title AS link_title, li.status AS link_status,
+              li.title AS link_title, li.status AS link_status, li.body AS link_body,
+              c.mc_options, c.mc_answer, c.mc_streak,
               i.title, i.body, i.project, i.para, i.kind,
               nc.body AS chunk_body,
               (SELECT COUNT(*) FROM note_chunks n2 WHERE n2.item_id = i.id) AS chunk_count
@@ -353,6 +360,41 @@ function baseQuestion(row: CardRow): Omit<StudyCardQuestion, 'kind' | 'question'
     chunkIndex: row.chunk_index == null ? null : Number(row.chunk_index),
     chunkCount: Number(row.chunk_count ?? 0),
     citations: citationsFromIds([row.item_id]),
+  }
+}
+
+/**
+ * How a multiple-choice practice-test card is asked now (#324): with its
+ * options (shuffled), or as free recall once it has been answered right twice
+ * in a row. Nothing for other cards, or when the project has the mode off.
+ */
+function mcFields(row: CardRow): Partial<StudyCardQuestion> {
+  if (row.origin !== 'practice-test') return {}
+  const options = parseOptions(row.mc_options)
+  const key = row.mc_answer ?? ''
+  if (!options || !options.some((o) => o.key === key)) return {}
+  if (!projectMultipleChoice(row.project)) return {}
+  const streak = Number(row.mc_streak)
+  const mode = mcMode(streak, true)
+  if (mode === 'recall') return { mode, streak }
+  // Why-wrong lines come only from the cited source: the test's explanation,
+  // or the learner's note once it is confirmed in their own words (#217).
+  const sources = [row.explanation, row.link_status && row.link_status !== 'ai-draft' ? row.link_body : null]
+  const whyWrong: Record<string, string> = {}
+  for (const o of options) {
+    if (o.key === key) continue
+    const line = whyWrongLine(o.text, sources)
+    if (line) whyWrong[o.key] = line
+  }
+  const last = lastWrongPick(row.id, key)
+  const lastOption = last ? options.find((o) => o.key === last.key) : undefined
+  return {
+    mode,
+    streak,
+    options: shuffleOptions(options),
+    answerKey: key,
+    whyWrong,
+    lastPick: last && lastOption ? { key: lastOption.key, text: lastOption.text, latest: last.latest } : null,
   }
 }
 
@@ -429,6 +471,7 @@ export async function getCardQuestion(cardId: string): Promise<StudyCardQuestion
       quote: row.quote,
       model: row.q_model,
       notice: row.q_note && (kind === 'cloze' || kind === 'explain') ? `The written question didn’t pass Vault’s checks (${row.q_note}), so this prompt was made from your note.` : undefined,
+      ...mcFields(row),
     }
   }
   if (row.origin !== 'note') {
@@ -518,16 +561,44 @@ export function startStudySession(input: StudySessionStartInput = {}): StudySess
  */
 export function answerStudyCard(input: StudyAnswerInput): StudyAnswerResult {
   const cardId = String(input?.cardId ?? '')
-  const card = getDb().prepare('SELECT id, item_id FROM study_cards WHERE id = ?').get(cardId) as
-    | { id: string; item_id: string }
+  const database = getDb()
+  const card = database
+    .prepare('SELECT id, item_id, mc_options, mc_answer, mc_streak FROM study_cards WHERE id = ?')
+    .get(cardId) as
+    | { id: string; item_id: string; mc_options: string | null; mc_answer: string | null; mc_streak: number }
     | undefined
   if (!card) throw new Error('This card no longer exists.')
-  const grade = toReviewGrade(String(input.grade))
-  const state = rateReview(cardId, grade)
-  const due = getDb().prepare('SELECT due_at FROM card_schedule WHERE card_id = ?').get(cardId) as { due_at: string }
+  let grade = toReviewGrade(String(input.grade))
+  let attempt = input.dontKnow ? 'I don’t know' : (input.attempt ?? '')
+
+  // Multiple choice (#324): a wrong pick is Missed whatever was clicked, and
+  // the pick is logged; the streak decides when the card turns into recall.
+  const options = parseOptions(card.mc_options)
+  const isMc = !!options && !!card.mc_answer && options.some((o) => o.key === card.mc_answer)
+  const chosen = isMc && input.mode === 'mc' ? options!.find((o) => o.key === String(input.chosenOption ?? '')) : undefined
+  let correct: boolean | undefined
+  let streak: number | undefined
+  if (chosen) {
+    correct = chosen.key === card.mc_answer
+    if (!correct) grade = 'again'
+    if (!input.dontKnow) attempt = chosen.text
+    streak = nextStreak(Number(card.mc_streak), 'mc', grade, correct)
+  } else if (isMc && input.mode === 'recall') {
+    streak = nextStreak(Number(card.mc_streak), 'recall', grade, null)
+  } else if (isMc && input.mode === 'mc' && input.dontKnow) {
+    // "I don't know" on a multiple-choice card: Missed, no pick to log.
+    grade = 'again'
+    streak = 0
+  }
+
+  const state = rateReview(cardId, grade, { chosenOption: chosen?.key ?? null })
+  if (streak !== undefined) {
+    database.prepare('UPDATE study_cards SET mc_streak = ?, updated_at = ? WHERE id = ?').run(streak, nowIso(), cardId)
+  }
+  const due = database.prepare('SELECT due_at FROM card_schedule WHERE card_id = ?').get(cardId) as { due_at: string }
   recordStudyAttempt({
     question: input.question ?? '',
-    attempt: input.dontKnow ? 'I don’t know' : (input.attempt ?? ''),
+    attempt,
     confidence: input.dontKnow ? 0 : input.confidence,
     selfGrade: reviewGradeToSelfGrade(grade) ?? 'missed',
     citedIds: [card.item_id],
@@ -537,7 +608,13 @@ export function answerStudyCard(input: StudyAnswerInput): StudyAnswerResult {
     sessionId: String(input.sessionId ?? ''),
     grade,
   })
-  return { state: getCardState(cardId) ?? state, dueAt: String(due.due_at) }
+  return {
+    state,
+    dueAt: String(due.due_at),
+    grade,
+    ...(correct !== undefined ? { correct } : {}),
+    ...(streak !== undefined ? { streak } : {}),
+  }
 }
 
 /** Last moment of tomorrow, local time. */
@@ -636,5 +713,6 @@ export function studySessionSummary(sessionId: string, project?: string, now: Da
     revisit: [...revisit.entries()].map(([itemId, title]) => ({ itemId, title })),
     nextDueAt: next?.next ? String(next.next) : null,
     dueByTomorrow: Number(soon?.reviewed ?? 0) + freshSoon,
+    repeatedPicks: listRepeatedPicks({ cardIds: [...first.keys()].filter(Boolean) }),
   }
 }

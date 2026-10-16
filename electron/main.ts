@@ -36,6 +36,7 @@ import {
   deleteProject,
   getProjectSettings,
   setProjectExamDate,
+  setProjectMultipleChoice,
   restoreItem,
   removeSampleNotes,
   trashItem,
@@ -825,6 +826,9 @@ function registerIpc(): void {
   ipcMain.handle('projects:delete', (_e, name: string) => deleteProject(name))
   // Per-project settings (#261): the exam date drives exam-aware spacing.
   ipcMain.handle('projects:getSettings', (_e, name: string) => getProjectSettings(String(name ?? '')))
+  ipcMain.handle('projects:setMultipleChoice', (_e, name: string, on: boolean) =>
+    setProjectMultipleChoice(String(name ?? ''), on !== false)
+  )
   ipcMain.handle('projects:setExamDate', (_e, name: string, examDate: string | null) =>
     setProjectExamDate(String(name ?? ''), examDate ?? null)
   )
