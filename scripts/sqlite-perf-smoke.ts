@@ -123,7 +123,7 @@ async function main(): Promise<void> {
 
   console.log('migration v11')
   const version = Number(database.pragma('user_version', { simple: true }))
-  assert(version === db.SCHEMA_VERSION && version === 11, `user_version is 11 (got ${version})`)
+  assert(version === db.SCHEMA_VERSION && version >= 11, `user_version is current, at least 11 (got ${version})`)
   const indexes = (
     database
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_items_%'")
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_items_%'")
       .all() as Array<{ name: string }>
   ).map((r) => r.name)
-  assert(reVersion === 11, 'reopening keeps user_version 11')
+  assert(reVersion === db.SCHEMA_VERSION, 'reopening keeps user_version current')
   assert(
     reIndexes.includes('idx_items_status_updated') && reIndexes.includes('idx_items_project'),
     'reopening keeps both indexes (CREATE IF NOT EXISTS)'

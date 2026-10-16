@@ -563,12 +563,15 @@ export function createLkvMock(): LkvMock {
       delete: vi.fn().mockResolvedValue({ count: 0 }),
       getSettings: vi
         .fn()
-        .mockImplementation((name: string) => Promise.resolve({ name, examDate: null })),
+        .mockImplementation((name: string) => Promise.resolve({ name, examDate: null, multipleChoice: true })),
       setExamDate: vi
         .fn()
         .mockImplementation((name: string, examDate: string | null) =>
-          Promise.resolve({ name, examDate: examDate || null }),
+          Promise.resolve({ name, examDate: examDate || null, multipleChoice: true }),
         ),
+      setMultipleChoice: vi
+        .fn()
+        .mockImplementation((name: string, on: boolean) => Promise.resolve({ name, examDate: null, multipleChoice: on })),
     },
     citationPack: {
       export: vi.fn().mockResolvedValue(makeCitationPackResult()),

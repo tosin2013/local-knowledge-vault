@@ -281,7 +281,7 @@ async function main(): Promise<void> {
     'review:enqueueProject', 'review:stats', 'review:enrolled',
     // projects + per-project settings (#261)
     'projects:list', 'projects:rename', 'projects:merge', 'projects:delete',
-    'projects:getSettings', 'projects:setExamDate',
+    'projects:getSettings', 'projects:setExamDate', 'projects:setMultipleChoice',
     // study (#215)
     'study:record', 'study:listRecent', 'study:calibration', 'study:questions',
     // study session (#263)
@@ -413,6 +413,9 @@ async function main(): Promise<void> {
   assert(setRes.examDate === examDay, 'projects:setExamDate saves the date')
   const gotRes = await ipcRendererMock.invoke('projects:getSettings', 'IPC Exam') as { examDate: string | null }
   assert(gotRes.examDate === examDay, 'projects:getSettings reads it back')
+  const mcOff = await ipcRendererMock.invoke('projects:setMultipleChoice', 'IPC Exam', false) as { multipleChoice: boolean; examDate: string | null }
+  assert(mcOff.multipleChoice === false && mcOff.examDate === examDay, 'projects:setMultipleChoice turns multiple choice off and keeps the date (#324)')
+  await ipcRendererMock.invoke('projects:setMultipleChoice', 'IPC Exam', true)
   const projList = await ipcRendererMock.invoke('projects:list') as Array<{ name: string; examDate?: string | null }>
   assert(projList.some((p) => p.name === 'IPC Exam' && p.examDate === examDay), 'projects:list includes examDate')
   let badDate = false

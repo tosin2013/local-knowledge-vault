@@ -27,6 +27,7 @@ import type {
   StudySessionReport,
 } from '../../../electron/types'
 import { STUDY_GRADES, gradeLabel } from './grades'
+import { RepeatedPicks } from './RepeatedPicks'
 
 export interface StudySessionProps {
   /** The Study project ('' = every project). */
@@ -48,6 +49,15 @@ const ORIGIN_LABEL: Record<string, string> = {
 
 function pct(v: number): string {
   return `${Math.round((v || 0) * 100)}%`
+}
+
+const LETTERS = 'ABCDEFGH'
+
+/** "C (Tailgating)": the option's letter as shown on this review, and its text. */
+export function optionLabel(q: StudyCardQuestion, key: string): string {
+  const i = (q.options ?? []).findIndex((o) => o.key === key)
+  const text = i >= 0 ? q.options![i].text : key
+  return i >= 0 ? `${LETTERS[i]} (${text})` : text
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -88,6 +98,8 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
   const pending = useRef<Record<string, Promise<StudyCardQuestion | null>>>({})
   const [attempt, setAttempt] = useState('')
   const [dontKnow, setDontKnow] = useState(false)
+  /** Multiple choice (#324): the option key picked (committed on reveal). */
+  const [picked, setPicked] = useState<string | null>(null)
   const [confidence, setConfidence] = useState(50)
   const [revealed, setRevealed] = useState(false)
   const [showSection, setShowSection] = useState(false)
@@ -152,6 +164,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
   const resetCard = () => {
     setAttempt('')
     setDontKnow(false)
+    setPicked(null)
     setConfidence(50)
     setRevealed(false)
     setShowSection(false)
@@ -198,7 +211,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
     }
   }
 
-  const canReveal = !!question && (dontKnow || attempt.trim().length > 0)
+  const isMc = question?.mode === 'mc' && (question.options?.length ?? 0) > 1
+  const canReveal = !!question && (dontKnow || (isMc ? picked != null : attempt.trim().length > 0))
+  const pickedRight = isMc && picked != null && picked === question?.answerKey
 
   const grade = async (g: ReviewGrade) => {
     if (!current || !question || !api?.answer) return
@@ -214,8 +229,19 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
         confidence: dontKnow ? 0 : confidence,
         grade: g,
         answer: question.answer ?? question.quote ?? null,
+        ...(question.mode ? { mode: question.mode } : {}),
+        ...(isMc && picked && !dontKnow ? { chosenOption: picked } : {}),
       })
       onGraded?.()
+      // A multiple-choice card asks again fresh (new shuffle, maybe a new mode).
+      if (g === 'again' && question.mode) {
+        delete pending.current[current.card_id]
+        setQuestions((prev) => {
+          const next = { ...prev }
+          delete next[current.card_id]
+          return next
+        })
+      }
       // A missed card comes back at the end of this session (#264).
       const nextQueue = g === 'again' ? [...queue, { ...current, last_grade: 'again' as const }] : queue
       if (g === 'again') setQueue(nextQueue)
@@ -288,6 +314,10 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                 />
               )}
               {current.last_grade === 'again' && <Chip size="small" color="error" variant="outlined" label="Missed last time" />}
+              {question?.mode === 'mc' && <Chip size="small" variant="outlined" label="Multiple choice" />}
+              {question?.mode === 'recall' && (
+                <Chip size="small" color="success" variant="outlined" label="From memory: options hidden" data-testid="mc-promoted" />
+              )}
             </Stack>
 
             {!question ? (
@@ -313,8 +343,30 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                   </Alert>
                 )}
 
+                {question.mode === 'recall' && !revealed && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    You picked the right option twice in a row, so this time answer from memory. A miss brings the
+                    options back.
+                  </Typography>
+                )}
                 {!revealed ? (
                   <>
+                    {isMc ? (
+                      <List dense disablePadding aria-label="Options" data-testid="mc-options" sx={{ mb: 0.5 }}>
+                        {question.options!.map((o, i) => (
+                          <ListItemButton
+                            key={o.key}
+                            selected={picked === o.key}
+                            disabled={dontKnow}
+                            onClick={() => setPicked(o.key)}
+                            sx={{ border: 1, borderColor: picked === o.key ? 'primary.main' : 'divider', borderRadius: 1, mb: 0.5 }}
+                            aria-pressed={picked === o.key}
+                          >
+                            <ListItemText primary={`${LETTERS[i]}. ${o.text}`} />
+                          </ListItemButton>
+                        ))}
+                      </List>
+                    ) : (
                     <TextField
                       label="Your answer"
                       placeholder="Answer from memory before you look"
@@ -328,6 +380,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                       disabled={dontKnow}
                       inputProps={{ 'aria-label': 'Your answer' }}
                     />
+                    )}
                     <Box sx={{ mt: 1.5, maxWidth: 420 }}>
                       <Typography variant="caption" color="text.secondary" id="session-confidence-label">
                         {dontKnow ? 'Confidence: 0% (you don’t know yet)' : `How sure are you? ${confidence}%`}
@@ -350,22 +403,76 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         onClick={() => {
                           setDontKnow((v) => !v)
                           setAttempt('')
+                          setPicked(null)
                         }}
                       >
                         I don&apos;t know
                       </Button>
                       <Button variant="contained" size="small" disabled={!canReveal} onClick={() => setRevealed(true)}>
-                        Reveal answer
+                        {isMc ? 'Check answer' : 'Reveal answer'}
                       </Button>
                       {!canReveal && (
                         <Typography variant="caption" color="text.secondary">
-                          Type your answer or choose “I don&apos;t know” first.
+                          {isMc ? 'Pick an option or choose “I don’t know” first.' : 'Type your answer or choose “I don’t know” first.'}
                         </Typography>
                       )}
                     </Stack>
                   </>
                 ) : (
                   <Stack spacing={1.25} data-testid="session-reveal">
+                    {isMc && (
+                      <Box data-testid="mc-reveal">
+                        {question.lastPick && question.answerKey && (
+                          <Alert severity="info" sx={{ mb: 1 }} data-testid="mc-last-pick">
+                            {question.lastPick.latest ? 'Last time' : 'Earlier'} you picked {optionLabel(question, question.lastPick.key)};
+                            the answer is {optionLabel(question, question.answerKey)}.
+                            {question.whyWrong?.[question.lastPick.key] && (
+                              <Typography variant="body2" component="span" sx={{ display: 'block', mt: 0.5 }}>
+                                Why not {question.lastPick.text}: {question.whyWrong[question.lastPick.key]}
+                              </Typography>
+                            )}
+                          </Alert>
+                        )}
+                        <List dense disablePadding aria-label="Options">
+                          {question.options!.map((o, i) => {
+                            const right = o.key === question.answerKey
+                            const mine = o.key === picked
+                            return (
+                              <Box
+                                key={o.key}
+                                sx={{
+                                  border: 1,
+                                  borderRadius: 1,
+                                  mb: 0.5,
+                                  px: 1.5,
+                                  py: 0.5,
+                                  borderColor: right ? 'success.main' : mine ? 'error.main' : 'divider',
+                                  bgcolor: right ? 'success.50' : undefined,
+                                }}
+                              >
+                                <Typography variant="body2" fontWeight={right || mine ? 600 : 400}>
+                                  {LETTERS[i]}. {o.text}
+                                  {right ? '  ✓ answer' : mine ? '  ✗ your pick' : ''}
+                                </Typography>
+                              </Box>
+                            )
+                          })}
+                        </List>
+                        <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }} data-testid="mc-result">
+                          {dontKnow
+                            ? `You didn’t know; the answer is ${optionLabel(question, question.answerKey ?? '')}. Graded Missed.`
+                            : pickedRight
+                              ? `Right: ${optionLabel(question, picked!)}.`
+                              : `You picked ${optionLabel(question, picked ?? '')}; the answer is ${optionLabel(question, question.answerKey ?? '')}. Graded Missed.`}
+                        </Typography>
+                        {!dontKnow && !pickedRight && picked && question.whyWrong?.[picked] && question.lastPick?.key !== picked && (
+                          <Typography variant="body2" color="text.secondary" data-testid="mc-why-wrong">
+                            Why not {question.options!.find((o) => o.key === picked)?.text}: {question.whyWrong[picked]}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                    {!isMc && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
                         Your answer · {dontKnow ? 'confidence 0%' : `confidence ${confidence}%`}
@@ -374,8 +481,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         {dontKnow ? 'I don’t know' : attempt.trim()}
                       </Typography>
                     </Box>
+                    )}
                     <Divider />
-                    {question.answer && (
+                    {question.answer && !isMc && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
                           Answer
@@ -466,6 +574,24 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                     <Typography variant="caption" color="text.secondary">
                       How did you do?
                     </Typography>
+                    {isMc ? (
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        {pickedRight && !dontKnow ? (
+                          <>
+                            <Button size="small" variant="contained" disabled={grading} onClick={() => void grade('good')}>
+                              {gradeLabel('good')}
+                            </Button>
+                            <Button size="small" variant="outlined" color="warning" disabled={grading} onClick={() => void grade('hard')}>
+                              {gradeLabel('hard')}: I guessed
+                            </Button>
+                          </>
+                        ) : (
+                          <Button size="small" variant="contained" color="error" disabled={grading} onClick={() => void grade('again')}>
+                            Next (Missed)
+                          </Button>
+                        )}
+                      </Stack>
+                    ) : (
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                       {STUDY_GRADES.map(({ grade: g, label }) => (
                         <Button
@@ -480,6 +606,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         </Button>
                       ))}
                     </Stack>
+                    )}
                   </Stack>
                 )}
               </>
@@ -537,6 +664,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                     </List>
                   </Alert>
                 )}
+                <RepeatedPicks picks={report.repeatedPicks} onOpenNote={onOpenNote} />
                 {report.revisit.length > 0 && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">

@@ -68,7 +68,7 @@ export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote,
         sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
       >
         {section === 'home' && (
-          <StudyHome project={project} onProjectChange={setProject} onStartReview={() => onSection('review')} />
+          <StudyHome project={project} onProjectChange={setProject} onStartReview={() => onSection('review')} onOpenNote={onOpenNote} />
         )}
         {section === 'review' && <ReviewView {...viewProps} />}
         {section === 'quiz' && <StudyView {...viewProps} />}

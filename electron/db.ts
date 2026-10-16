@@ -77,7 +77,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 11
+export const SCHEMA_VERSION = 12
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -116,7 +116,31 @@ function migrate(database: Database.Database): void {
   if (version < 11) {
     migrateV11(database)
   }
+  if (version < 12) {
+    migrateV12(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v12 (#324): multiple-choice practice-test questions. Additive only, so every
+ * existing card, schedule and grade log row is kept as it is.
+ *
+ * - `study_cards.mc_options`: JSON `[{ key, text }]` (the test's own labels),
+ *   `mc_answer`: the correct option's key, `mc_streak`: consecutive correct
+ *   multiple-choice answers (2 or more = asked as free recall). Cards without
+ *   options (every card before v12) stay free recall; an imported card gains
+ *   its options on re-import.
+ * - `review_log.chosen_option`: the option key picked on that attempt.
+ * - `project_settings.mc_mode`: "Ask multiple-choice questions as multiple
+ *   choice", on (1) by default.
+ */
+function migrateV12(database: Database.Database): void {
+  addColumnIfMissing(database, 'study_cards', 'mc_options', 'TEXT')
+  addColumnIfMissing(database, 'study_cards', 'mc_answer', 'TEXT')
+  addColumnIfMissing(database, 'study_cards', 'mc_streak', 'INTEGER NOT NULL DEFAULT 0')
+  addColumnIfMissing(database, 'review_log', 'chosen_option', 'TEXT')
+  addColumnIfMissing(database, 'project_settings', 'mc_mode', 'INTEGER NOT NULL DEFAULT 1')
 }
 
 /**
@@ -827,11 +851,11 @@ export function normalizeExamDate(value: string | null | undefined): string | nu
 /** Settings for one project (an absent row means no settings yet). */
 export function getProjectSettings(name: string): ProjectSettings {
   const n = (name ?? '').trim()
-  if (!n) return { name: '', examDate: null }
-  const row = getDb().prepare('SELECT exam_date FROM project_settings WHERE name = ?').get(n) as
-    | { exam_date: string | null }
+  if (!n) return { name: '', examDate: null, multipleChoice: true }
+  const row = getDb().prepare('SELECT exam_date, mc_mode FROM project_settings WHERE name = ?').get(n) as
+    | { exam_date: string | null; mc_mode: number | null }
     | undefined
-  return { name: n, examDate: row?.exam_date ? String(row.exam_date) : null }
+  return { name: n, examDate: row?.exam_date ? String(row.exam_date) : null, multipleChoice: row ? Number(row.mc_mode ?? 1) !== 0 : true }
 }
 
 /** Set (or clear, with null/'') a project's exam date. */
@@ -847,7 +871,27 @@ export function setProjectExamDate(name: string, examDate: string | null | undef
        ON CONFLICT(name) DO UPDATE SET exam_date = excluded.exam_date, updated_at = excluded.updated_at`
     )
     .run(n, date, ts, ts)
-  return { name: n, examDate: date }
+  return getProjectSettings(n)
+}
+
+/** Turn "Ask multiple-choice questions as multiple choice" on or off for a project (#324). */
+export function setProjectMultipleChoice(name: string, on: boolean): ProjectSettings {
+  const n = (name ?? '').trim()
+  if (!n) throw new Error('Pick a project to change this setting')
+  const ts = nowIso()
+  getDb()
+    .prepare(
+      `INSERT INTO project_settings (name, exam_date, mc_mode, created_at, updated_at)
+       VALUES (?, NULL, ?, ?, ?)
+       ON CONFLICT(name) DO UPDATE SET mc_mode = excluded.mc_mode, updated_at = excluded.updated_at`
+    )
+    .run(n, on ? 1 : 0, ts, ts)
+  return getProjectSettings(n)
+}
+
+/** Whether a project asks multiple-choice cards as multiple choice (default on; no project = on). */
+export function projectMultipleChoice(name: string | null | undefined): boolean {
+  return getProjectSettings(name ?? '').multipleChoice
 }
 
 /**
@@ -857,7 +901,7 @@ export function setProjectExamDate(name: string, examDate: string | null | undef
  */
 function moveProjectSettings(database: Database.Database, from: string, to: string): void {
   const src = database.prepare('SELECT * FROM project_settings WHERE name = ?').get(from) as
-    | { exam_date: string | null; created_at: string }
+    | { exam_date: string | null; mc_mode: number | null; created_at: string }
     | undefined
   if (!src) return
   const dst = database.prepare('SELECT exam_date FROM project_settings WHERE name = ?').get(to) as
@@ -866,8 +910,8 @@ function moveProjectSettings(database: Database.Database, from: string, to: stri
   const ts = nowIso()
   if (!dst) {
     database
-      .prepare('INSERT INTO project_settings (name, exam_date, created_at, updated_at) VALUES (?, ?, ?, ?)')
-      .run(to, src.exam_date, src.created_at, ts)
+      .prepare('INSERT INTO project_settings (name, exam_date, mc_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run(to, src.exam_date, src.mc_mode ?? 1, src.created_at, ts)
   } else if (!dst.exam_date && src.exam_date) {
     database.prepare('UPDATE project_settings SET exam_date = ?, updated_at = ? WHERE name = ?').run(src.exam_date, ts, to)
   }
