@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #326: the lkvmedia:// handler forwarded Range to net.fetch(file://…), which answers 200 without Content-Range, so Chromium marked local media as not seekable (seekable [[0,0]]) and citation seeks, scrubbing and resume snapped back to 0:00. Fix: the handler (now handleMediaRequest in media-protocol.ts) stats the registered file, parses the Range header and streams the slice itself — 206 with Content-Range/Content-Length/Accept-Ranges, 416 bytes */size when unsatisfiable, 200 with the whole file otherwise — keeping the opaque-id lookup (#18). Criterion 1 is the issue's 'test covers ranged and non-ranged lkvmedia:// requests': the media smoke now asserts 206 + Content-Range with byte-exact slices far into a 2 MiB file (the HTTP shape Chromium needs so seekable spans the duration; the 2 h end-to-end seek check stays a manual review-box item), plus 416/malformed/404/400/deleted-file paths. Criteria 2-4 guard the main-process wiring and the rest of the suite.",
+  "authority_id": "326",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:ipc-preload" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}

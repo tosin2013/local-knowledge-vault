@@ -31,6 +31,8 @@ import {
   resolveMediaFile,
   mediaMimeType,
   mediaProtocolUrlForPath,
+  handleMediaRequest,
+  parseByteRange,
 } from '../electron/media-protocol'
 import { findCompanionCaptions } from '../electron/media-ingest'
 
@@ -71,6 +73,100 @@ function assert(cond: unknown, msg: string): asserts cond {
 
   fs.rmSync(mediaDir, { recursive: true, force: true })
 }
+
+// ---- #326: lkvmedia range requests (206 + Content-Range so <video> can seek) ----
+// net.fetch(file://…) answered ranged requests with 200 and no Content-Range, so
+// `video.seekable` stayed [[0,0]] and every seek snapped back to 0:00.
+void (async () => {
+  const rangeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lkv-range-'))
+  const big = path.join(rangeDir, 'lecture.mp4')
+  // 2 MiB stand-in for a long recording: byte i is i % 251, so a seek far into
+  // the file is verified byte-exactly (the HTTP shape matters, not the runtime).
+  const size = 2 * 1024 * 1024
+  const buf = Buffer.alloc(size)
+  for (let i = 0; i < size; i++) buf[i] = i % 251
+  fs.writeFileSync(big, buf)
+  const id = registerMediaFile(big)!
+  const rangeUrl = `lkvmedia://media/${id}`
+  const req = (range: string | null) =>
+    handleMediaRequest({
+      url: rangeUrl,
+      headers: { get: (n: string) => (n.toLowerCase() === 'range' ? range : null) },
+    })
+
+  // Non-ranged: the whole file, still advertising range support.
+  const full = await req(null)
+  assert(full.status === 200, `no Range header → 200 (got ${full.status})`)
+  assert(full.headers.get('accept-ranges') === 'bytes', '200 advertises Accept-Ranges: bytes')
+  assert(full.headers.get('content-length') === String(size), '200 carries the full Content-Length')
+  assert(full.headers.get('content-type') === 'video/mp4', '200 carries the media MIME type')
+  assert(Buffer.from(await full.arrayBuffer()).equals(buf), '200 body is the whole file')
+
+  // Ranged: the citation-seek shape — a request for bytes far into a long file.
+  const seek = await req('bytes=1900000-1900999')
+  assert(seek.status === 206, `Range → 206 (got ${seek.status})`)
+  assert(
+    seek.headers.get('content-range') === `bytes 1900000-1900999/${size}`,
+    `206 carries Content-Range (got ${seek.headers.get('content-range')})`
+  )
+  assert(seek.headers.get('content-length') === '1000', '206 carries the slice Content-Length')
+  assert(
+    Buffer.from(await seek.arrayBuffer()).equals(buf.subarray(1900000, 1901000)),
+    '206 body is exactly the requested slice'
+  )
+
+  // Open-ended and suffix ranges.
+  const openEnded = await req(`bytes=${size - 100}-`)
+  assert(
+    openEnded.status === 206 &&
+      openEnded.headers.get('content-range') === `bytes ${size - 100}-${size - 1}/${size}`,
+    'open-ended range is clamped to the file'
+  )
+  const suffix = await req('bytes=-100')
+  assert(
+    suffix.status === 206 &&
+      suffix.headers.get('content-range') === `bytes ${size - 100}-${size - 1}/${size}`,
+    `suffix range returns the file tail (got ${suffix.headers.get('content-range')})`
+  )
+  assert(Buffer.from(await suffix.arrayBuffer()).equals(buf.subarray(size - 100)), 'suffix body is the tail')
+
+  // Unsatisfiable → 416 in the RFC shape; unparseable unit → ignored, full 200.
+  const tooFar = await req('bytes=999999999-')
+  assert(tooFar.status === 416, `range beyond EOF → 416 (got ${tooFar.status})`)
+  assert(tooFar.headers.get('content-range') === `bytes */${size}`, '416 carries "bytes */size"')
+  assert((await req('bytes=zz-zz')).status === 200, 'malformed Range is ignored → 200')
+
+  // parseByteRange corner cases.
+  assert(parseByteRange(null, 10) === null, 'absent header → null')
+  assert(parseByteRange('chunks=0-5', 10) === null, 'unknown unit is ignored → null')
+  assert(parseByteRange('bytes=-0', 10) === 'unsatisfiable', 'bytes=-0 is unsatisfiable')
+  assert(parseByteRange('bytes=0-', 0) === 'unsatisfiable', 'any range on an empty file is unsatisfiable')
+  assert(
+    JSON.stringify(parseByteRange('bytes=5-10,20-25', 100)) === JSON.stringify({ start: 5, end: 10 }),
+    'multi-range: the first range is served'
+  )
+
+  // The #18 guardrails still hold through the handler.
+  assert(
+    (await handleMediaRequest({ url: 'lkvmedia://media/deadbeef', headers: { get: () => null } })).status === 404,
+    'unknown id → 404'
+  )
+  assert(
+    (await handleMediaRequest({ url: 'lkvmedia://media/', headers: { get: () => null } })).status === 400,
+    'missing id → 400'
+  )
+
+  // A file deleted after registration 404s instead of crashing.
+  fs.rmSync(big, { force: true })
+  const gone = await req(null)
+  assert(gone.status === 404, `deleted file → 404 (got ${gone.status})`)
+
+  fs.rmSync(rangeDir, { recursive: true, force: true })
+  console.log('OK lkvmedia range: 206 + Content-Range served, seek offsets verified')
+})().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
 
 const fixture = path.join(__dirname, '..', 'fixtures', 'sample.srt')
 const raw = fs.readFileSync(fixture, 'utf8')

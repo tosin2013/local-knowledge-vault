@@ -4,7 +4,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, session, shell, type OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { pathToFileURL } from 'url'
 import {
   closeDb,
   createChatProfile,
@@ -96,7 +95,7 @@ import {
 import { encryptLegacySecretFiles } from './secret-files'
 import { secretEncryptionAvailable } from './secret-store'
 import { checkForUpdate, checkForUpdateOnLaunch, getUpdateSettings, setUpdateSettings } from './update-check'
-import { resolveMediaFile, mediaMimeType } from './media-protocol'
+import { handleMediaRequest } from './media-protocol'
 import { YOUTUBE_EMBED_FILTER, rewriteYoutubeEmbedHeaders } from './youtube-embed-headers'
 import {
   listMcpServers,
@@ -1043,36 +1042,9 @@ app.whenReady().then(async () => {
   // The second instance is already quitting; don't open the DB or the bridge.
   if (!hasInstanceLock) return
   fixYoutubeEmbedHeaders()
-  protocol.handle('lkvmedia', async (request) => {
-    try {
-      const u = new URL(request.url)
-      // lkvmedia://media/<opaque-id> — the id is looked up in the registry,
-      // never a filesystem path.
-      const id = u.pathname.replace(/^\/+/, '').split('/')[0]
-      if (!id) {
-        return new Response('missing media id', { status: 400 })
-      }
-      const filePath = resolveMediaFile(id)
-      if (!filePath) {
-        return new Response('unknown media id', { status: 404 })
-      }
-      const headers: Record<string, string> = {}
-      const range = request.headers.get('range')
-      if (range) headers.Range = range
-      const res = await net.fetch(pathToFileURL(filePath).href, { headers })
-      const outHeaders: Record<string, string> = {
-        'Content-Type': mediaMimeType(filePath),
-        'Accept-Ranges': 'bytes',
-      }
-      if (res.status === 206 && res.headers.get('content-range')) {
-        outHeaders['Content-Range'] = res.headers.get('content-range')!
-      }
-      return new Response(res.body, { status: res.status, headers: outHeaders })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return new Response(msg, { status: 500 })
-    }
-  })
+  // #326: serve registered media with HTTP range support so local video/audio
+  // can seek (citation seeks, scrubbing, resume no longer snap back to 0:00).
+  protocol.handle('lkvmedia', (request) => handleMediaRequest(request))
 
   if (!(await initializeDbWithRecovery())) {
     app.quit()
