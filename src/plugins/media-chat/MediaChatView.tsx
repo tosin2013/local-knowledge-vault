@@ -163,7 +163,6 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const videoRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null)
   const ytFrameRef = useRef<HTMLIFrameElement | null>(null)
   const ytPlayerRef = useRef<YTPlayer | null>(null)
-  const ytPlayingRef = useRef(false)
   /** Position to seek to once the player is ready — from the saved state (#329). */
   const resumeSecRef = useRef(0)
   const notesNearAtRef = useRef(0)
@@ -276,6 +275,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     if (!el) return
     const onTime = () => setCurrentTime(el.currentTime || 0)
     el.addEventListener('timeupdate', onTime)
+    // Scrubs while paused never fire timeupdate — 'seeked' covers them (#330).
+    el.addEventListener('seeked', onTime)
     const applySaved = () => {
       const t = currentTimeRef.current
       if (t > 0) {
@@ -290,6 +291,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     el.addEventListener('loadedmetadata', applySaved)
     return () => {
       el.removeEventListener('timeupdate', onTime)
+      el.removeEventListener('seeked', onTime)
       el.removeEventListener('loadedmetadata', applySaved)
     }
   }, [active?.mediaProtocolUrl, active?.mediaPath])
@@ -348,19 +350,18 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Near-playhead note count (informational). Throttled: playback fires
-  // timeupdate ~4/s and the YouTube poll fires 1/s, but each tick is an IPC
-  // round-trip + full project scan, so at most one scan every 2 s.
+  // Near-playhead note count (informational). Leading + trailing throttle:
+  // playback fires timeupdate ~4/s and the YouTube poll fires 1/s, but each tick
+  // is an IPC round-trip + full project scan, so at most one scan every 2 s —
+  // and the last change of a burst always gets its scan (#330), so the count
+  // settles on the new position after a seek even while paused.
   useEffect(() => {
     if (!active || !window.lkv?.media?.notesNear) {
       setNearCount(null)
       return
     }
-    const now = Date.now()
-    if (now - notesNearAtRef.current < 2000) return
-    notesNearAtRef.current = now
     let cancelled = false
-    const tick = async () => {
+    const scan = async () => {
       try {
         const notes = await window.lkv.media.notesNear({
           project: active.project,
@@ -372,7 +373,21 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         if (!cancelled) setNearCount(null)
       }
     }
-    void tick()
+    const remaining = notesNearAtRef.current + 2000 - Date.now()
+    if (remaining <= 0) {
+      notesNearAtRef.current = Date.now()
+      void scan()
+    } else {
+      const timer = setTimeout(() => {
+        if (cancelled) return
+        notesNearAtRef.current = Date.now()
+        void scan()
+      }, remaining)
+      return () => {
+        cancelled = true
+        clearTimeout(timer)
+      }
+    }
     return () => {
       cancelled = true
     }
@@ -384,7 +399,6 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     let cancelled = false
     ytPlayerRef.current?.destroy()
     ytPlayerRef.current = null
-    ytPlayingRef.current = false
     setYtReady(false)
     setYtVideoId(null)
     if (!active?.mediaUrl || !window.lkv?.media?.youtubeEmbedUrl) {
@@ -431,6 +445,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       } catch {
         /* ignore */
       }
+      // Poll unconditionally (not only while playing): a paused scrub must move
+      // the playhead too, or "Ask about this moment" uses the old time (#330).
       const player = new window.YT.Player(ytFrameRef.current, {
         events: {
           onReady: () => {
@@ -447,15 +463,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
               resumeSecRef.current = 0
             }
           },
-          onStateChange: (e) => {
-            // 1 = playing
-            ytPlayingRef.current = e.data === 1
-          },
         },
       })
       ytPlayerRef.current = player
       poll = setInterval(() => {
-        if (cancelled || !ytPlayingRef.current) return
+        if (cancelled) return
         try {
           const t = player.getCurrentTime()
           if (Number.isFinite(t)) setCurrentTime(t)
@@ -474,7 +486,6 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         /* ignore */
       }
       ytPlayerRef.current = null
-      ytPlayingRef.current = false
       setYtReady(false)
     }
   }, [embedUrl, ytVideoId])
@@ -774,10 +785,32 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     }
   }
 
-  const buildQuestion = (raw: string, forceMoment: boolean): string => {
+  /**
+   * The player's time right now — not the last-polled state (#330). While
+   * paused the poll may lag a scrub; reading the player at the moment of use
+   * keeps "Ask about this moment" / "Save this moment" on the real position.
+   */
+  const readPlayerTime = (): number => {
+    const el = videoRef.current
+    if (el && Number.isFinite(el.currentTime)) {
+      return el.currentTime
+    }
+    const yt = ytPlayerRef.current
+    if (yt && ytReady) {
+      try {
+        const t = yt.getCurrentTime()
+        if (Number.isFinite(t)) return t
+      } catch {
+        /* player gone */
+      }
+    }
+    return currentTime
+  }
+
+  const buildQuestion = (raw: string, forceMoment: boolean, sec: number): string => {
     const q = raw.trim()
     if (!forceMoment && !followPlayhead) return q
-    const clock = formatClock(currentTime)
+    const clock = formatClock(sec)
     const windowHint =
       nearCount != null
         ? ` (~${nearCount} transcript notes near ±45s)`
@@ -788,18 +821,20 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   /** Save the transcript passage near the playhead as an AI-draft note. */
   const saveMoment = async () => {
     if (!active || !onNewDraft || !window.lkv?.media?.notesNear) return
+    const momentSec = readPlayerTime()
+    setCurrentTime(momentSec)
     setBusy(true)
     setError(null)
     try {
-      const notes = await window.lkv.media.notesNear({ project: active.project, centerSec: currentTime, windowSec: 45 })
+      const notes = await window.lkv.media.notesNear({ project: active.project, centerSec: momentSec, windowSec: 45 })
       const passage = notes.map((n) => n.body).join('\n\n') || '(no transcript near this moment)'
       onNewDraft({
-        title: `Media moment — ${formatClock(currentTime)}`,
+        title: `Media moment — ${formatClock(momentSec)}`,
         body:
           provenanceHeader({
             sourceUrl: active.mediaUrl ?? active.mediaPath,
-            tStart: Math.max(0, Math.round(currentTime - 45)),
-            tEnd: Math.round(currentTime + 45),
+            tStart: Math.max(0, Math.round(momentSec - 45)),
+            tEnd: Math.round(momentSec + 45),
           }) +
           passage +
           '\n\n## In my words\n\n',
@@ -818,7 +853,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const onSend = async (opts?: { aboutMoment?: boolean }) => {
     if (!window.lkv || !active || !chatInput.trim() || sending) return
     const rawInput = chatInput
-    const text = buildQuestion(rawInput, !!opts?.aboutMoment)
+    // Read the player at click time so a paused scrub is not sent as the old
+    // position (#330); sync the chip while we're at it.
+    const momentSec = readPlayerTime()
+    setCurrentTime(momentSec)
+    const text = buildQuestion(rawInput, !!opts?.aboutMoment, momentSec)
     const optimisticId = `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
     setChatInput('')
     setSending(true)
