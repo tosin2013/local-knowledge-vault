@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #328: onCitationClick always called onOpenNote(id), which opens the app-level NotePeek drawer outside the fullscreen view — behind the fullscreen overlay it is invisible but focus-stealing (Esc stopped exiting, the overlay was aria-hidden, and the drawer blocked the right side after exiting). Fix: while fullscreen, onCitationClick seeks and shows the cited passage in a closable panel inside the overlay and never opens the drawer; the panel clears on exit and on session resets; normal mode still calls onOpenNote. Criterion 1 (seek + passage visible inside fullscreen) and 2 (Esc exits right after a citation click) are asserted directly in the renderer test; criterion 3 (no hidden modal remains) is structural — the drawer is never opened in fullscreen (onOpenNote asserted not called) — with a regression test that non-fullscreen citation clicks still open it. The visible-passage/activeElement probe on a live build stays a manual review-box item. Criteria 2-4 guard the renderer suite, typecheck, build, and the main-process suite.",
+  "authority_id": "328",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}

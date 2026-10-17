@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MediaChatView } from '../../src/plugins/media-chat/MediaChatView'
 import { lkvMock, makeIngestResult, makeItem, makeMessage, makePrompt, makeSession, makeVoicePack } from './lkv'
@@ -238,6 +238,54 @@ describe('MediaChatView', () => {
       expect(video.currentTime).toBe(120) // the same, still-mounted element seeks
     })
     expect(screen.getByText('Now: 02:00')).toBeInTheDocument() // "Now:" follows the seek
+  })
+
+  it('shows the cited passage inside fullscreen and keeps Esc working (#328)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))
+    const onOpenNote = vi.fn()
+    const { container } = render(<MediaChatView onOpenNote={onOpenNote} />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(container.querySelector('video')).not.toBeNull())
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    const citation = await screen.findByText('Transcript')
+    fireEvent.click(screen.getByLabelText('Enter fullscreen'))
+    await screen.findByLabelText('Exit fullscreen')
+
+    fireEvent.click(citation)
+    // The passage is visible inside fullscreen; the app drawer was never requested.
+    expect(await screen.findByText('Note title')).toBeInTheDocument()
+    expect(screen.getByText(/some text/)).toBeInTheDocument()
+    expect(onOpenNote).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect((container.querySelector('video') as HTMLVideoElement).currentTime).toBe(120),
+    )
+
+    // Esc still exits fullscreen right after the citation click.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await screen.findByLabelText('Enter fullscreen')
+    expect(screen.queryByLabelText('Exit fullscreen')).toBeNull()
+  })
+
+  it('still opens the note drawer from a citation outside fullscreen (#328)', async () => {
+    const lkv = seedMedia()
+    lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))
+    const onOpenNote = vi.fn()
+    render(<MediaChatView onOpenNote={onOpenNote} />)
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    await screen.findByText(/Ingested 10 transcript notes/)
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    const citation = await screen.findByText('Transcript')
+    fireEvent.click(citation)
+    await waitFor(() => expect(onOpenNote).toHaveBeenCalledWith('itm_1'))
   })
 
   it('clicks a citation to open the note and seek', async () => {
