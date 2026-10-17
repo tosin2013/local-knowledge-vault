@@ -153,6 +153,9 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
   if (!text) {
     throw new Error('Message text is empty')
   }
+  // Media chat sends the playhead-prefixed question as `text` but stores the raw
+  // question, so restored histories read like the user wrote them (#329, #161).
+  const displayContent = input.displayContent?.trim() || text
 
   // Prior user turns for retrieval (before appending the current message)
   const priorUserTexts = listMessages(session.id)
@@ -163,14 +166,14 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
   appendMessage({
     session_id: session.id,
     role: 'user',
-    content: text,
+    content: displayContent,
   })
 
   // Auto-title from first user message on untitled sessions
   let currentSession = session
   const isFirstUserTurn = priorUserTexts.length === 0
   if (isFirstUserTurn && isUntitledSessionTitle(session.title)) {
-    const titled = updateSessionTitle(session.id, titleFromUserText(text))
+    const titled = updateSessionTitle(session.id, titleFromUserText(displayContent))
     if (titled) currentSession = titled
   }
 

@@ -178,6 +178,8 @@ export interface CreateSessionInput {
 export interface ChatSendInput {
   sessionId: string
   text: string
+  /** What gets stored (and titled) as the user message when it differs from `text` (#329). */
+  displayContent?: string
   filters?: ItemFilters
   promptId?: string
   systemPrompt?: string
@@ -646,6 +648,29 @@ export interface MediaProjectInfo {
   mediaUrl?: string
   mediaProtocolUrl?: string
   updatedAt: string
+}
+
+/** Persisted per-video Media chat state (#329), keyed by a stable video key. */
+export interface MediaStateRow {
+  /** YouTube URL or local file path — never the per-run `lkvmedia://` id. */
+  videoKey: string
+  project: string
+  /** Continuing chat session for this video (null until the first send). */
+  sessionId: string | null
+  lastPositionSec: number
+  voice: string | null
+  followPlayhead: boolean
+  updatedAt: string
+}
+
+/** Partial update: fields left out keep their stored value. */
+export interface MediaStateInput {
+  videoKey: string
+  project?: string
+  sessionId?: string | null
+  lastPositionSec?: number
+  voice?: string | null
+  followPlayhead?: boolean
 }
 
 export interface MediaFindExistingInput {

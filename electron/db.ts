@@ -17,6 +17,8 @@ import type {
   CreateSessionInput,
   Item,
   ItemFilters,
+  MediaStateInput,
+  MediaStateRow,
   Prompt,
   ProjectResult,
   ProjectSummary,
@@ -77,7 +79,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 12
+export const SCHEMA_VERSION = 13
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -119,7 +121,32 @@ function migrate(database: Database.Database): void {
   if (version < 12) {
     migrateV12(database)
   }
+  if (version < 13) {
+    migrateV13(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v13 (#329): per-video Media chat state, so leaving and coming back restores
+ * the conversation, voice, playhead and open video. One row per video, keyed by
+ * a stable video key (YouTube URL or local file path — never the in-memory
+ * `lkvmedia://` id, which changes per app run). `session_id` points at the
+ * continuing chat session; `project` is refreshed on every save, so a project
+ * rename heals on the next tick.
+ */
+function migrateV13(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS media_state (
+      video_key TEXT PRIMARY KEY,
+      project TEXT NOT NULL DEFAULT '',
+      session_id TEXT,
+      last_position_sec REAL NOT NULL DEFAULT 0,
+      voice TEXT,
+      follow_playhead INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+  `)
 }
 
 /**
@@ -1258,6 +1285,73 @@ export function appendMessage(input: {
     .run({ ...msg, uncited: msg.uncited ? 1 : 0 })
   touchSession(input.session_id)
   return msg
+}
+
+/* ---- Media chat state (#329) ---- */
+
+function rowToMediaState(row: Record<string, unknown>): MediaStateRow {
+  return {
+    videoKey: String(row.video_key),
+    project: String(row.project ?? ''),
+    sessionId: row.session_id == null ? null : String(row.session_id),
+    lastPositionSec: Number(row.last_position_sec ?? 0),
+    voice: row.voice == null ? null : String(row.voice),
+    followPlayhead: Number(row.follow_playhead ?? 1) === 1,
+    updatedAt: String(row.updated_at),
+  }
+}
+
+/** Per-video Media chat state, or null when this video was never studied. */
+export function getMediaState(videoKey: string): MediaStateRow | null {
+  const row = getDb().prepare('SELECT * FROM media_state WHERE video_key = ?').get(videoKey) as
+    | Record<string, unknown>
+    | undefined
+  return row ? rowToMediaState(row) : null
+}
+
+/** Most recently saved per-video state — the video to reopen on mount (#329). */
+export function getLatestMediaState(): MediaStateRow | null {
+  // rowid breaks ties when two saves land in the same millisecond.
+  const row = getDb()
+    .prepare('SELECT * FROM media_state ORDER BY updated_at DESC, rowid DESC LIMIT 1')
+    .get() as Record<string, unknown> | undefined
+  return row ? rowToMediaState(row) : null
+}
+
+/** Upsert per-video state. Called throttled (~5 s) while a video is open. */
+export function setMediaState(input: MediaStateInput): MediaStateRow {
+  const existing = getMediaState(input.videoKey)
+  const row: MediaStateRow = {
+    videoKey: input.videoKey,
+    project: input.project ?? existing?.project ?? '',
+    sessionId: input.sessionId !== undefined ? input.sessionId : (existing?.sessionId ?? null),
+    lastPositionSec: input.lastPositionSec ?? existing?.lastPositionSec ?? 0,
+    voice: input.voice !== undefined ? input.voice : (existing?.voice ?? null),
+    followPlayhead: input.followPlayhead ?? existing?.followPlayhead ?? true,
+    updatedAt: nowIso(),
+  }
+  getDb()
+    .prepare(
+      `INSERT INTO media_state (video_key, project, session_id, last_position_sec, voice, follow_playhead, updated_at)
+       VALUES (@video_key, @project, @session_id, @last_position_sec, @voice, @follow_playhead, @updated_at)
+       ON CONFLICT(video_key) DO UPDATE SET
+         project = excluded.project,
+         session_id = excluded.session_id,
+         last_position_sec = excluded.last_position_sec,
+         voice = excluded.voice,
+         follow_playhead = excluded.follow_playhead,
+         updated_at = excluded.updated_at`
+    )
+    .run({
+      video_key: row.videoKey,
+      project: row.project,
+      session_id: row.sessionId,
+      last_position_sec: row.lastPositionSec,
+      voice: row.voice,
+      follow_playhead: row.followPlayhead ? 1 : 0,
+      updated_at: row.updatedAt,
+    })
+  return row
 }
 
 /* ---- Prompts ---- */

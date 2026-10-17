@@ -164,6 +164,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const ytFrameRef = useRef<HTMLIFrameElement | null>(null)
   const ytPlayerRef = useRef<YTPlayer | null>(null)
   const ytPlayingRef = useRef(false)
+  /** Position to seek to once the player is ready — from the saved state (#329). */
+  const resumeSecRef = useRef(0)
   const notesNearAtRef = useRef(0)
   const currentTimeRef = useRef(0)
   const [projects, setProjects] = useState<MediaProjectInfo[]>([])
@@ -267,21 +269,29 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
 
   // Poll playhead for HTML5 media. The player element is mounted once and only
   // rebinds when the media itself changes — fullscreen is a CSS change on the
-  // same subtree (#327), so playback survives the toggle.
+  // same subtree (#327), so playback survives the toggle. On (re)bind the saved
+  // playhead is re-applied, also once metadata loads (#329 resume).
   useEffect(() => {
     const el = videoRef.current
     if (!el) return
     const onTime = () => setCurrentTime(el.currentTime || 0)
     el.addEventListener('timeupdate', onTime)
-    const t = currentTimeRef.current
-    if (t > 0) {
-      try {
-        el.currentTime = t
-      } catch {
-        /* ignore */
+    const applySaved = () => {
+      const t = currentTimeRef.current
+      if (t > 0) {
+        try {
+          el.currentTime = t
+        } catch {
+          /* not seekable yet */
+        }
       }
     }
-    return () => el.removeEventListener('timeupdate', onTime)
+    applySaved()
+    el.addEventListener('loadedmetadata', applySaved)
+    return () => {
+      el.removeEventListener('timeupdate', onTime)
+      el.removeEventListener('loadedmetadata', applySaved)
+    }
   }, [active?.mediaProtocolUrl, active?.mediaPath])
 
   // Esc exits fullscreen (the old MUI Dialog handled this for us; the fullscreen
@@ -294,6 +304,49 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [fullscreen])
+
+  // #329: persist per-video state while a video is open — every 5 s, on
+  // beforeunload, and once more when it closes or the video/project/voice/session
+  // changes — so a comeback never loses more than ~5 s of playhead.
+  const videoKey = active?.mediaUrl ?? active?.mediaPath ?? null
+  useEffect(() => {
+    if (!active || !videoKey || !window.lkv?.media?.setMediaState) return
+    const save = () => {
+      void window.lkv.media?.setMediaState?.({
+        videoKey,
+        project: active.project,
+        sessionId,
+        lastPositionSec: currentTimeRef.current,
+        voice: activeVoice,
+        followPlayhead,
+      })
+    }
+    const iv = setInterval(save, 5000)
+    window.addEventListener('beforeunload', save)
+    return () => {
+      clearInterval(iv)
+      window.removeEventListener('beforeunload', save)
+      save()
+    }
+  }, [active, videoKey, sessionId, activeVoice, followPlayhead])
+
+  // #329: Media chat reopens the last video you studied when it mounts.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const last = await window.lkv?.media?.getLatestMediaState?.()
+      if (!last || cancelled) return
+      const projects = (await window.lkv?.media?.listProjects?.()) ?? []
+      if (cancelled) return
+      const proj = projects.find((x) => x.project === last.project)
+      if (proj) await loadProject(proj)
+      else if (!cancelled) setStatus(`Last opened “${last.project}”, which no longer exists.`)
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Near-playhead note count (informational). Throttled: playback fires
   // timeupdate ~4/s and the YouTube poll fires 1/s, but each tick is an IPC
@@ -382,6 +435,17 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         events: {
           onReady: () => {
             if (!cancelled) setYtReady(true)
+            // Resume the saved playhead once the player can seek (#329).
+            const resume = resumeSecRef.current
+            if (resume > 0) {
+              try {
+                player.seekTo(resume, true)
+                if (!cancelled) setCurrentTime(resume)
+              } catch {
+                /* ignore */
+              }
+              resumeSecRef.current = 0
+            }
           },
           onStateChange: (e) => {
             // 1 = playing
@@ -545,8 +609,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const loadProject = async (p: MediaProjectInfo) => {
     if (!window.lkv) return
     setError(null)
+    // Saved per-video state (if any) picks the voice and resumes the chat (#329)
+    const videoKey = p.mediaUrl ?? p.mediaPath ?? null
+    const saved = videoKey ? ((await window.lkv.media.getMediaState?.(videoKey)) ?? null) : null
     const opts = await refreshVoices()
-    const voice = resolveVoicePrompt(opts, readStoredVoiceName())
+    const voice = resolveVoicePrompt(opts, saved?.voice ?? readStoredVoiceName())
     const profiles = await window.lkv.profiles.list()
     // Keep any existing project profile for Ask Customize; voice is prompt-only
     const profile = profiles.find((pr) => (pr.project ?? '') === p.project)
@@ -565,8 +632,30 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setMessages([])
     setFsNote(null)
     setSessionId(null)
-    setCurrentTime(0)
-    setStatus(`Loaded media project “${p.project}” (${p.noteCount} notes) · voice “${voice.name}”`)
+    if (!saved) {
+      setCurrentTime(0)
+      resumeSecRef.current = 0
+      setStatus(`Loaded media project “${p.project}” (${p.noteCount} notes) · voice “${voice.name}”`)
+      return
+    }
+    // Continue where you left off: same conversation, voice and playhead.
+    setFollowPlayhead(saved.followPlayhead)
+    setCurrentTime(saved.lastPositionSec)
+    resumeSecRef.current = saved.lastPositionSec
+    let restoredMsg = ''
+    if (saved.sessionId) {
+      const hist = await window.lkv.chat.listMessages(saved.sessionId)
+      if (hist.length > 0) {
+        setMessages(hist)
+        setSessionId(saved.sessionId)
+        restoredMsg = ` · chat continued (${hist.length} messages)`
+      }
+    }
+    setStatus(
+      `Loaded media project “${p.project}” (${p.noteCount} notes) · voice “${voice.name}”` +
+        restoredMsg +
+        (saved.lastPositionSec > 0 ? ` · resume at ${formatClock(saved.lastPositionSec)}` : '')
+    )
   }
 
   const selectVoice = async (name: string) => {
@@ -580,11 +669,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setActiveVoice(name)
     writeStoredVoiceName(name)
     setActive((prev) => (prev ? { ...prev, promptId: opt.promptId } : prev))
-    // New voice → fresh session so history isn't mixed across styles
-    setMessages([])
-    setFsNote(null)
-    setSessionId(null)
-    setStatus(`Voice: ${name} (works with any media project)`)
+    // #329: a voice change styles the next answers; it must not silently erase
+    // the conversation.
+    setStatus(`Voice: ${name} — your conversation stays (New chat starts fresh).`)
   }
 
   const onRenameProject = async () => {
@@ -630,6 +717,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   }
 
   const seekTo = (sec: number) => {
+    resumeSecRef.current = 0 // a manual seek supersedes the saved resume point
     const el = videoRef.current
     if (el) {
       el.currentTime = sec
@@ -652,6 +740,14 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     }
     // YouTube player not ready (or API blocked) — show hint
     setStatus(`Seek target ${formatClock(sec)} — play the video first, or use local media for click-to-seek.`)
+  }
+
+  /** #329: start a fresh conversation; the previous session stays in Ask's history. */
+  const onNewChat = () => {
+    setMessages([])
+    setSessionId(null)
+    setFsNote(null)
+    setStatus('Started a new chat — the previous conversation is still in Ask.')
   }
 
   const onCitationClick = async (id: string) => {
@@ -757,6 +853,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       const res = await window.lkv.chat.send({
         sessionId: sid,
         text,
+        // Store the question as typed; the playhead prefix is context for the
+        // model and for retrieval, not for the history (#329, #161).
+        displayContent: rawInput,
         filters: { project: active.project },
         promptId: active.promptId || undefined,
         limit: 8,
@@ -819,6 +918,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         onClick={() => void onSend({ aboutMoment: true })}
       >
         Ask about this moment
+      </Button>
+      <Button size="small" variant="text" disabled={!active || busy || sending} onClick={onNewChat}>
+        New chat
       </Button>
     </Stack>
   )

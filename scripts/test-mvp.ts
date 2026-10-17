@@ -27,6 +27,9 @@ import {
   appendMessage,
   listMessages,
   updateSessionTitle,
+  getLatestMediaState,
+  getMediaState,
+  setMediaState,
   listProjects,
   listSampleNotes,
   removeSampleNotes,
@@ -310,6 +313,49 @@ async function main(): Promise<void> {
     limit: 5,
   })
   assert(withPrompt.messages.length >= 2, 'send with promptId still persists turns')
+
+  // --- #329: displayContent — store the raw question, send the prefixed context
+  console.log('\nChat displayContent (#329)')
+  const chatSes3 = createSession()
+  const raw = await sendChatTurn({
+    sessionId: chatSes3.id,
+    text: '[At 00:02 in the media (~2 transcript notes near ±45s)] What is he explaining here?',
+    displayContent: 'What is he explaining here?',
+    filters: {},
+    limit: 5,
+  })
+  assert(
+    raw.messages.some((m) => m.role === 'user' && m.content === 'What is he explaining here?'),
+    'stored user message is the raw question, not the playhead-prefixed text'
+  )
+  assert(
+    !raw.messages.some((m) => m.role === 'user' && m.content.includes('[At 00:02')),
+    'no playhead prefix leaks into stored history'
+  )
+
+  // --- #329: per-video media_state roundtrip
+  console.log('\nMedia state (#329)')
+  assert(SCHEMA_VERSION >= 13, 'media_state migration is part of the current schema')
+  assert(getMediaState('no-such-video') === null, 'unknown videoKey resolves to null')
+  assert(getLatestMediaState() === null, 'no latest state on an empty table')
+  const saved = setMediaState({
+    videoKey: 'https://youtube.com/watch?v=abc',
+    project: 'Lecture',
+    sessionId: chatSes3.id,
+    lastPositionSec: 4360,
+    voice: 'Curious student',
+    followPlayhead: false,
+  })
+  assert(saved.project === 'Lecture' && saved.lastPositionSec === 4360, 'setMediaState upserts')
+  assert(saved.followPlayhead === false, 'followPlayhead roundtrips as boolean')
+  const reread = getMediaState('https://youtube.com/watch?v=abc')
+  assert(!!reread && reread.sessionId === chatSes3.id && reread.voice === 'Curious student', 'getMediaState returns the saved row')
+  // Partial update keeps untouched fields.
+  setMediaState({ videoKey: 'https://youtube.com/watch?v=abc', lastPositionSec: 4420 })
+  const patched = getMediaState('https://youtube.com/watch?v=abc')
+  assert(!!patched && patched.lastPositionSec === 4420 && patched.voice === 'Curious student', 'partial update keeps other fields')
+  setMediaState({ videoKey: '/tmp/other.mp4', project: 'Other' })
+  assert(getLatestMediaState()?.videoKey === '/tmp/other.mp4', 'getLatestMediaState returns the most recently saved row')
 
   // --- Stale session (#315): a deleted session must surface the recognizable
   // --- error, never a raw FOREIGN KEY constraint failure.

@@ -34,6 +34,9 @@ import {
   mergeProject,
   deleteProject,
   getProjectSettings,
+  getLatestMediaState,
+  getMediaState,
+  setMediaState,
   setProjectExamDate,
   setProjectMultipleChoice,
   restoreItem,
@@ -163,6 +166,8 @@ import type {
   UpdateItemPatch,
   UpdatePromptPatch,
   MediaIngestLocalInput,
+  MediaStateInput,
+  MediaStateRow,
   MediaIngestYoutubeInput,
   MediaNotesNearInput,
   MediaApplyPersonaInput,
@@ -957,6 +962,10 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('media:listProjects', () => listMediaProjects())
+  // Per-video Media chat state (#329): conversation, voice, playhead resume.
+  ipcMain.handle('media:getMediaState', (_e, videoKey: string) => getMediaState(videoKey))
+  ipcMain.handle('media:getLatestMediaState', () => getLatestMediaState())
+  ipcMain.handle('media:setMediaState', (_e, input: MediaStateInput) => setMediaState(input))
 
   ipcMain.handle('media:findExistingProject', (_e, input?: MediaFindExistingInput) => {
     if (input?.mediaPath) {
