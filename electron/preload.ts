@@ -23,6 +23,8 @@ import type {
   MediaNotesNearInput,
   MediaPickLocalResult,
   MediaProjectInfo,
+  MediaStateInput,
+  MediaStateRow,
   MediaApplyPersonaInput,
   MediaApplyPersonaResult,
   MediaEnsurePersonasResult,
@@ -309,6 +311,15 @@ const api = {
       ipcRenderer.invoke('media:ingestYoutube', input),
     listProjects: (): Promise<MediaProjectInfo[]> =>
       ipcRenderer.invoke('media:listProjects'),
+    /** Per-video Media chat state (#329): restore conversation/voice/playhead. */
+    getMediaState: (videoKey: string): Promise<MediaStateRow | null> =>
+      ipcRenderer.invoke('media:getMediaState', videoKey),
+    /** Most recently studied video — Media chat reopens it on mount (#329). */
+    getLatestMediaState: (): Promise<MediaStateRow | null> =>
+      ipcRenderer.invoke('media:getLatestMediaState'),
+    /** Throttled save (~5 s) of the open video's state (#329). */
+    setMediaState: (input: MediaStateInput): Promise<MediaStateRow> =>
+      ipcRenderer.invoke('media:setMediaState', input),
     findExistingProject: (input: MediaFindExistingInput): Promise<MediaExistingProject | null> =>
       ipcRenderer.invoke('media:findExistingProject', input),
     notesNear: (input: MediaNotesNearInput): Promise<Item[]> =>

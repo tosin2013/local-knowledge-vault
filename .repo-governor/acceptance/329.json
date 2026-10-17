@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #329: Media chat kept everything in React state, so closing the plugin, switching tabs, or restarting the app lost the open video, chat history, playhead and voice; every visit created a new session (chats on one video piled up in Ask), re-selecting the project showed an empty chat, and a voice switch wiped the conversation. Fix: a new `media_state` table (migration v13) keyed by a stable video key (YouTube URL / local path — never the per-run lkvmedia id), holding project, continuing sessionId, lastPositionSec, voice and followPlayhead; saved every ~5 s, on beforeunload, and on unmount/switch. loadProject restores the conversation (validated via listMessages), voice and playhead; Media chat reopens the last studied video on mount (getLatestMediaState); sessions continue per video with a New chat button for a fresh start; voice switches keep the conversation; chat.send gains displayContent so the raw question is stored while the playhead-prefixed text stays model/retrieval context (#161). Criterion 1 (reopen/switch/restart returns video + history + voice, resume within 5 s) is covered by the renderer tests (auto-reopen, restored messages/voice/currentTime, save-on-unmount bounding loss to the 5 s interval); criterion 2 (one continuing session per video) by the restore test asserting createSession is not re-called plus the New chat test; criterion 4 (voice change keeps history) asserted directly; criterion 3 (rename/move keeps the link) holds structurally — the link is keyed by videoKey, not the project name, and each save refreshes the stored project (roundtrip + partial-update tested in test:mvp) — with rename/move flows against a live vault staying a manual review-box item. Criteria 2-4 guard typecheck, build and the suites.",
+  "authority_id": "329",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "tests_pass", "target": "npm run test:mvp" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

@@ -256,7 +256,10 @@ async function main(): Promise<void> {
   raw.close()
   db.initDb(v11)
   const post = snap(db.getDb())
-  assert(Number(db.getDb().pragma('user_version', { simple: true })) === 12, 'user_version is 12')
+  assert(
+    Number(db.getDb().pragma('user_version', { simple: true })) >= 12,
+    'user_version is at least 12 (v12 landed; later migrations may follow)'
+  )
   assert(pre.cards === post.cards && pre.sched === post.sched && pre.log === post.log && pre.ps === post.ps, 'cards, schedules, grade logs and settings are unchanged')
   assert((db.getDb().prepare('SELECT COUNT(*) AS n FROM study_cards WHERE mc_options IS NOT NULL').get() as { n: number }).n === 0, 'old cards have no options until re-import')
   assert(db.getProjectSettings('Bio').multipleChoice === true, 'existing projects default to on')

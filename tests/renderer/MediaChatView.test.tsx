@@ -288,6 +288,124 @@ describe('MediaChatView', () => {
     await waitFor(() => expect(onOpenNote).toHaveBeenCalledWith('itm_1'))
   })
 
+  it('reopens the last video with its conversation, voice and playhead (#329)', async () => {
+    const lkv = seedMedia()
+    const saved = {
+      videoKey: '/tmp/video.mp4',
+      project: 'Long lecture',
+      sessionId: 'ses_saved',
+      lastPositionSec: 5400,
+      voice: 'Desk cohost',
+      followPlayhead: true,
+      updatedAt: '2026-10-17T00:00:00.000Z',
+    }
+    lkv.media.listProjects.mockResolvedValue([
+      {
+        project: 'Long lecture',
+        noteCount: 10,
+        sourceType: 'local',
+        mediaPath: '/tmp/video.mp4',
+        mediaProtocolUrl: 'lkvmedia://video',
+        updatedAt: '2026-10-17T00:00:00.000Z',
+      },
+    ])
+    lkv.media.getLatestMediaState.mockResolvedValue(saved)
+    lkv.media.getMediaState.mockResolvedValue(saved)
+    lkv.chat.listMessages.mockResolvedValue([
+      makeMessage({ id: 'msg_u', role: 'user', content: 'What is he explaining here?' }),
+      makeMessage({ id: 'msg_a', role: 'assistant', content: 'He is explaining otters.' }),
+    ])
+    const { container } = render(<MediaChatView />)
+
+    // Media chat reopens the last studied video on mount…
+    expect((await screen.findAllByText('Long lecture')).length).toBeGreaterThan(0)
+    expect(lkv.media.getMediaState).toHaveBeenCalledWith('/tmp/video.mp4')
+    // …with its continuing conversation (no new session)…
+    expect(await screen.findByText('He is explaining otters.')).toBeInTheDocument()
+    expect(await screen.findByText(/chat continued \(2 messages\)/)).toBeInTheDocument()
+    expect(screen.getByText(/voice “Desk cohost”/)).toBeInTheDocument()
+    // …and the saved playhead, applied to the player.
+    await waitFor(() => {
+      const video = container.querySelector('video') as HTMLVideoElement
+      expect(video.currentTime).toBe(5400)
+    })
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'why?' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    await waitFor(() => expect(window.lkv.chat.send).toHaveBeenCalled())
+    expect(window.lkv.chat.createSession).not.toHaveBeenCalled()
+  })
+
+  it('keeps the conversation when the voice changes (#329)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestYoutube.mockResolvedValue(
+      makeIngestResult({ sourceType: 'youtube', mediaUrl: 'https://www.youtube.com/watch?v=abc123' }),
+    )
+    render(<MediaChatView />)
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    await screen.findByText(/Ingested 10 transcript notes/)
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    const answer = await screen.findByText('It is about otters.')
+
+    fireEvent.click(screen.getByText('Desk cohost'))
+    expect(await screen.findByText(/Voice: Desk cohost — your conversation stays/)).toBeInTheDocument()
+    expect(answer).toBeInTheDocument()
+    expect(screen.getByText('What is this about?')).toBeInTheDocument()
+  })
+
+  it('stores the raw question and sends the playhead context separately (#329)', async () => {
+    await ingestYoutube()
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), {
+      target: { value: 'Explain the intro' },
+    })
+    fireEvent.click(screen.getByLabelText('Send'))
+    await waitFor(() => expect(window.lkv.chat.send).toHaveBeenCalled())
+    const input = vi.mocked(window.lkv.chat.send).mock.calls[0][0]
+    expect(input.displayContent).toBe('Explain the intro')
+    expect(input.text).toContain('Explain the intro')
+    expect(input.text).toMatch(/^\[At /)
+    expect(input.text.length).toBeGreaterThan('Explain the intro'.length)
+  })
+
+  it('New chat starts a fresh session and keeps the old one (#329)', async () => {
+    await ingestYoutube()
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    const answer = await screen.findByText('It is about otters.')
+    expect(window.lkv.chat.createSession).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByText('New chat'))
+    expect(answer).not.toBeInTheDocument()
+    expect(screen.getByText(/Started a new chat/)).toBeInTheDocument()
+
+    // The next send opens a new session instead of continuing the old one.
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'again' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    await waitFor(() => expect(window.lkv.chat.createSession).toHaveBeenCalledTimes(2))
+  })
+
+  it('saves per-video state when Media chat closes (#329)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestYoutube.mockResolvedValue(
+      makeIngestResult({ sourceType: 'youtube', mediaUrl: 'https://www.youtube.com/watch?v=abc123' }),
+    )
+    const view = render(<MediaChatView />)
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    await screen.findByText(/Ingested 10 transcript notes/)
+    view.unmount()
+    await waitFor(() =>
+      expect(window.lkv.media.setMediaState).toHaveBeenCalledWith(
+        expect.objectContaining({ videoKey: 'https://www.youtube.com/watch?v=abc123', project: 'My podcast' }),
+      )
+    )
+  })
+
   it('clicks a citation to open the note and seek', async () => {
     const lkv = await ingestYoutube()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))
