@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #332: the Ingest panel (project picker, file/URL ingest, project switcher, rename/delete) was always expanded above the player, so on a 1280×800 laptop the player's controls and Ask box fell below the fold. Fix: once a video is loaded (active), the ingest controls collapse behind an 'Add media' toggle and the project switcher + Rename/Delete move into a one-line header, so the player, its controls and the Ask composer fit one screen; with no video loaded the full panel still shows. Criterion 1 is the issue's visual acceptance check — the structural half is asserted in the renderer (ingest controls hidden when active, switcher/rename/delete visible in the header, 'Add media' toggles them open/closed), while the exact 1280×800 no-scroll fit stays a manual review-box item (jsdom has no layout/viewport). Criteria 2-4 guard the renderer suite, typecheck and build.",
+  "authority_id": "332",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}

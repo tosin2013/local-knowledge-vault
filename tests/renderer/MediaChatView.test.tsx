@@ -621,6 +621,20 @@ describe('MediaChatView', () => {
     )
   })
 
+  it('collapses the ingest panel into a one-line header once a video is loaded (#332)', async () => {
+    await ingestYoutube()
+    // The ingest controls are hidden; the switcher + rename/delete stay visible.
+    expect(screen.queryByText('Local video/audio + captions')).toBeNull()
+    expect(screen.getByLabelText('Open media project')).toBeInTheDocument()
+    expect(screen.getByText('Rename')).toBeInTheDocument()
+    expect(screen.getByText('Delete')).toBeInTheDocument()
+    // "Add media" reveals the collapsed controls; "Close" hides them again.
+    fireEvent.click(screen.getByLabelText('Add media'))
+    expect(await screen.findByText('Local video/audio + captions')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Hide add media'))
+    await waitFor(() => expect(screen.queryByText('Local video/audio + captions')).toBeNull())
+  })
+
   it('deletes the active media project after confirm', async () => {
     await ingestYoutube()
     fireEvent.click(screen.getByText('Delete'))
