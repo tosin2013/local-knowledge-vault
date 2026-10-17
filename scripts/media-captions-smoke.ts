@@ -506,6 +506,17 @@ void (async () => {
       JSON.stringify(starts) === JSON.stringify([6260, 6300, 6340]),
       `near-playhead chunks are in ascending t_start order (got ${JSON.stringify(starts)})`
     )
+    // A transcript note without t_start/t_end metadata is skipped, not included.
+    const noMeta = createItem({
+      title: 'Broken chunk',
+      body: 'chunk text without timing metadata',
+      para: 'resources',
+      kind: 'transcript',
+      project: proj,
+    })
+    setUpdated(noMeta.id, '2030-01-04T00:00:00.000Z')
+    const stillNear = notesNearPlayhead(proj, 6300, 45)
+    assert(stillNear.length === 3, `metadata-less transcript is skipped (got ${stillNear.length})`)
   }
 
   // The delete+create transaction rolls back on failure.
