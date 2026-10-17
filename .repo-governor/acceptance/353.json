@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #353: Media chat rendered assistant messages and the fullscreen cited-passage panel as raw pre-wrap text, so Markdown characters (**bold**, # Heading, - list, ```code```) showed literally — unlike Ask/Study, which route answers through the shared AnswerText renderer (#238). Fix: Media chat assistant messages now use AnswerText (light Markdown + inline numbered citations that seek on click) with CitationChips for the numbered title chips, and the #328 fullscreen passage panel renders its body through AnswerText while keeping the [clock] timestamp prefixes. Criterion 1 (bold/heading/list/code formatted, no literal markers) and 2 (citation chips still seek/open) are asserted directly in the renderer test; criterion 3 (passage panel renders Markdown with timestamps kept) is a structural change covered by the existing #328 passage test (timestamps) plus the shared AnswerText renderer, with the visual pass remaining a manual review-box item. Criteria 2-4 guard the renderer suite, typecheck and build.",
+  "authority_id": "353",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}

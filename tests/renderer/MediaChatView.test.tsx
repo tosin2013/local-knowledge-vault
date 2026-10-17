@@ -130,7 +130,7 @@ describe('MediaChatView', () => {
     fireEvent.click(screen.getByLabelText('Send'))
 
     await waitFor(() => expect(screen.getByText('It is about otters.')).toBeInTheDocument())
-    expect(screen.getByText('Transcript')).toBeInTheDocument()
+    expect(screen.getByText(/Transcript/)).toBeInTheDocument()
     expect(window.lkv.chat.send).toHaveBeenCalled()
   })
 
@@ -229,7 +229,7 @@ describe('MediaChatView', () => {
     await waitFor(() => expect(container.querySelector('video')).not.toBeNull())
     fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
     fireEvent.click(screen.getByLabelText('Send'))
-    const citation = await screen.findByText('Transcript')
+    const citation = await screen.findByText(/Transcript/)
     fireEvent.click(screen.getByLabelText('Enter fullscreen'))
     await screen.findByLabelText('Exit fullscreen')
     fireEvent.click(citation)
@@ -252,7 +252,7 @@ describe('MediaChatView', () => {
     await waitFor(() => expect(container.querySelector('video')).not.toBeNull())
     fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
     fireEvent.click(screen.getByLabelText('Send'))
-    const citation = await screen.findByText('Transcript')
+    const citation = await screen.findByText(/Transcript/)
     fireEvent.click(screen.getByLabelText('Enter fullscreen'))
     await screen.findByLabelText('Exit fullscreen')
 
@@ -283,7 +283,7 @@ describe('MediaChatView', () => {
     await screen.findByText(/Ingested 10 transcript notes/)
     fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
     fireEvent.click(screen.getByLabelText('Send'))
-    const citation = await screen.findByText('Transcript')
+    const citation = await screen.findByText(/Transcript/)
     fireEvent.click(citation)
     await waitFor(() => expect(onOpenNote).toHaveBeenCalledWith('itm_1'))
   })
@@ -566,7 +566,7 @@ describe('MediaChatView', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
     fireEvent.click(screen.getByLabelText('Send'))
-    const citation = await screen.findByText('Transcript')
+    const citation = await screen.findByText(/Transcript/)
     fireEvent.click(citation)
 
     await waitFor(() => expect(lkv.items.get).toHaveBeenCalledWith('itm_1'))
@@ -633,6 +633,40 @@ describe('MediaChatView', () => {
     expect(await screen.findByText('Local video/audio + captions')).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText('Hide add media'))
     await waitFor(() => expect(screen.queryByText('Local video/audio + captions')).toBeNull())
+  })
+
+  it('formats Media chat answers as Markdown with numbered citations (#353)', async () => {
+    const lkv = seedMedia()
+    lkv.chat.send.mockResolvedValue({
+      assistant: makeMessage(),
+      messages: [
+        makeMessage({ id: 'msg_user', role: 'user', content: 'hi' }),
+        makeMessage({
+          id: 'msg_asst',
+          role: 'assistant',
+          content: '**bold** and\n\n# Heading\n\n- item',
+          citations_json: JSON.stringify([{ id: 'itm_1', title: 'Transcript' }]),
+        }),
+      ],
+      session: makeSession('s_1'),
+      offline: false,
+    })
+    const { container } = render(<MediaChatView />)
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    await screen.findByText(/Ingested 10 transcript notes/)
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+
+    expect(await screen.findByTestId('answer-text')).toBeInTheDocument()
+    expect(container.querySelector('strong')?.textContent).toBe('bold') // **bold** → <strong>
+    expect(container.querySelector('h3')?.textContent).toBe('Heading') // # Heading → heading
+    expect(container.querySelector('li')?.textContent).toBe('item') // - item → list
+    expect(screen.queryByText('**bold**')).toBeNull() // no literal markdown characters
+    // Citation chip keeps its seek affordance and shows the numbered title.
+    expect(screen.getByText(/\[1\] Transcript/)).toBeInTheDocument()
   })
 
   it('deletes the active media project after confirm', async () => {
