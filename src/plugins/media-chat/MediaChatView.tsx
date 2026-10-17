@@ -26,6 +26,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import type { VaultPluginRenderProps } from '../types'
 import { AI_DRAFT_STATUS, loadImportProject, provenanceHeader, saveImportProject } from '../../domain'
 import { AnswerProviderChip } from '../../components/ai/AnswerProviderChip'
+import { AnswerText, CitationChips } from '../../components/answer/AnswerText'
 import { MoveNotesAction } from '../../features/MoveNotesAction'
 import { ProjectSelect } from '../../features/ProjectSelect'
 import type {
@@ -1222,21 +1223,21 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                       borderRadius: 2,
                     }}
                   >
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                      {m.content}
-                    </Typography>
+                    {m.role === 'assistant' ? (
+                      // #353: format answers like Ask/Study (light Markdown +
+                      // inline numbered citations) instead of raw text.
+                      <AnswerText
+                        text={m.content}
+                        citations={cites}
+                        onSelectCitation={(id) => void onCitationClick(id)}
+                      />
+                    ) : (
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {m.content}
+                      </Typography>
+                    )}
                     {cites.length > 0 && (
-                      <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.75 }}>
-                        {cites.map((c) => (
-                          <Chip
-                            key={c.id}
-                            size="small"
-                            label={c.title || c.id}
-                            onClick={() => void onCitationClick(c.id)}
-                            sx={{ cursor: 'pointer' }}
-                          />
-                        ))}
-                      </Stack>
+                      <CitationChips citations={cites} onSelectCitation={(id) => void onCitationClick(id)} />
                     )}
                     {m.role === 'assistant' && <AnswerProviderChip providerJson={m.provider_json} />}
                     {m.role === 'assistant' && onNewDraft && (
@@ -1638,9 +1639,10 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Stack>
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>
-              {fsNote.body}
-            </Typography>
+            {/* #353: the cited passage formats Markdown like Ask/Study. */}
+            <Box sx={{ mt: 0.5 }}>
+              <AnswerText text={fsNote.body} />
+            </Box>
           </Paper>
         )}
       </Box>
