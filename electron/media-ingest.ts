@@ -906,15 +906,19 @@ export function notesNearPlayhead(
   centerSec: number,
   windowSec = 45
 ): Item[] {
-  const items = listItems({ project, kind: 'transcript' })
   const lo = centerSec - windowSec
   const hi = centerSec + windowSec
-  return items.filter((it) => {
+  const near: { item: Item; start: number }[] = []
+  for (const it of listItems({ project, kind: 'transcript' })) {
     const start = parseTStartFromBody(it.body)
     const end = parseTEndFromBody(it.body)
-    if (start == null || end == null) return false
-    return start <= hi && end >= lo
-  })
+    if (start == null || end == null) continue
+    if (start <= hi && end >= lo) near.push({ item: it, start })
+  }
+  // Chronological, never by updated_at (#331): "Save this moment" joins the
+  // chunks in this order, and updated_at reshuffles on re-ingest or edit.
+  near.sort((a, b) => a.start - b.start)
+  return near.map((n) => n.item)
 }
 
 export { formatTimestamp, parseTStartFromBody }
