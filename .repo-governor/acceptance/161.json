@@ -1,0 +1,11 @@
+{
+  "$comment": "Completion bar for #161: 'Follow playhead' only prefixed the question — retrieval was still a full-project keyword search, the ±45s window was hardcoded in two places, and saved-note provenance wrote raw seconds. Fix: (1) ChatSendInput.mediaWindow passes the playhead window into sendChatTurn, which merges notesNearPlayhead chunks — mapped by itemToMediaHit, scored above BM25 — ahead of keyword hits and rescues an otherwise-missed question; (2) the window is a configurable select (±30s/±45s/±1m/±3m) persisted in localStorage, used by the near-count, buildQuestion hint, saveMoment and the scoped retrieval; (3) provenanceHeader now writes a human-readable 'From 1:29:15 to 1:30:45 in the media' line while keeping the t_start/t_end machine lines. Criterion 1 is covered by test:mvp (a playhead window grounds an answer whose keyword search finds nothing; itemToMediaHit strips metadata and scores 1000) and by a renderer test (chat.send carries mediaWindow when follow playhead is on); criterion 2 by the renderer window-select test (the near-count scans at 180 s after choosing ±3m); criterion 3 by the renderer provenance test (human line present, machine seconds retained). No LLM call is asserted in CI: the grounding contract is proven by the rescue path skipping the 'couldn't find' soft-fail. Criteria 2-5 guard typecheck, build and the suites.",
+  "authority_id": "161",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:mvp" },
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

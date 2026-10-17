@@ -141,12 +141,34 @@ export interface NoteProvenance {
 }
 
 /**
+ * Human-readable media clock (#161): `mm:ss` under an hour, `h:mm:ss` above.
+ * Mirrors the Media chat "Now:" chip; machine parsing keeps using t_start/t_end
+ * seconds.
+ */
+export function formatMediaClock(sec: number): string {
+  const t = Math.max(0, Math.floor(sec || 0))
+  const h = Math.floor(t / 3600)
+  const m = Math.floor((t % 3600) / 60)
+  const s = t % 60
+  const mm = String(m).padStart(2, '0')
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
+/**
  * Provenance header lines for a note saved from a source moment, written into
  * the note body using the same `source_url:` marker convention as media ingest
  * (`electron/media-ingest.ts`). Empty string when there is nothing to record.
+ * Times are human-readable first (#161); the `t_start:`/`t_end:` seconds lines
+ * stay for machine parsing.
  */
 export function provenanceHeader(prov: NoteProvenance): string {
   const lines: string[] = []
+  if (prov.tStart !== undefined && prov.tEnd !== undefined) {
+    lines.push(`From ${formatMediaClock(prov.tStart)} to ${formatMediaClock(prov.tEnd)} in the media`)
+  } else if (prov.tStart !== undefined) {
+    lines.push(`At ${formatMediaClock(prov.tStart)} in the media`)
+  }
   if (prov.sourceUrl) lines.push(`source_url: ${prov.sourceUrl}`)
   if (prov.tStart !== undefined) lines.push(`t_start: ${prov.tStart}`)
   if (prov.tEnd !== undefined) lines.push(`t_end: ${prov.tEnd}`)

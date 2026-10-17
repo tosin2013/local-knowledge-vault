@@ -157,6 +157,31 @@ type MediaVoiceOption = {
 
 const MEDIA_VOICE_STORAGE_KEY = 'lkv.mediaVoice'
 
+/** Playhead retrieval window options (#161), in seconds. */
+const PLAYHEAD_WINDOW_OPTIONS = [30, 45, 60, 180]
+const PLAYHEAD_WINDOW_STORAGE_KEY = 'lkv.media.playheadWindowSec'
+
+function loadPlayheadWindowSec(): number {
+  try {
+    const v = Number(localStorage.getItem(PLAYHEAD_WINDOW_STORAGE_KEY))
+    return PLAYHEAD_WINDOW_OPTIONS.includes(v) ? v : 45
+  } catch {
+    return 45
+  }
+}
+
+function savePlayheadWindowSec(sec: number): void {
+  try {
+    localStorage.setItem(PLAYHEAD_WINDOW_STORAGE_KEY, String(sec))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function windowLabel(sec: number): string {
+  return sec >= 60 ? `±${sec / 60}m` : `±${sec}s`
+}
+
 function readStoredVoiceName(): string | null {
   try {
     const v = localStorage.getItem(MEDIA_VOICE_STORAGE_KEY)
@@ -205,6 +230,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [ytReady, setYtReady] = useState(false)
   const [nearCount, setNearCount] = useState<number | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
+  /** Playhead retrieval window (#161): scopes near-count, moment saves and retrieval. */
+  const [playheadWindowSec, setPlayheadWindowSec] = useState<number>(loadPlayheadWindowSec)
   // #328: cited-passage shown inside fullscreen (the app-side note drawer would
   // open behind the overlay, hidden but focus-stealing — Esc would stop working).
   const [fsNote, setFsNote] = useState<{ title: string; body: string } | null>(null)
@@ -381,7 +408,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         const notes = await window.lkv.media.notesNear({
           project: active.project,
           centerSec: currentTime,
-          windowSec: 45,
+          windowSec: playheadWindowSec,
         })
         if (!cancelled) setNearCount(notes.length)
       } catch {
@@ -406,7 +433,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     return () => {
       cancelled = true
     }
-  }, [active, currentTime])
+  }, [active, currentTime, playheadWindowSec])
 
   // YouTube embed URL comes from the main process (single hardened parser), and the
   // IFrame API player is created once the iframe exists.
@@ -828,7 +855,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     const clock = formatClock(sec)
     const windowHint =
       nearCount != null
-        ? ` (~${nearCount} transcript notes near ±45s)`
+        ? ` (~${nearCount} transcript notes near ${windowLabel(playheadWindowSec)})`
         : ''
     return `[At ${clock} in the media${windowHint}] ${q}`
   }
@@ -841,7 +868,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setBusy(true)
     setError(null)
     try {
-      const notes = await window.lkv.media.notesNear({ project: active.project, centerSec: momentSec, windowSec: 45 })
+      const notes = await window.lkv.media.notesNear({ project: active.project, centerSec: momentSec, windowSec: playheadWindowSec })
       // notesNear returns chunks in t_start order (#331); show each with its
       // clock time and without the machine metadata lines.
       const passage =
@@ -854,8 +881,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         body:
           provenanceHeader({
             sourceUrl: active.mediaUrl ?? active.mediaPath,
-            tStart: Math.max(0, Math.round(momentSec - 45)),
-            tEnd: Math.round(momentSec + 45),
+            tStart: Math.max(0, Math.round(momentSec - playheadWindowSec)),
+            tEnd: Math.round(momentSec + playheadWindowSec),
           }) +
           passage +
           '\n\n## In my words\n\n',
@@ -920,6 +947,12 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         promptId: active.promptId || undefined,
         limit: 8,
         sourcesLast: false, // Media chat is chat with the video: transcripts rank normally
+        // #161: Follow playhead / "Ask about this moment" scope retrieval to the
+        // playhead window, so the answer is grounded in the notes around now.
+        mediaWindow:
+          followPlayhead || !!opts?.aboutMoment
+            ? { centerSec: momentSec, windowSec: playheadWindowSec }
+            : undefined,
       })
       setMessages(res.messages)
     } catch (e) {
@@ -971,6 +1004,24 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         }
         label={<Typography variant="caption">Follow playhead</Typography>}
       />
+      <TextField
+        select
+        size="small"
+        label="Window"
+        value={playheadWindowSec}
+        onChange={(e) => {
+          const v = Number(e.target.value)
+          setPlayheadWindowSec(v)
+          savePlayheadWindowSec(v)
+        }}
+        sx={{ minWidth: 96 }}
+      >
+        {PLAYHEAD_WINDOW_OPTIONS.map((sec) => (
+          <MenuItem key={sec} value={sec}>
+            {windowLabel(sec)}
+          </MenuItem>
+        ))}
+      </TextField>
       <Button
         size="small"
         variant="outlined"

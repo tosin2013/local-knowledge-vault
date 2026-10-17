@@ -35,7 +35,7 @@ import {
 } from './db'
 import { resolveUserDataDir } from './user-data'
 import { mediaProtocolUrlForPath } from './media-protocol'
-import type { ChatProfile, Item, Prompt } from './types'
+import type { ChatProfile, Item, Prompt, SearchHit } from './types'
 
 export const MEDIA_READER_NAME = 'Media reader'
 
@@ -922,3 +922,27 @@ export function notesNearPlayhead(
 }
 
 export { formatTimestamp, parseTStartFromBody }
+
+/**
+ * A transcript Item as a retrieval hit for the playhead window (#161): the
+ * chunk text with machine metadata stripped becomes both the snippet and the
+ * passage, scored above keyword hits so the current moment grounds the answer.
+ */
+export function itemToMediaHit(it: Item): SearchHit {
+  const text = it.body
+    .split('\n')
+    .filter((line) => !/^\s*(t_start|t_end|source_path|source_url|kind_tag|cited):/i.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return {
+    id: it.id,
+    title: it.title,
+    snippet: text.length > 240 ? `${text.slice(0, 237).trimEnd()}…` : text,
+    score: 1000, // above BM25 scores: the playhead window ranks first
+    para: it.para,
+    kind: it.kind,
+    project: it.project,
+    passage: text,
+  }
+}

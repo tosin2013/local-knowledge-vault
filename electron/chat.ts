@@ -10,6 +10,7 @@ import {
   updateSessionTitle,
 } from './db'
 import { searchQuery } from './search'
+import { itemToMediaHit, notesNearPlayhead } from './media-ingest'
 import { llmGenerate } from './llm'
 import {
   buildGroundedMessages,
@@ -245,7 +246,23 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     sourcesLast: input.sourcesLast ?? true,
   })
 
-  if (hits.length === 0) {
+  // #161: Follow playhead scopes retrieval. Transcript chunks overlapping the
+  // playhead window ground the answer even when keyword search misses them, and
+  // rank ahead of the keyword hits (itemToMediaHit scores them above BM25).
+  let retrieval = hits
+  if (input.mediaWindow && input.filters?.project) {
+    const near = notesNearPlayhead(
+      input.filters.project,
+      input.mediaWindow.centerSec,
+      input.mediaWindow.windowSec
+    ).map(itemToMediaHit)
+    if (near.length > 0) {
+      const nearIds = new Set(near.map((h) => h.id))
+      retrieval = [...near, ...hits.filter((h) => !nearIds.has(h.id))].slice(0, limit)
+    }
+  }
+
+  if (retrieval.length === 0) {
     const project = (input.filters?.project ?? '').trim()
     const soft = project
       ? `I couldn't find that in your ${project} notes. Try a name or topic from those notes, or switch Profile to search more broadly.`
@@ -261,7 +278,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
     .filter((m: ChatMessage) => m.role === 'user' || m.role === 'assistant')
     .slice(-HISTORY_TURNS)
 
-  const grounded = buildGroundedMessages(text, hits, {
+  const grounded = buildGroundedMessages(text, retrieval, {
     systemExtra,
     history: recent.map((m) => ({ role: m.role, content: m.content })),
   })
@@ -269,16 +286,16 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
   const gen = await llmGenerate(grounded)
   if (!gen.ok) {
     const content = offlineCopy(gen, 'Your message was saved — showing search context only')
-    return finish(content, [], hits, { offline: true, error: gen.error })
+    return finish(content, [], retrieval, { offline: true, error: gen.error })
   }
 
-  const allowed = new Set(hits.map((h) => h.id))
+  const allowed = new Set(retrieval.map((h) => h.id))
   const rawCited = extractCitedIds(gen.text)
   const validIds = validateCitations(rawCited, allowed)
   const citations = citationsFromIds(validIds)
   const finalized = finalizeAnswer(gen.text, allowed)
 
-  return finish(finalized.answer, citations, hits, {
+  return finish(finalized.answer, citations, retrieval, {
     provider: answerProvider(gen),
     uncited: finalized.uncited,
   })

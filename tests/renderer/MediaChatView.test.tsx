@@ -515,6 +515,51 @@ describe('MediaChatView', () => {
     expect(passage).not.toMatch(/kind_tag:|source_url:|source_path:|t_start:|t_end:|cited:/)
   })
 
+  it('applies the playhead window to the near count and retrieval (#161)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    render(<MediaChatView />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(lkv.media.notesNear).toHaveBeenCalled())
+    // Change the window to ±3m (180 s): the near-count scan now uses it.
+    fireEvent.mouseDown(screen.getByLabelText('Window'))
+    fireEvent.click(screen.getByRole('option', { name: '±3m' }))
+    await waitFor(
+      () => expect(lkv.media.notesNear).toHaveBeenLastCalledWith(expect.objectContaining({ windowSec: 180 })),
+      { timeout: 4000 },
+    )
+  })
+
+  it('scopes retrieval to the playhead window when follow playhead is on (#161)', async () => {
+    await ingestYoutube()
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    await waitFor(() => expect(window.lkv.chat.send).toHaveBeenCalled())
+    const input = vi.mocked(window.lkv.chat.send).mock.calls[0][0]
+    expect(input.mediaWindow).toEqual({ centerSec: 0, windowSec: 45 })
+  })
+
+  it('writes human-readable times in the saved-moment provenance (#161)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    const onNewDraft = vi.fn()
+    const { container } = render(<MediaChatView onNewDraft={onNewDraft} />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(container.querySelector('video')).not.toBeNull())
+    ;(container.querySelector('video') as HTMLVideoElement).currentTime = 5400
+    fireEvent.click(screen.getByText('Save this moment'))
+    await waitFor(() => expect(onNewDraft).toHaveBeenCalled())
+    const body = onNewDraft.mock.calls[0][0].body as string
+    // Human-readable window line first, machine seconds still there to parse.
+    expect(body).toContain('From 1:29:15 to 1:30:45 in the media')
+    expect(body).toContain('t_start: 5355')
+    expect(body).toContain('t_end: 5445')
+  })
+
   it('clicks a citation to open the note and seek', async () => {
     const lkv = await ingestYoutube()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))

@@ -333,6 +333,33 @@ async function main(): Promise<void> {
     'no playhead prefix leaks into stored history'
   )
 
+  // --- #161: Follow playhead scopes retrieval to the window ---
+  console.log('\nPlayhead window retrieval (#161)')
+  const wproj = 'Window lecture'
+  const wchunk = (start: number, end: number, text: string) =>
+    createItem({
+      title: `T ${start}`,
+      body: `${text}\n\nt_start: ${start.toFixed(3)}\nt_end: ${end.toFixed(3)}\nkind_tag: transcript`,
+      para: 'resources',
+      kind: 'transcript',
+      project: wproj,
+    })
+  wchunk(6260, 6275, 'mitochondria are the powerhouse of the cell')
+  wchunk(6280, 6300, 'respiration converts glucose into ATP')
+  const wSes = createSession({ filters: { project: wproj } })
+  const wRes = await sendChatTurn({
+    sessionId: wSes.id,
+    text: 'zzzz unmatched gibberish query',
+    filters: { project: wproj },
+    limit: 8,
+    mediaWindow: { centerSec: 6265, windowSec: 45 },
+  })
+  assert(
+    !/couldn't find that in your/i.test(wRes.assistant.content),
+    'a playhead window grounds the answer even when keyword search misses'
+  )
+  assert(wRes.messages.length >= 2, 'window-scoped send still persists the turn')
+
   // --- #329: per-video media_state roundtrip
   console.log('\nMedia state (#329)')
   assert(SCHEMA_VERSION >= 13, 'media_state migration is part of the current schema')

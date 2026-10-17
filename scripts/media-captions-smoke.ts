@@ -6,6 +6,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import type { Item } from '../electron/types'
 import {
   chunkCues,
   decodeCaptions,
@@ -20,6 +21,7 @@ import {
   buildYtDlpSubtitleArgs,
   describeYtDlpFailure,
   ingestYoutubeMedia,
+  itemToMediaHit,
   normalizeYoutubeUrl,
   pickCaptionTrack,
   ingestLocalMedia,
@@ -517,6 +519,27 @@ void (async () => {
     setUpdated(noMeta.id, '2030-01-04T00:00:00.000Z')
     const stillNear = notesNearPlayhead(proj, 6300, 45)
     assert(stillNear.length === 3, `metadata-less transcript is skipped (got ${stillNear.length})`)
+  }
+
+  // ---- #161: itemToMediaHit strips metadata and ranks the window above BM25 ----
+  {
+    const hitItem = {
+      id: 'itm_window',
+      title: 'T 84',
+      para: 'resources',
+      kind: 'transcript',
+      project: 'P',
+      body: 'real words here\n\nt_start: 84.500\nt_end: 128.000\nkind_tag: transcript',
+      summary: null,
+      status: 'active',
+      created_at: '2026-09-28T00:00:00.000Z',
+      updated_at: '2026-09-28T00:00:00.000Z',
+    } as Item
+    const h = itemToMediaHit(hitItem)
+    assert(h.score === 1000, 'near-window hit ranks above keyword scores')
+    assert(h.passage === 'real words here', 'passage is the chunk text with metadata stripped')
+    assert(!/t_start|kind_tag|source_/.test(h.snippet), 'snippet has no machine metadata lines')
+    assert(h.project === 'P' && h.kind === 'transcript', 'hit keeps its item identity')
   }
 
   // The delete+create transaction rolls back on failure.
