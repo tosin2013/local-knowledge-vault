@@ -189,6 +189,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [ytReady, setYtReady] = useState(false)
   const [nearCount, setNearCount] = useState<number | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
+  // #328: cited-passage shown inside fullscreen (the app-side note drawer would
+  // open behind the overlay, hidden but focus-stealing — Esc would stop working).
+  const [fsNote, setFsNote] = useState<{ title: string; body: string } | null>(null)
   const [voices, setVoices] = useState<MediaVoiceOption[]>([])
   const [activeVoice, setActiveVoice] = useState<string>('Media reader')
   const [renaming, setRenaming] = useState(false)
@@ -439,6 +442,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     })
     setActiveVoice(voice.name)
     setMessages([])
+    setFsNote(null)
     setSessionId(null)
     setCurrentTime(0)
     setStatus(
@@ -559,6 +563,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     })
     setActiveVoice(voice.name)
     setMessages([])
+    setFsNote(null)
     setSessionId(null)
     setCurrentTime(0)
     setStatus(`Loaded media project “${p.project}” (${p.noteCount} notes) · voice “${voice.name}”`)
@@ -577,6 +582,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setActive((prev) => (prev ? { ...prev, promptId: opt.promptId } : prev))
     // New voice → fresh session so history isn't mixed across styles
     setMessages([])
+    setFsNote(null)
     setSessionId(null)
     setStatus(`Voice: ${name} (works with any media project)`)
   }
@@ -612,6 +618,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       await window.lkv.projects.delete(active.project)
       setActive(null)
       setMessages([])
+      setFsNote(null)
       setSessionId(null)
       setStatus(`Deleted media project “${active.project}”`)
       await refreshProjects()
@@ -653,7 +660,19 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     if (item) {
       const t = parseTStart(item.body)
       if (t != null) seekTo(t)
+      // #328: in fullscreen the note drawer would open *behind* the overlay —
+      // hidden, but focus-stealing (Esc stopped working). Show the passage
+      // inside fullscreen instead; the drawer still serves normal mode.
+      if (fullscreen) {
+        setFsNote({
+          title: item.title,
+          body: item.body.replace(/^\s*t_start:\s*[0-9.]+\s*\n?/, ''),
+        })
+        return
+      }
       onOpenNote?.(id)
+    } else if (fullscreen) {
+      setStatus(`Note ${id} is not in your vault.`)
     } else {
       onOpenNote?.(id)
     }
@@ -767,7 +786,10 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     [active]
   )
 
-  const exitFullscreen = useCallback(() => setFullscreen(false), [])
+  const exitFullscreen = useCallback(() => {
+    setFullscreen(false)
+    setFsNote(null)
+  }, [])
 
   const renderPlayerControls = () => (
     <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
@@ -1342,6 +1364,30 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         )}
 
         {renderPlayerAskLayout({ large: fullscreen })}
+
+        {/* #328: the cited passage, shown inside fullscreen. The app-side note
+            drawer stays closed here — it would render behind the overlay, hidden
+            but focus-stealing (Esc stopped exiting fullscreen). */}
+        {fullscreen && fsNote && (
+          <Paper variant="outlined" sx={{ p: 1.25, maxHeight: 220, overflow: 'auto', flexShrink: 0 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography variant="subtitle2" noWrap sx={{ flex: 1, minWidth: 0 }}>
+                {fsNote.title}
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={() => setFsNote(null)}
+                aria-label="Close note passage"
+                title="Close note passage"
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>
+              {fsNote.body}
+            </Typography>
+          </Paper>
+        )}
       </Box>
     </Box>
   )
