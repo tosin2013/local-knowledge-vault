@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #330: the playhead went stale when paused — the YouTube poll returned early unless playing (a paused scrub never moved 'Now:'), the HTML5 element only listened to timeupdate (scrubs while paused fire 'seeked', not timeupdate), the near-count throttle dropped the last update of a burst without scheduling a trailing one, and buildQuestion/saveMoment read the polled state instead of the player. Fix: the YT poll reads getCurrentTime every second unconditionally (ytPlayingRef removed as dead state), the HTML5 element also listens to 'seeked', the near-count throttle now schedules a trailing scan so the last position of a burst always settles, and a readPlayerTime() helper reads the element/player at click time for 'Ask about this moment' and 'Save this moment' (syncing the chip). Criterion 1: the paused-scrub shape is covered in jsdom — 'seeked' moves 'Now:' to 1:30:00, and Ask about this moment with a scrubbed-but-unpolled player sends '[At 1:30:00 …'; the YouTube half of the 1 s claim stays a manual review-box item (the review box rate-limits YouTube playback, per the issue). Criterion 2 (near-count settles) is asserted: a burst ending at t=300 ends with a notesNear call at centerSec 300. Criteria 2-4 guard the renderer suite, typecheck and build.",
+  "authority_id": "330",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}

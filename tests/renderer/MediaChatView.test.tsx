@@ -406,6 +406,74 @@ describe('MediaChatView', () => {
     )
   })
 
+  it('updates "Now:" when you scrub a paused video (#330)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    const { container } = render(<MediaChatView />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    const video = (await waitFor(() => {
+      const el = container.querySelector('video')
+      expect(el).not.toBeNull()
+      return el!
+    })) as HTMLVideoElement
+
+    // Paused scrub: no timeupdate ever fires, only 'seeked'.
+    video.currentTime = 5400
+    fireEvent(video, new Event('seeked'))
+    expect(await screen.findByText('Now: 1:30:00')).toBeInTheDocument()
+  })
+
+  it('asks about the live player time, not the last-polled one (#330)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    const { container } = render(<MediaChatView />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(container.querySelector('video')).not.toBeNull())
+    const video = container.querySelector('video') as HTMLVideoElement
+
+    // Scrub to 1:30:00 while paused WITHOUT a timeupdate/seeked — the polled
+    // state still says 00:00; the click must read the player instead.
+    video.currentTime = 5400
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), {
+      target: { value: 'What is on this slide?' },
+    })
+    fireEvent.click(screen.getByText('Ask about this moment'))
+    await waitFor(() => expect(window.lkv.chat.send).toHaveBeenCalled())
+    const input = vi.mocked(window.lkv.chat.send).mock.calls[0][0]
+    expect(input.text).toContain('[At 1:30:00 in the media')
+    expect(await screen.findByText('Now: 1:30:00')).toBeInTheDocument() // chip caught up too
+  })
+
+  it('settles the near-playhead count on the last position of a burst (#330)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    const { container } = render(<MediaChatView />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(container.querySelector('video')).not.toBeNull())
+    const video = container.querySelector('video') as HTMLVideoElement
+
+    // A burst of timeupdates (e.g. a scrub) that stops mid-throttle…
+    for (const t of [100, 200, 300]) {
+      video.currentTime = t
+      fireEvent(video, new Event('timeupdate'))
+    }
+    // …must still end with a scan at the final position (trailing call).
+    await waitFor(
+      () => {
+        const calls = vi.mocked(window.lkv.media.notesNear).mock.calls
+        expect(calls.length).toBeGreaterThan(0)
+        expect(calls[calls.length - 1][0].centerSec).toBe(300)
+      },
+      { timeout: 4000 },
+    )
+  })
+
   it('clicks a citation to open the note and seek', async () => {
     const lkv = await ingestYoutube()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))
