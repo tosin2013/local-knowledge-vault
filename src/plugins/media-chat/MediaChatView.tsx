@@ -61,6 +61,21 @@ function parseTStart(body: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/**
+ * One transcript chunk as a readable passage line (#331): machine metadata
+ * (t_start/t_end/source_path/source_url/kind_tag/cited) stripped, prefixed
+ * with the chunk's clock time.
+ */
+function transcriptPassageChunk(body: string, clock: string): string {
+  const text = body
+    .split('\n')
+    .filter((line) => !/^\s*(t_start|t_end|source_path|source_url|kind_tag|cited):/i.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return text ? `[${clock}] ${text}` : ''
+}
+
 function isAudioPath(p?: string): boolean {
   if (!p) return false
   return /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(p)
@@ -827,7 +842,13 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setError(null)
     try {
       const notes = await window.lkv.media.notesNear({ project: active.project, centerSec: momentSec, windowSec: 45 })
-      const passage = notes.map((n) => n.body).join('\n\n') || '(no transcript near this moment)'
+      // notesNear returns chunks in t_start order (#331); show each with its
+      // clock time and without the machine metadata lines.
+      const passage =
+        notes
+          .map((n) => transcriptPassageChunk(n.body, formatClock(parseTStart(n.body) ?? momentSec)))
+          .filter(Boolean)
+          .join('\n\n') || '(no transcript near this moment)'
       onNewDraft({
         title: `Media moment — ${formatClock(momentSec)}`,
         body:

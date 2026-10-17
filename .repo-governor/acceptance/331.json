@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #331: notesNearPlayhead filtered listItems({kind:'transcript'}) and returned it in the DB's updated_at DESC order, so 'Save this moment' joined the transcript chunks jumbled (1:45:40, 1:44:15, 1:44:58, 1:43:34) and the passage repeated the t_start/source_path/source_url/kind_tag machine lines. Fix: notesNearPlayhead sorts its overlap set by parsed t_start ascending (a re-ingest or edit that reshuffles updated_at no longer affects order), and saveMoment renders each chunk as '[clock] text' with the metadata lines stripped (a transcriptPassageChunk helper). Criterion 2 is the issue's requested unit test: three chunks with updated_at forced into the reverse of t_start order come back ascending. Criterion 1 is asserted in the renderer: a saved moment's body lists [1:44:20] Early < [1:45:00] Middle < [1:45:40] Late and the passage region matches no machine-metadata line (the draft's own provenance header, above the passage, is untouched). The longer-term column/index suggestion is recorded as a follow-up, not attempted here. Criteria 2-4 guard the suites, typecheck and build.",
+  "authority_id": "331",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:media" },
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" }
+  ]
+}

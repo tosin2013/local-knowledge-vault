@@ -474,6 +474,47 @@ describe('MediaChatView', () => {
     )
   })
 
+  it('saves the moment passage in time order with readable timestamps (#331)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    // Sorted by t_start, as notesNearPlayhead now guarantees (#331).
+    lkv.media.notesNear.mockResolvedValue([
+      makeItem('n_early', {
+        kind: 'transcript',
+        body: 'Early lines\n\nt_start: 6260.000\nt_end: 6275.000\nsource_path: /tmp/video.mp4\nkind_tag: transcript',
+      }),
+      makeItem('n_mid', {
+        kind: 'transcript',
+        body: 'Middle lines\n\nt_start: 6300.000\nt_end: 6320.000\nkind_tag: transcript',
+      }),
+      makeItem('n_late', {
+        kind: 'transcript',
+        body: 'Late lines\n\nt_start: 6340.000\nt_end: 6355.000\nkind_tag: transcript',
+      }),
+    ])
+    const onNewDraft = vi.fn()
+    render(<MediaChatView onNewDraft={onNewDraft} />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(screen.getByText('Save this moment')).toBeEnabled())
+    fireEvent.click(screen.getByText('Save this moment'))
+    await waitFor(() => expect(onNewDraft).toHaveBeenCalled())
+    const body = onNewDraft.mock.calls[0][0].body as string
+
+    // The passage reads chronologically, each chunk with its clock time…
+    const early = body.indexOf('[1:44:20] Early lines')
+    const mid = body.indexOf('[1:45:00] Middle lines')
+    const late = body.indexOf('[1:45:40] Late lines')
+    expect(early).toBeGreaterThan(-1)
+    expect(mid).toBeGreaterThan(early)
+    expect(late).toBeGreaterThan(mid)
+    // …and no machine metadata lines are repeated inside the passage (the
+    // draft's own provenance header, above the passage, is unaffected).
+    const passage = body.slice(early, body.indexOf('## In my words'))
+    expect(passage).not.toMatch(/kind_tag:|source_url:|source_path:|t_start:|t_end:|cited:/)
+  })
+
   it('clicks a citation to open the note and seek', async () => {
     const lkv = await ingestYoutube()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))

@@ -15,7 +15,7 @@ import {
   parseSrt,
   parseTStartFromBody,
 } from '../electron/media-captions'
-import { closeDb, createItem, getItem, initDb, listItems, listItemsByProjectExact, runInTransaction } from '../electron/db'
+import { closeDb, createItem, getDb, getItem, initDb, listItems, listItemsByProjectExact, runInTransaction } from '../electron/db'
 import {
   buildYtDlpSubtitleArgs,
   describeYtDlpFailure,
@@ -24,6 +24,7 @@ import {
   pickCaptionTrack,
   ingestLocalMedia,
   ensureMediaReaderPrompt,
+  notesNearPlayhead,
   runYtDlp,
 } from '../electron/media-ingest'
 import {
@@ -477,6 +478,35 @@ void (async () => {
     "B's notes untouched by A's re-ingest"
   )
   assert(getItem(handNote.id) !== null, 'hand-written "Media — …" note survives re-ingest')
+
+  // ---- #331: notesNearPlayhead returns chunks in t_start order, not updated_at ----
+  {
+    const proj = 'Order test'
+    const chunk = (start: number, end: number, text: string) =>
+      createItem({
+        title: `T ${start}`,
+        body: `${text}\n\nt_start: ${start.toFixed(3)}\nt_end: ${end.toFixed(3)}\nkind_tag: transcript`,
+        para: 'resources',
+        kind: 'transcript',
+        project: proj,
+      })
+    const late = chunk(6340, 6355, 'late chunk')
+    const early = chunk(6260, 6275, 'early chunk')
+    const middle = chunk(6300, 6320, 'middle chunk')
+    // Force updated_at DESC ≠ t_start order (a re-ingest or edit reshuffles it).
+    const db = getDb()
+    const setUpdated = (id: string, ts: string) => db.prepare('UPDATE items SET updated_at = ? WHERE id = ?').run(ts, id)
+    setUpdated(late.id, '2030-01-01T00:00:00.000Z') // newest updated_at, latest t_start
+    setUpdated(early.id, '2030-01-03T00:00:00.000Z') // oldest updated_at, earliest t_start
+    setUpdated(middle.id, '2030-01-02T00:00:00.000Z')
+    const near = notesNearPlayhead(proj, 6300, 45)
+    assert(near.length === 3, `all three chunks are near 6300 (got ${near.length})`)
+    const starts = near.map((n) => parseTStartFromBody(n.body))
+    assert(
+      JSON.stringify(starts) === JSON.stringify([6260, 6300, 6340]),
+      `near-playhead chunks are in ascending t_start order (got ${JSON.stringify(starts)})`
+    )
+  }
 
   // The delete+create transaction rolls back on failure.
   const beforeTx = listItems({}).length
