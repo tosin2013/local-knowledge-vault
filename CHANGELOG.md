@@ -4,6 +4,29 @@ All notable changes to Vault. Versions match the `vX.Y.Z` tags on the
 [Releases page](https://github.com/tosin2013/local-knowledge-vault/releases); the release workflow
 uses the matching section below as the release notes.
 
+## [0.5.0] — Media chat you can study with
+
+Media chat goes from a preview to a real study tool. Local videos (file + captions) and YouTube
+lectures now seek reliably, fullscreen keeps the same player, sessions persist across visits, and
+answers are grounded in the moment you're watching — not a timestamped full-library search.
+
+### Media chat
+- **Local videos seek** — the `lkvmedia://` handler serves HTTP range requests (206 + `Content-Range`), so citation seek, scrubbing and resume work on long files instead of snapping back to 0:00. (#326)
+- **Fullscreen doesn't restart the player** — the player mounts once and fullscreen is a CSS overlay on the same subtree, so the YouTube player stays bound and playback continues. (#327)
+- **Citations work in fullscreen** — a citation click shows the passage inside fullscreen instead of opening a hidden drawer, and Esc keeps working. (#328)
+- **Sessions persist** — the open video, chat history, playhead and voice are remembered across visits, tab switches and restarts; one video keeps one continuing session (a "New chat" button starts fresh). (#329)
+- **The playhead tracks pauses and scrubs** — "Ask about this moment" and "Save this moment" use the player's real position, and the near-playhead count settles after a seek. (#330)
+- **"Save this moment" reads in order** — the transcript passage is saved chronologically with readable `[1:44:20]` timestamps and no machine-metadata lines. (#331)
+- **Follow playhead scopes retrieval** — answers are grounded in the notes around the current moment, over a configurable window (±30 s / ±45 s / ±1 m / ±3 m). (#161)
+- **The ingest panel collapses** once a video is loaded, so the player, its controls and the composer fit a laptop screen. (#332)
+- **Answers and the cited passage render Markdown**, matching Ask and Study. (#353)
+
+### Study
+- Practice-test questions can be asked as multiple-choice, and wrong picks are remembered. (#324)
+
+### Docs
+- Retaken README screenshots, a new social preview, and guides that describe `[1]` citations. (#323)
+
 ## [0.4.0] — Study for exams, faster big vaults
 
 Vault becomes a study tool: a top-level **Study** tab turns your notes into spaced, exam-aware
