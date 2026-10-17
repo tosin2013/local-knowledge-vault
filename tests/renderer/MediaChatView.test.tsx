@@ -158,6 +158,88 @@ describe('MediaChatView', () => {
     await screen.findByLabelText('Exit fullscreen')
   })
 
+  it('keeps the same local player and time across fullscreen toggles (#327)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    const { container } = render(<MediaChatView />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    const video = (await waitFor(() => {
+      const el = container.querySelector('video')
+      expect(el).not.toBeNull()
+      return el!
+    })) as HTMLVideoElement
+    video.currentTime = 5400
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(screen.getByLabelText('Enter fullscreen'))
+      const fsVideo = container.querySelector('video')
+      expect(fsVideo).toBe(video) // same DOM node — the player never restarts
+      expect(fsVideo!.currentTime).toBe(5400) // playhead survives the toggle
+      fireEvent.click(screen.getByLabelText('Exit fullscreen'))
+      expect(container.querySelector('video')).toBe(video)
+    }
+    expect(video.currentTime).toBe(5400)
+  })
+
+  it('keeps the YouTube iframe bound across fullscreen toggles (#327)', async () => {
+    const lkv = seedMedia()
+    const embed = 'https://www.youtube-nocookie.com/embed/abc123abc12?enablejsapi=1'
+    lkv.media.youtubeEmbedUrl.mockResolvedValue(embed)
+    lkv.media.ingestYoutube.mockResolvedValue(
+      makeIngestResult({ sourceType: 'youtube', mediaUrl: 'https://www.youtube.com/watch?v=abc123abc12' }),
+    )
+    const { container } = render(<MediaChatView />)
+    fireEvent.change(screen.getByPlaceholderText(/youtube.com\/watch/), {
+      target: { value: 'https://youtube.com/watch?v=abc123abc12' },
+    })
+    fireEvent.click(screen.getByText('Ingest YouTube'))
+    const iframe = (await waitFor(() => {
+      const el = container.querySelector('iframe')
+      expect(el).not.toBeNull()
+      return el!
+    })) as HTMLIFrameElement
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(screen.getByLabelText('Enter fullscreen'))
+      const fsIframe = container.querySelector('iframe')
+      expect(fsIframe).toBe(iframe) // the YT player stays attached to its iframe
+      expect(fsIframe!.getAttribute('src')).toBe(embed) // embed never reloads
+      fireEvent.click(screen.getByLabelText('Exit fullscreen'))
+    }
+    expect(container.querySelector('iframe')).toBe(iframe)
+  })
+
+  it('exits fullscreen on Escape (#327)', async () => {
+    await ingestYoutube()
+    fireEvent.click(screen.getByLabelText('Enter fullscreen'))
+    await screen.findByLabelText('Exit fullscreen')
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await screen.findByLabelText('Enter fullscreen')
+    expect(screen.queryByLabelText('Exit fullscreen')).toBeNull()
+  })
+
+  it('seeks the visible player from a citation after toggling fullscreen (#327)', async () => {
+    const lkv = seedMedia()
+    lkv.media.ingestLocal.mockResolvedValue(
+      makeIngestResult({ mediaPath: '/tmp/video.mp4', mediaProtocolUrl: 'lkvmedia://video' }),
+    )
+    lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))
+    const { container } = render(<MediaChatView />)
+    fireEvent.click(screen.getByText('Local video/audio + captions'))
+    await waitFor(() => expect(container.querySelector('video')).not.toBeNull())
+    fireEvent.change(screen.getByPlaceholderText('Ask about this media…'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    const citation = await screen.findByText('Transcript')
+    fireEvent.click(screen.getByLabelText('Enter fullscreen'))
+    await screen.findByLabelText('Exit fullscreen')
+    fireEvent.click(citation)
+    await waitFor(() => {
+      const video = container.querySelector('video') as HTMLVideoElement
+      expect(video.currentTime).toBe(120) // the same, still-mounted element seeks
+    })
+    expect(screen.getByText('Now: 02:00')).toBeInTheDocument() // "Now:" follows the seek
+  })
+
   it('clicks a citation to open the note and seek', async () => {
     const lkv = await ingestYoutube()
     lkv.items.get.mockResolvedValue(makeItem('itm_1', { body: 't_start: 120\nsome text' }))

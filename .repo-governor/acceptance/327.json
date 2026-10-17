@@ -1,0 +1,10 @@
+{
+  "$comment": "Completion bar for #327: the normal layout and the fullscreen MUI Dialog each called renderPlayerAskLayout(), so every fullscreen toggle unmounted the <video>/<iframe> and mounted a fresh one — the YT API player stayed bound to the destroyed iframe (seek died, 'Now:' chip lied, 'player is not attached to the DOM' warning) and local media paused and reset. Fix: the player+Ask subtree mounts exactly once and fullscreen is a CSS overlay (position:fixed) on the same container — the surrounding content hides via visibility; Esc handled by a keydown listener replacing the Dialog's. seekTo also refuses a player whose getIframe() is not the mounted iframe, so the chip can no longer report a seek that did not happen. Criterion 1's 'keeps playing at ~1:30:0x' needs a media backend, which jsdom lacks: the renderer tests prove the proxy — the same <video> node with an untouched currentTime and the same <iframe> with an unchanged src across 5 toggles (a remount would reset both) — with the audible/visual playback check staying a manual review-box item along with criterion 3's console warning. Criterion 2 (citation seeks the visible player after toggling, 'Now:' follows) is asserted directly. Criteria 2-4 guard the renderer suite, typecheck, build, and the main-process suite.",
+  "authority_id": "327",
+  "criteria": [
+    { "check": "tests_pass", "target": "npm run test:renderer" },
+    { "check": "command_exit", "target": "npm run typecheck" },
+    { "check": "command_exit", "target": "npm run build" },
+    { "check": "tests_pass", "target": "npm run test:mvp" }
+  ]
+}

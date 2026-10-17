@@ -5,7 +5,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
   FormControlLabel,
   IconButton,
   LinearProgress,
@@ -73,6 +72,8 @@ interface YTPlayer {
   getCurrentTime(): number
   getPlayerState(): number
   destroy(): void
+  /** The iframe the player is bound to — lets us detect a detached player (#327). */
+  getIframe?(): HTMLIFrameElement
 }
 
 declare global {
@@ -261,7 +262,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     currentTimeRef.current = currentTime
   }, [currentTime])
 
-  // Poll playhead for HTML5 media; rebind after fullscreen remount and restore time
+  // Poll playhead for HTML5 media. The player element is mounted once and only
+  // rebinds when the media itself changes — fullscreen is a CSS change on the
+  // same subtree (#327), so playback survives the toggle.
   useEffect(() => {
     const el = videoRef.current
     if (!el) return
@@ -276,7 +279,18 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       }
     }
     return () => el.removeEventListener('timeupdate', onTime)
-  }, [active?.mediaProtocolUrl, active?.mediaPath, fullscreen])
+  }, [active?.mediaProtocolUrl, active?.mediaPath])
+
+  // Esc exits fullscreen (the old MUI Dialog handled this for us; the fullscreen
+  // layout is now a CSS overlay on the same player subtree, #327).
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullscreen])
 
   // Near-playhead note count (informational). Throttled: playback fires
   // timeupdate ~4/s and the YouTube poll fires 1/s, but each tick is an IPC
@@ -617,7 +631,10 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       return
     }
     const yt = ytPlayerRef.current
-    if (yt && ytReady) {
+    // A player bound to an iframe that is no longer the mounted one would accept
+    // the seek silently and leave the video unmoved (#327) — treat it as not ready.
+    const attached = !!yt && (!yt.getIframe || yt.getIframe() === ytFrameRef.current)
+    if (yt && ytReady && attached) {
       try {
         yt.seekTo(sec, true)
         setCurrentTime(sec)
@@ -1076,29 +1093,45 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     )
   }
 
+  // #327: the player+Ask subtree below mounts exactly once. Fullscreen hides the
+  // surrounding content via `visibility` (the overlay resets it) instead of
+  // unmounting anything, so the <video>/<iframe> — and the YT player bound to the
+  // iframe — survive every toggle, and seek/playhead keep working.
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-        <MovieIcon color="primary" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
-          Media chat
-        </Typography>
-        <IconButton
-          size="small"
-          onClick={() => setFullscreen(true)}
-          aria-label="Enter fullscreen"
-          title="Fullscreen"
-        >
-          <FullscreenIcon fontSize="small" />
-        </IconButton>
-        {onClose && (
-          <IconButton size="small" onClick={onClose} aria-label="Close Media chat" title="Back to Ask">
-            <CloseIcon fontSize="small" />
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        p: 1.5,
+        gap: 1.5,
+        visibility: fullscreen ? 'hidden' : 'visible',
+      }}
+    >
+      {!fullscreen && (
+        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+          <MovieIcon color="primary" fontSize="small" />
+          <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+            Media chat
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={() => setFullscreen(true)}
+            aria-label="Enter fullscreen"
+            title="Fullscreen"
+          >
+            <FullscreenIcon fontSize="small" />
           </IconButton>
-        )}
-      </Stack>
+          {onClose && (
+            <IconButton size="small" onClick={onClose} aria-label="Close Media chat" title="Back to Ask">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Stack>
+      )}
 
-      {status && (
+      {!fullscreen && status && (
         <Alert
           severity="success"
           onClose={() => {
@@ -1112,7 +1145,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
           )}
         </Alert>
       )}
-      {error && (
+      {!fullscreen && error && (
         <Alert severity="error" onClose={() => setError(null)}>
           {error}
         </Alert>
@@ -1248,16 +1281,28 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         </Paper>
       )}
 
-      {/* Only mount player+Ask once (normal or fullscreen) to avoid duplicate media elements */}
-      {!fullscreen && renderPlayerAskLayout()}
-
-      <Dialog
-        fullScreen
-        open={fullscreen}
-        onClose={exitFullscreen}
-        aria-labelledby="media-chat-fullscreen-title"
+      {/* #327: mounted exactly once — normal layout or fullscreen overlay. Toggling
+          changes styles only, never the player DOM, so the <video> keeps playing and
+          the YT player stays bound to its iframe. */}
+      <Box
+        sx={
+          fullscreen
+            ? {
+                position: 'fixed',
+                inset: 0,
+                zIndex: 1300,
+                visibility: 'visible',
+                bgcolor: 'background.paper',
+                p: 1.5,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                gap: 1.5,
+              }
+            : { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
+        }
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5 }}>
+        {fullscreen && (
           <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
             <MovieIcon color="primary" fontSize="small" />
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1280,21 +1325,24 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
               Exit fullscreen
             </Button>
           </Stack>
+        )}
 
-          {status && (
-            <Alert severity="success" onClose={() => setStatus(null)}>
-              {status}
-            </Alert>
-          )}
-          {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
+        {fullscreen && status && (
+          <Alert severity="success" onClose={() => setStatus(null)}>
+            {status}
+            {moveOffer && moveOffer.itemIds.length > 0 && (
+              <MoveNotesAction itemIds={moveOffer.itemIds} onMoved={handleMoved} />
+            )}
+          </Alert>
+        )}
+        {fullscreen && error && (
+          <Alert severity="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
 
-          {fullscreen && renderPlayerAskLayout({ large: true })}
-        </Box>
-      </Dialog>
+        {renderPlayerAskLayout({ large: fullscreen })}
+      </Box>
     </Box>
   )
 }
