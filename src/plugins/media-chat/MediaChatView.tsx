@@ -21,6 +21,8 @@ import CloseIcon from '@mui/icons-material/Close'
 import MovieIcon from '@mui/icons-material/Movie'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
+import AddIcon from '@mui/icons-material/Add'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import type { VaultPluginRenderProps } from '../types'
 import { AI_DRAFT_STATUS, loadImportProject, provenanceHeader, saveImportProject } from '../../domain'
 import { AnswerProviderChip } from '../../components/ai/AnswerProviderChip'
@@ -230,6 +232,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [ytReady, setYtReady] = useState(false)
   const [nearCount, setNearCount] = useState<number | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
+  /** #332: whether the (collapsed) ingest controls are expanded once a video is loaded. */
+  const [ingestOpen, setIngestOpen] = useState(false)
   /** Playhead retrieval window (#161): scopes near-count, moment saves and retrieval. */
   const [playheadWindowSec, setPlayheadWindowSec] = useState<number>(loadPlayheadWindowSec)
   // #328: cited-passage shown inside fullscreen (the app-side note drawer would
@@ -662,6 +666,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const loadProject = async (p: MediaProjectInfo) => {
     if (!window.lkv) return
     setError(null)
+    setIngestOpen(false) // switching video re-collapses the ingest controls (#332)
     // Saved per-video state (if any) picks the voice and resumes the chat (#329)
     const videoKey = p.mediaUrl ?? p.mediaPath ?? null
     const saved = videoKey ? ((await window.lkv.media.getMediaState?.(videoKey)) ?? null) : null
@@ -1388,76 +1393,22 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
 
       {!fullscreen && (
         <Paper variant="outlined" sx={{ p: 1.5 }}>
-          <Stack spacing={1.25}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}
-            >
-              Ingest
-            </Typography>
-            {/* #276: file the ingest into a project; "Use file name" keeps
-                deriving it from the media. */}
-            <ProjectSelect
-              value={ingestProject}
-              onChange={onIngestProjectChange}
-              label="Project"
-              allLabel="Use file name"
-            />
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-              <Button variant="contained" size="small" disabled={busy} onClick={() => void onPickLocal()}>
-                Local video/audio + captions
-              </Button>
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="https://youtube.com/watch?v=…"
-                value={ytUrl}
-                disabled={busy}
-                onChange={(e) => setYtUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void onIngestYoutube()
-                  }
-                }}
-                aria-label="YouTube URL"
-              />
-              <Button variant="outlined" size="small" disabled={busy} onClick={() => void onIngestYoutube()}>
-                Ingest YouTube
-              </Button>
-            </Stack>
-            {ingestStage && (
-              <Stack spacing={0.75} data-testid="ingest-progress">
-                <LinearProgress />
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-                    {ingestStage}
-                  </Typography>
-                  <Button
-                    size="small"
-                    color="error"
-                    onClick={() => void window.lkv?.media?.cancelIngest?.()}
-                  >
-                    Cancel
-                  </Button>
-                </Stack>
-              </Stack>
-            )}
-            <Typography variant="caption" color="text.secondary">
-              Captions become searchable transcript notes in your vault.
-            </Typography>
-            {projects.length > 0 && (
+          {/* #332: with a video loaded, the ingest controls collapse behind an
+              "Add media" toggle and the project switcher + rename/delete sit in
+              a one-line header, so the player, its controls and Ask fit one
+              screen (a 1280×800 laptop). */}
+          {active && (
+            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
               <TextField
                 select
                 size="small"
                 label="Open media project"
-                value={active?.project ?? ''}
+                value={active.project}
                 onChange={(e) => {
                   const p = projects.find((x) => x.project === e.target.value)
                   if (p) void loadProject(p)
                 }}
-                sx={{ maxWidth: 420 }}
+                sx={{ minWidth: 220, flex: '1 1 auto' }}
               >
                 <MenuItem value="">
                   <em>Select…</em>
@@ -1468,51 +1419,142 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                   </MenuItem>
                 ))}
               </TextField>
-            )}
-            {active && (
-              <Stack direction="row" spacing={0.5} alignItems="center">
-                {renaming ? (
-                  <>
-                    <TextField
-                      size="small"
-                      sx={{ minWidth: 180 }}
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      label="Rename media project"
-                      autoFocus
-                    />
+              {renaming ? (
+                <>
+                  <TextField
+                    size="small"
+                    sx={{ minWidth: 180 }}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    label="Rename media project"
+                    autoFocus
+                  />
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={busy || !renameValue.trim() || renameValue.trim() === active.project}
+                    onClick={() => void onRenameProject()}
+                  >
+                    Save
+                  </Button>
+                  <Button size="small" disabled={busy} onClick={() => setRenaming(false)}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="small"
+                    disabled={busy}
+                    onClick={() => {
+                      setRenaming(true)
+                      setRenameValue(active.project)
+                    }}
+                  >
+                    Rename
+                  </Button>
+                  <Button size="small" color="error" disabled={busy} onClick={() => void onDeleteProject()}>
+                    Delete
+                  </Button>
+                </>
+              )}
+              <Box sx={{ flex: 1 }} />
+              <Button
+                size="small"
+                startIcon={ingestOpen ? <ExpandLessIcon fontSize="small" /> : <AddIcon fontSize="small" />}
+                onClick={() => setIngestOpen((v) => !v)}
+                aria-label={ingestOpen ? 'Hide add media' : 'Add media'}
+              >
+                {ingestOpen ? 'Close' : 'Add media'}
+              </Button>
+            </Stack>
+          )}
+          {(!active || ingestOpen) && (
+            <Stack spacing={1.25} sx={{ mt: active ? 1.25 : 0 }}>
+              {!active && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}
+                >
+                  Ingest
+                </Typography>
+              )}
+              {/* #276: file the ingest into a project; "Use file name" keeps
+                  deriving it from the media. */}
+              <ProjectSelect
+                value={ingestProject}
+                onChange={onIngestProjectChange}
+                label="Project"
+                allLabel="Use file name"
+              />
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                <Button variant="contained" size="small" disabled={busy} onClick={() => void onPickLocal()}>
+                  Local video/audio + captions
+                </Button>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="https://youtube.com/watch?v=…"
+                  value={ytUrl}
+                  disabled={busy}
+                  onChange={(e) => setYtUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void onIngestYoutube()
+                    }
+                  }}
+                  aria-label="YouTube URL"
+                />
+                <Button variant="outlined" size="small" disabled={busy} onClick={() => void onIngestYoutube()}>
+                  Ingest YouTube
+                </Button>
+              </Stack>
+              {ingestStage && (
+                <Stack spacing={0.75} data-testid="ingest-progress">
+                  <LinearProgress />
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                      {ingestStage}
+                    </Typography>
                     <Button
-                      variant="contained"
                       size="small"
-                      disabled={busy || !renameValue.trim() || renameValue.trim() === active.project}
-                      onClick={() => void onRenameProject()}
+                      color="error"
+                      onClick={() => void window.lkv?.media?.cancelIngest?.()}
                     >
-                      Save
-                    </Button>
-                    <Button size="small" disabled={busy} onClick={() => setRenaming(false)}>
                       Cancel
                     </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      size="small"
-                      disabled={busy}
-                      onClick={() => {
-                        setRenaming(true)
-                        setRenameValue(active.project)
-                      }}
-                    >
-                      Rename
-                    </Button>
-                    <Button size="small" color="error" disabled={busy} onClick={() => void onDeleteProject()}>
-                      Delete
-                    </Button>
-                  </>
-                )}
-              </Stack>
-            )}
-          </Stack>
+                  </Stack>
+                </Stack>
+              )}
+              <Typography variant="caption" color="text.secondary">
+                Captions become searchable transcript notes in your vault.
+              </Typography>
+              {!active && projects.length > 0 && (
+                <TextField
+                  select
+                  size="small"
+                  label="Open media project"
+                  value=""
+                  onChange={(e) => {
+                    const p = projects.find((x) => x.project === e.target.value)
+                    if (p) void loadProject(p)
+                  }}
+                  sx={{ maxWidth: 420 }}
+                >
+                  <MenuItem value="">
+                    <em>Select…</em>
+                  </MenuItem>
+                  {projects.map((p) => (
+                    <MenuItem key={p.project} value={p.project}>
+                      {p.project} ({p.noteCount}) · {p.sourceType}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+            </Stack>
+          )}
         </Paper>
       )}
 
