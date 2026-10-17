@@ -186,6 +186,12 @@ export interface ChatSendInput {
   limit?: number
   /** When true, transcript (source) chunks sort after the user's own notes. */
   sourcesLast?: boolean
+  /**
+   * Follow playhead (#161): when set, transcript chunks overlapping this
+   * window are retrieved first (even if keyword search misses them), so the
+   * answer is grounded in the notes around the current moment.
+   */
+  mediaWindow?: { centerSec: number; windowSec: number }
 }
 
 export interface ChatSendResult {
