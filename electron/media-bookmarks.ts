@@ -133,11 +133,11 @@ function toBookmark(row: BookmarkRow, chunks: TranscriptChunk[]): MediaBookmark 
   return {
     id: String(row.id),
     videoKey: String(row.video_key),
-    project: String(row.project ?? ''),
-    videoTitle: String(row.video_title ?? ''),
+    project: row.project,
+    videoTitle: row.video_title,
     sourceType: row.source_type === 'youtube' ? 'youtube' : 'local',
     positionSec: Number(row.position_sec),
-    label: String(row.label ?? ''),
+    label: row.label,
     tag: row.tag == null ? null : String(row.tag),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -149,9 +149,12 @@ function toBookmark(row: BookmarkRow, chunks: TranscriptChunk[]): MediaBookmark 
 function withTranscript(rows: BookmarkRow[]): MediaBookmark[] {
   const cache = new Map<string, TranscriptChunk[]>()
   return rows.map((r) => {
-    const p = String(r.project ?? '')
-    if (!cache.has(p)) cache.set(p, transcriptChunks(p))
-    return toBookmark(r, cache.get(p) ?? [])
+    let chunks = cache.get(r.project)
+    if (!chunks) {
+      chunks = transcriptChunks(r.project)
+      cache.set(r.project, chunks)
+    }
+    return toBookmark(r, chunks)
   })
 }
 
@@ -230,7 +233,8 @@ export function passageAround(project: string, centerSec: number, windowSec = DE
   return notesNearPlayhead(project, centerSec, windowSec)
     .map((n) => {
       const text = stripTranscriptMetadata(n.body)
-      const start = parseTStartFromBody(n.body) ?? centerSec
+      // notesNearPlayhead only returns notes that carry t_start.
+      const start = parseTStartFromBody(n.body) as number
       return text ? `[${formatTimestamp(start)}] ${text}` : ''
     })
     .filter(Boolean)
@@ -328,9 +332,8 @@ export function makeBookmarkCards(input: MediaBookmarkCardsInput): MediaBookmark
         para: 'resources',
         project,
       })
-      const made = createNoteCards(note.id, { pairs: false }).created
-      const card = made[0]
-      if (!card) continue
+      // A fresh note always gets its whole-note card (the body is never empty).
+      const card = createNoteCards(note.id, { pairs: false }).created[0]
       if (b.tag === 'Confused') {
         database.prepare('UPDATE study_cards SET priority = 1 WHERE item_id = ?').run(note.id)
       }
@@ -359,10 +362,10 @@ export function mediaMomentForCard(cardId: string): StudyMediaMoment | null {
   return {
     bookmarkId: String(row.id),
     videoKey: String(row.video_key),
-    project: String(row.project ?? ''),
+    project: row.project,
     positionSec: Number(row.position_sec),
-    label: String(row.label ?? ''),
-    tag: row.tag == null ? null : String(row.tag),
+    label: row.label,
+    tag: row.tag,
     sourceType: row.source_type === 'youtube' ? 'youtube' : 'local',
   }
 }

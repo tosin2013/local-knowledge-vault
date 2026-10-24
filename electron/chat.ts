@@ -263,7 +263,8 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
       for (const it of notesNearPlayhead(input.filters.project, Number(w.centerSec), Number(w.windowSec))) {
         if (seen.has(it.id)) continue
         seen.add(it.id)
-        nearItems.push({ item: it, start: parseTStartFromBody(it.body) ?? 0 })
+        // notesNearPlayhead only returns notes that carry t_start.
+        nearItems.push({ item: it, start: parseTStartFromBody(it.body) as number })
       }
     }
     nearItems.sort((a, b) => a.start - b.start)

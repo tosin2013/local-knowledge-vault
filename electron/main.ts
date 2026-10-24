@@ -995,13 +995,13 @@ function registerIpc(): void {
   })
 
   // #334: video bookmarks (per video, kept across sessions).
-  ipcMain.handle('media:listBookmarks', (_e, videoKey: string) => listBookmarks(String(videoKey ?? '')))
+  ipcMain.handle('media:listBookmarks', (_e, videoKey: string) => listBookmarks(videoKey))
   ipcMain.handle('media:addBookmark', (_e, input: MediaBookmarkAddInput) => addBookmark(input))
   ipcMain.handle('media:updateBookmark', (_e, input: MediaBookmarkUpdateInput) => updateBookmark(input))
-  ipcMain.handle('media:deleteBookmark', (_e, id: string) => deleteBookmark(String(id ?? '')))
+  ipcMain.handle('media:deleteBookmark', (_e, id: string) => deleteBookmark(id))
   ipcMain.handle('media:bookmarkCards', (_e, input: MediaBookmarkCardsInput) => makeBookmarkCards(input))
   ipcMain.handle('media:bookmarksMarkdown', (_e, input: { videoKey?: string; project?: string }) =>
-    bookmarksMarkdown(input ?? {}),
+    bookmarksMarkdown(input),
   )
 
   ipcMain.handle('media:youtubeEmbedUrl', (_e, url: string) => youtubeEmbedUrl(url))
