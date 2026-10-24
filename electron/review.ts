@@ -394,18 +394,45 @@ interface NewCardGroup {
   fresh: number
   /** Cards first reviewed today. */
   today: number
+  /** Live, active cards in the group (#296: folded in so Study home scans once). */
+  total: number
+  /** Distinct notes those cards come from. */
+  notes: number
+  /** New cards due at or before the queue cut-off. */
+  dueNew: number
+  /** Already-reviewed cards due at or before the queue cut-off. */
+  dueReviewed: number
 }
 
-/** New-card counts per project for the scope (#264). */
-function newCardGroups(project: string | undefined, now: Date): NewCardGroup[] {
+/** A never-reviewed card, in SQL (matches `isNew` in the queue builder). */
+const IS_NEW_SQL = '(cs.reps = 0 AND cs.last_reviewed_at IS NULL)'
+
+/**
+ * Per-project card counts for the scope (#264), in one pass over the live
+ * cards (#296): new-card budget inputs, Study home totals and the due split
+ * the queue size is computed from.
+ *
+ * "First reviewed today" used to be a correlated `MIN(reviewed_at)` probe of
+ * `review_log` for every card. It is now the set of cards with a live review
+ * today and none before today, which only touches today's log rows (same
+ * cards: MIN ≥ today ⇔ some row ≥ today and no row < today).
+ */
+function newCardGroups(project: string | undefined, now: Date, before: string = now.toISOString()): NewCardGroup[] {
   const p = project?.trim()
   const rows = getDb()
     .prepare(
       `SELECT items.project AS project, ps.exam_date AS exam_date,
-              COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 1 ELSE 0 END), 0) AS fresh,
-              COALESCE(SUM(CASE WHEN (SELECT MIN(l.reviewed_at) FROM review_log l
-                                      WHERE l.card_id = c.id AND l.migrated = 0) >= @today
-                                THEN 1 ELSE 0 END), 0) AS today
+              COALESCE(SUM(${IS_NEW_SQL}), 0) AS fresh,
+              COALESCE(SUM(c.id IN (
+                SELECT l.card_id FROM review_log l
+                WHERE l.reviewed_at >= @today AND l.migrated = 0
+                  AND NOT EXISTS (SELECT 1 FROM review_log l2
+                                  WHERE l2.card_id = l.card_id AND l2.migrated = 0 AND l2.reviewed_at < @today)
+              )), 0) AS today,
+              COUNT(*) AS total,
+              COUNT(DISTINCT c.item_id) AS notes,
+              COALESCE(SUM(cs.due_at <= @before AND ${IS_NEW_SQL}), 0) AS due_new,
+              COALESCE(SUM(cs.due_at <= @before AND NOT ${IS_NEW_SQL}), 0) AS due_reviewed
        FROM study_cards c
        JOIN card_schedule cs ON cs.card_id = c.id
        JOIN items ON items.id = c.item_id
@@ -413,17 +440,16 @@ function newCardGroups(project: string | undefined, now: Date): NewCardGroup[] {
        WHERE items.status NOT IN ('trashed','archived') AND c.status = 'active'${p ? ' AND items.project = @project' : ''}
        GROUP BY items.project`,
     )
-    .all({ today: startOfLocalDay(now), project: p ?? '' }) as Array<{
-    project: string | null
-    exam_date: string | null
-    fresh: number
-    today: number
-  }>
+    .all({ today: startOfLocalDay(now), before, project: p ?? '' }) as Array<Record<string, unknown>>
   return rows.map((r) => ({
     project: r.project == null ? null : String(r.project),
     examDate: r.exam_date ? String(r.exam_date) : null,
     fresh: Number(r.fresh),
     today: Number(r.today),
+    total: Number(r.total),
+    notes: Number(r.notes),
+    dueNew: Number(r.due_new),
+    dueReviewed: Number(r.due_reviewed),
   }))
 }
 
@@ -445,10 +471,17 @@ export function getNewCardBudget(
   project?: string,
   now: Date = new Date(),
 ): { perDay: number; leftToday: number; unreachable: number } {
+  return budgetFromGroups(newCardGroups(project, now), now)
+}
+
+function budgetFromGroups(
+  groups: NewCardGroup[],
+  now: Date,
+): { perDay: number; leftToday: number; unreachable: number } {
   let perDay = 0
   let leftToday = 0
   let unreachable = 0
-  for (const g of newCardGroups(project, now)) {
+  for (const g of groups) {
     const a = groupAllowance(g, now)
     perDay += a.budget
     leftToday += a.left
@@ -457,48 +490,147 @@ export function getNewCardBudget(
   return { perDay, leftToday, unreachable }
 }
 
-/** Every due card for the scope, in session order (#264). */
-function dueQueue(before: string, project: string | undefined, now: Date): ReviewQueueItem[] {
+/**
+ * New cards each queue key may still bring in today. Keys are `project ?? ''`
+ * exactly as the queue builder groups them (a later group with the same key
+ * wins, as it always has).
+ */
+function allowanceByKey(groups: NewCardGroup[], now: Date): Map<string, number> {
+  const left = new Map<string, number>()
+  for (const g of groups) left.set(g.project ?? '', groupAllowance(g, now).left)
+  return left
+}
+
+/**
+ * The session queue's size without loading a single card row (#296): every
+ * due reviewed card, plus each project's due new cards up to its allowance.
+ * Equal to `buildReviewQueue(...).length` over the full due set.
+ */
+function queueSize(groups: NewCardGroup[], now: Date): number {
+  const left = allowanceByKey(groups, now)
+  const dueNew = new Map<string, number>()
+  let size = 0
+  for (const g of groups) {
+    size += g.dueReviewed
+    const key = g.project ?? ''
+    dueNew.set(key, (dueNew.get(key) ?? 0) + g.dueNew)
+  }
+  for (const [key, n] of dueNew) size += Math.min(n, Math.max(0, left.get(key) ?? NEW_CARDS_PER_DAY_MAX))
+  return size
+}
+
+/** One due card as the ordering queries see it: no bodies, no chunk counts (#296). */
+interface DueRow {
+  card_id: string
+  project: string | null
+  due_at: string
+  last_grade: string | null
+}
+
+/** Session order for due cards on live notes: priority, then reading order. */
+const QUEUE_ORDER = 'ORDER BY c.priority DESC, items.created_at ASC, items.rowid, c.chunk_index, c.rowid'
+
+/**
+ * The first `limit` cards of the session queue (#264 order), as narrow rows.
+ *
+ * #296: the old queue selected `items.*`, the chunk body and a correlated
+ * chunk count for every due card (all ~20k on a freshly enrolled 5k-note
+ * vault), then dropped most of them in `buildReviewQueue` and `.slice()`.
+ * Now:
+ *  - reviewed due cards (usually few) are read narrow and sorted missed →
+ *    Partly → due date, exactly as before;
+ *  - new cards are streamed in session order and the stream stops as soon as
+ *    the queue is full, honouring each project's daily allowance;
+ *  - bodies are fetched afterwards for the returned cards only.
+ * Same WHERE and ORDER BY as before, so the cards and their order are unchanged.
+ */
+function dueOrder(before: string, project: string | undefined, now: Date, limit: number): DueRow[] {
+  if (limit <= 0) return []
   const where = dueWhere(project)
-  const rows = getDb()
-    .prepare(
-      `SELECT items.*, c.id AS card_id, c.chunk_index, c.origin, c.question, c.answer, c.quote,
-              nc.body AS chunk_body,
-              (SELECT COUNT(*) FROM note_chunks n2 WHERE n2.item_id = items.id) AS chunk_count,
-              cs.due_at, cs.interval_days, cs.ease, cs.reps, cs.lapses, cs.last_grade, cs.last_reviewed_at
+  const database = getDb()
+  const select = `SELECT c.id AS card_id, items.project AS project, cs.due_at AS due_at, cs.last_grade AS last_grade
        FROM card_schedule cs
        JOIN study_cards c ON c.id = cs.card_id
        JOIN items ON items.id = c.item_id
-       LEFT JOIN note_chunks nc ON nc.item_id = c.item_id AND nc.chunk_index = c.chunk_index
-       WHERE ${where.sql}
-       ORDER BY c.priority DESC, items.created_at ASC, items.rowid, c.chunk_index, c.rowid`,
-    )
-    .all(before, ...where.params) as Record<string, unknown>[]
-  const items = rows.map(rowToQueueItem)
-  const groups = new Map<string, number>()
-  for (const g of newCardGroups(project, now)) groups.set(g.project ?? '', groupAllowance(g, now).left)
-  const candidates = items.map((item) => ({
-    item,
-    project: item.project,
-    dueAt: item.due_at,
-    lastGrade: item.last_grade,
-    isNew: item.reps === 0 && item.last_reviewed_at == null,
-  }))
-  return buildReviewQueue(candidates, (p) => groups.get(p ?? '') ?? NEW_CARDS_PER_DAY_MAX).map((c) => c.item)
+       WHERE ${where.sql}`
+  const reviewedRows = database
+    .prepare(`${select} AND NOT ${IS_NEW_SQL} ${QUEUE_ORDER}`)
+    .all(before, ...where.params) as DueRow[]
+  const reviewed = buildReviewQueue(
+    reviewedRows.map((row) => ({
+      row,
+      project: row.project == null ? null : String(row.project),
+      dueAt: String(row.due_at),
+      lastGrade: row.last_grade ?? null,
+      isNew: false,
+    })),
+    () => 0,
+  ).map((c) => c.row)
+  if (reviewed.length >= limit) return reviewed.slice(0, limit)
+
+  const left = allowanceByKey(newCardGroups(project, now, before), now)
+  const out = reviewed
+  const iter = database.prepare(`${select} AND ${IS_NEW_SQL} ${QUEUE_ORDER}`).iterate(before, ...where.params) as IterableIterator<DueRow>
+  for (const row of iter) {
+    const key = row.project ?? ''
+    if (!left.has(key)) left.set(key, NEW_CARDS_PER_DAY_MAX)
+    const n = left.get(key) ?? 0
+    if (n <= 0) continue
+    left.set(key, n - 1)
+    out.push(row)
+    if (out.length >= limit) break // `break` closes the statement (#296)
+  }
+  return out
+}
+
+/** SQLite's default host-parameter limit is 32766; stay far below it. */
+const HYDRATE_BATCH = 500
+
+/** Full queue items (note body, chunk text, chunk count) for the given cards, in the given order (#296). */
+function hydrateQueue(cardIds: string[]): ReviewQueueItem[] {
+  if (cardIds.length === 0) return []
+  const database = getDb()
+  const byId = new Map<string, ReviewQueueItem>()
+  for (let i = 0; i < cardIds.length; i += HYDRATE_BATCH) {
+    const batch = cardIds.slice(i, i + HYDRATE_BATCH)
+    const rows = database
+      .prepare(
+        `SELECT items.*, c.id AS card_id, c.chunk_index, c.origin, c.question, c.answer, c.quote,
+                nc.body AS chunk_body,
+                (SELECT COUNT(*) FROM note_chunks n2 WHERE n2.item_id = items.id) AS chunk_count,
+                cs.due_at, cs.interval_days, cs.ease, cs.reps, cs.lapses, cs.last_grade, cs.last_reviewed_at
+         FROM study_cards c
+         JOIN card_schedule cs ON cs.card_id = c.id
+         JOIN items ON items.id = c.item_id
+         LEFT JOIN note_chunks nc ON nc.item_id = c.item_id AND nc.chunk_index = c.chunk_index
+         WHERE c.id IN (${batch.map(() => '?').join(',')})`,
+      )
+      .all(...batch) as Record<string, unknown>[]
+    for (const row of rows) byId.set(String(row.card_id), rowToQueueItem(row))
+  }
+  const out: ReviewQueueItem[] = []
+  for (const id of cardIds) {
+    const item = byId.get(id)
+    if (item) out.push(item)
+  }
+  return out
 }
 
 /**
  * The review session queue: cards due at or before `before` (default: now)
  * on live notes, missed first, then Partly, then due by date, then today's
- * new cards within each project's daily budget (#264).
+ * new cards within each project's daily budget (#264). Only the returned
+ * cards load their bodies (#296).
  */
 export function listDueReviews(before?: string, limit = 50, project?: string): ReviewQueueItem[] {
-  return dueQueue(before ?? nowIso(), project, new Date()).slice(0, Math.max(0, limit))
+  const order = dueOrder(before ?? nowIso(), project, new Date(), Math.max(0, Math.floor(Number(limit) || 0)))
+  return hydrateQueue(order.map((r) => r.card_id))
 }
 
 /** How many cards the session queue holds now (the same cards `listDueReviews` returns, unlimited). */
 export function countDueReviews(before?: string, project?: string): number {
-  return dueQueue(before ?? nowIso(), project, new Date()).length
+  const now = new Date()
+  return queueSize(newCardGroups(project, now, before ?? nowIso()), now)
 }
 
 /**
@@ -676,17 +808,6 @@ export function getStudyStats(project?: string, now: Date = new Date()): StudySt
   const scope = name ? ' AND i.project = @project' : ''
   const params = { project: name, now: now.toISOString() }
   const live = `i.status NOT IN ('trashed', 'archived')`
-  const cards = database
-    .prepare(
-      `SELECT COUNT(*) AS total,
-              COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 1 ELSE 0 END), 0) AS fresh,
-              COUNT(DISTINCT c.item_id) AS notes
-       FROM study_cards c
-       JOIN card_schedule cs ON cs.card_id = c.id
-       JOIN items i ON i.id = c.item_id
-       WHERE c.status = 'active' AND ${live}${scope}`,
-    )
-    .get(params) as { total: number; fresh: number; notes: number }
   const notes = database
     .prepare(`SELECT COUNT(*) AS c FROM items i WHERE ${live}${scope}`)
     .get(params) as { c: number }
@@ -706,12 +827,19 @@ export function getStudyStats(project?: string, now: Date = new Date()): StudySt
         | { exam_date: string | null }
         | undefined)
     : undefined
-  const budget = getNewCardBudget(name || undefined, now)
+  // One pass over the live cards feeds the totals, the new-card budget and
+  // the queue size; no card row or body is loaded (#296).
+  const groups = newCardGroups(name || undefined, now)
+  const budget = budgetFromGroups(groups, now)
+  const cards = groups.reduce(
+    (acc, g) => ({ total: acc.total + g.total, fresh: acc.fresh + g.fresh, notes: acc.notes + g.notes }),
+    { total: 0, fresh: 0, notes: 0 },
+  )
   return {
     project: name || null,
     examDate: exam?.exam_date ? String(exam.exam_date) : null,
     // The session queue's size (due reviews + today's new cards within budget).
-    due: dueQueue(now.toISOString(), name || undefined, now).length,
+    due: queueSize(groups, now),
     totalCards: Number(cards.total),
     newCards: Number(cards.fresh),
     liveNotes: Number(notes.c),
