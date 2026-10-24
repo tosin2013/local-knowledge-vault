@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined'
 import type { MediaBookmark } from '../../../electron/types'
@@ -164,6 +165,8 @@ export interface BookmarksPanelProps {
   onSeek: (sec: number) => void
   onUpdate: (id: string, patch: { label: string; tag: string | null }) => void
   onDelete: (id: string) => void
+  /** #364: Exam tutor — quiz me on this bookmark's moment. */
+  onQuiz?: (bookmark: MediaBookmark) => void
   onAsk: (b: MediaBookmark) => void
   onSummarize: () => void
   onMakeCards: () => void
@@ -175,7 +178,7 @@ export interface BookmarksPanelProps {
 
 /** The bookmarks list (#334): time, label, tag and transcript; click a time to seek. */
 export function BookmarksPanel(props: BookmarksPanelProps) {
-  const { bookmarks, busy, editingId, onEdit, onAdd, onSeek, onUpdate, onDelete, onAsk, onSummarize, onMakeCards, onSaveAsNote, large } = props
+  const { bookmarks, busy, editingId, onEdit, onAdd, onSeek, onUpdate, onDelete, onAsk, onQuiz, onSummarize, onMakeCards, onSaveAsNote, large } = props
   const list = sortBookmarks(bookmarks)
   const withoutCard = list.filter((b) => !b.cardId).length
   // Close the editor when its bookmark disappears.
@@ -257,6 +260,15 @@ export function BookmarksPanel(props: BookmarksPanelProps) {
                       </IconButton>
                     </span>
                   </Tooltip>
+                  {onQuiz && (
+                    <Tooltip title="Quiz me on this bookmark">
+                      <span>
+                        <IconButton size="small" disabled={busy} onClick={() => onQuiz(b)} aria-label={`Quiz me on the bookmark at ${formatHms(b.positionSec)}`}>
+                          <SchoolOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
                   <IconButton size="small" onClick={() => onEdit(b.id)} aria-label={`Edit the bookmark at ${formatHms(b.positionSec)}`}>
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>

@@ -14,6 +14,8 @@ import type {
   McpServerSummary,
   McpToolSummary,
   MediaBookmark,
+  TutorQuiz,
+  TutorReveal,
   MediaBookmarkAddInput,
   MediaBookmarkUpdateInput,
   MediaIngestResult,
@@ -327,6 +329,39 @@ export function makeBookmark(overrides: Partial<MediaBookmark> = {}): MediaBookm
   }
 }
 
+export function makeTutorQuiz(overrides: Partial<TutorQuiz> = {}): TutorQuiz {
+  return {
+    quizId: 'tqz_1',
+    questions: [
+      { id: 'tq_1', quizId: 'tqz_1', text: 'Which port does HTTPS use by default?', index: 0, total: 2, kind: 'generated', objective: null },
+      { id: 'tq_2', quizId: 'tqz_1', text: 'What does DHCP hand out to clients?', index: 1, total: 2, kind: 'generated', objective: null },
+    ],
+    centerSec: 630,
+    windowSec: 45,
+    windowStartSec: 585,
+    windowEndSec: 675,
+    bookmarkId: null,
+    examDate: null,
+    ...overrides,
+  }
+}
+
+export function makeTutorReveal(overrides: Partial<TutorReveal> = {}): TutorReveal {
+  return {
+    questionId: 'tq_1',
+    grade: 'got',
+    answer: 'Port 443',
+    feedback: 'That matches the transcript.',
+    quote: 'HTTPS uses port 443 by default.',
+    citations: [{ id: 'itm_t1', title: '10:00–10:30', project: 'A+' }],
+    rewatchSec: 600,
+    askWhy: true,
+    offerPractice: false,
+    examNote: null,
+    ...overrides,
+  }
+}
+
 export function makeIngestResult(overrides: Partial<MediaIngestResult> = {}): MediaIngestResult {
   return {
     project: 'My podcast',
@@ -628,6 +663,14 @@ export function createLkvMock(): LkvMock {
       deleteBookmark: vi.fn().mockResolvedValue(true),
       bookmarkCards: vi.fn().mockResolvedValue({ created: 0, existing: 0, cards: [] }),
       bookmarksMarkdown: vi.fn().mockResolvedValue(''),
+      tutorQuiz: vi.fn().mockResolvedValue(makeTutorQuiz()),
+      tutorHint: vi.fn().mockImplementation((input: { level: number }) =>
+        Promise.resolve({ level: input.level, text: `hint ${input.level}`, seekSec: input.level === 3 ? 600 : null, last: input.level === 3 }),
+      ),
+      tutorReveal: vi.fn().mockResolvedValue(makeTutorReveal()),
+      tutorWhy: vi.fn().mockResolvedValue({ verdict: 'supported', note: 'Your reason uses what the speaker says here.', citations: [] }),
+      tutorPractice: vi.fn().mockResolvedValue({ bookmark: makeBookmark({ id: 'bmk_t', tag: 'Confused', positionSec: 600 }), bookmarkCreated: true, cardId: null, cardCreated: false }),
+      tutorMisses: vi.fn().mockResolvedValue([]),
       notesNear: vi.fn().mockResolvedValue([]),
       youtubeEmbedUrl: vi.fn().mockResolvedValue(null),
       ensurePersonas: vi.fn().mockResolvedValue({ promptIds: [], names: [], created: [], updated: [] }),

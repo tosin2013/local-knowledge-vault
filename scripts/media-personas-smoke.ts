@@ -48,7 +48,13 @@ async function main(): Promise<void> {
 
   // --- persona definitions (pure data) ---
   console.log('Persona definitions')
-  assert(MEDIA_PERSONAS.length === 3, 'three built-in Media personas')
+  assert(MEDIA_PERSONAS.length === 4, 'four built-in Media personas (with Exam tutor, #364)')
+  const tutor = getMediaPersonaById('exam-tutor')
+  assert(tutor?.name === 'Exam tutor' && /quiz/i.test(tutor.description) && /instead of answering/i.test(tutor.description), 'Exam tutor says it quizzes rather than answers')
+  assert(!!tutor && tutor.body.includes(MEDIA_HARD_RULES), 'Exam tutor keeps the shared grounding rules')
+  assert(!!tutor && /Do not give the answer yet/.test(tutor.body) && /hint in steps/i.test(tutor.body) && /Why is that\? One sentence/.test(tutor.body), 'Exam tutor prompt: ask first, hints in steps, why-prompt')
+  assert(!!tutor && /Never invent exam questions, objectives/.test(tutor.body), 'Exam tutor never invents objectives or exam claims')
+  assert(!!tutor && tutor.body.length < 2400, `Exam tutor prompt stays short for local models (${tutor?.body.length} chars)`)
   assert(
     MEDIA_PERSONAS.every((p) => p.name && p.description && p.body),
     'every persona has name / description / body',
@@ -67,7 +73,7 @@ async function main(): Promise<void> {
   // --- seed / refresh built-ins ---
   console.log('Seed / refresh personas')
   const first = ensureMediaPersonaPrompts()
-  assert(first.created.length === 3, `creates all three (created ${first.created.length})`)
+  assert(first.created.length === 4, `creates all four (created ${first.created.length})`)
   const second = ensureMediaPersonaPrompts()
   assert(second.created.length === 0 && second.updated.length === 0, 'idempotent re-run changes nothing')
 

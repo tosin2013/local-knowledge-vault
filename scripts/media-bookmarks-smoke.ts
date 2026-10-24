@@ -77,7 +77,7 @@ async function main(): Promise<void> {
   db.initDb(dbFile)
   const d = db.getDb()
   const tablesAfter = (d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map((r) => r.name)
-  assert(Number(d.pragma('user_version', { simple: true })) === db.SCHEMA_VERSION && db.SCHEMA_VERSION === 14, 'user_version is 14')
+  assert(Number(d.pragma('user_version', { simple: true })) === db.SCHEMA_VERSION && db.SCHEMA_VERSION >= 14, 'user_version is current (≥ 14)')
   assert(
     tablesAfter.filter((t) => !tablesBefore.includes(t)).sort().join(',') === 'media_bookmark_cards,media_bookmarks' &&
       tablesBefore.every((t) => tablesAfter.includes(t)),

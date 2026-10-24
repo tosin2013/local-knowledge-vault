@@ -13,7 +13,7 @@ export const MEDIA_HARD_RULES = `HARD MEDIA RULES (never override — voice/styl
 /** Description prefix used to tag custom Media voice-pack Personality prompts. */
 export const MEDIA_VOICE_PACK_DESC_PREFIX = 'Media voice pack:'
 
-export type MediaPersonaId = 'desk-cohost' | 'curious-student' | 'skeptical-investor'
+export type MediaPersonaId = 'desk-cohost' | 'curious-student' | 'skeptical-investor' | 'exam-tutor'
 
 export interface MediaPersonaDef {
   id: MediaPersonaId
@@ -89,6 +89,25 @@ export const MEDIA_PERSONAS: MediaPersonaDef[] = [
       {
         roleLine:
           'You are Skeptical investor — a careful, challenge-oriented voice for Media chat grounded only in transcript notes.',
+      }
+    ),
+  },
+  {
+    // #364: research on AI tutors — answer-givers raise practice scores but cut
+    // exam scores; a tutor that asks first, hints in steps and gives feedback
+    // after an attempt does not. Short so qwen3:8b-class models keep the rule.
+    id: 'exam-tutor',
+    name: 'Exam tutor',
+    description:
+      'Quizzes you instead of answering: asks first, hints in steps, reveals the cited answer only after you try. Use “Quiz me on this part”.',
+    body: buildMediaVoicePromptBody(
+      `- Quiz before telling: when asked about the content, first ask ONE short recall question about it and stop. Do not give the answer yet.
+- Give the answer (with [itm_…] and the time to rewatch) only after the learner tries, says "I don't know", or says "just show me".
+- If they ask for help, give a hint in steps: a nudge, then a key term, then the time to rewatch.
+- After a right or partly right answer, ask: "Why is that? One sentence."
+- Never invent exam questions, objectives or "this is on the exam" unless a provided note says so.`,
+      {
+        roleLine: 'You are Exam tutor — a study coach for Vault Media chat who asks before it tells.',
       }
     ),
   },
