@@ -29,6 +29,7 @@ import { hashText } from './text-hash'
 import { VISUAL_RE } from './practice-test'
 import { projectMultipleChoice } from './db'
 import { lastWrongPick, listRepeatedPicks, mcMode, nextStreak, parseOptions, shuffleOptions, whyWrongLine } from './multiple-choice'
+import { mediaMomentForCard } from './media-bookmarks'
 import { getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
 import { calibrationSummary, clampConfidence, recordStudyAttempt } from './study'
 import type {
@@ -360,6 +361,8 @@ function baseQuestion(row: CardRow): Omit<StudyCardQuestion, 'kind' | 'question'
     chunkIndex: row.chunk_index == null ? null : Number(row.chunk_index),
     chunkCount: Number(row.chunk_count ?? 0),
     citations: citationsFromIds([row.item_id]),
+    // #334: a card made from a Media chat bookmark reopens the video there.
+    mediaMoment: mediaMomentForCard(row.id),
   }
 }
 

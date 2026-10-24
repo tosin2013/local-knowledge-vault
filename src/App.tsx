@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, CssBaseline, Paper, ThemeProvider, Typography } from '@mui/material'
 import { listPlugins } from './plugins/registry'
+import { OPEN_PLUGIN_EVENT } from './plugins/media-chat/bookmarks'
 import { ProviderDialog } from './components/ai/ProviderDialog'
 import { aiChipLabel } from './components/ai/FirstRunLocalCard'
 import { personalityDisplayName, AI_DRAFT_STATUS, provenanceHeader, type ImportStatusAction, type Mode } from './domain'
@@ -199,6 +200,16 @@ export default function App() {
     setActivePluginId(id)
     setMode('chat')
   }, [])
+  // #334: other views (a Study card made from a video bookmark) ask the app to
+  // open a plugin, e.g. Media chat at the bookmarked moment.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: unknown }>).detail?.id
+      if (typeof id === 'string' && id) openPlugin(id)
+    }
+    window.addEventListener(OPEN_PLUGIN_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_PLUGIN_EVENT, onOpen)
+  }, [openPlugin])
   const quickAsks = useMemo(
     () =>
       providers.pluginContribs.promptPacks

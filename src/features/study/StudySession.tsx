@@ -20,6 +20,8 @@ import {
 } from '@mui/material'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline'
+import { formatHms, openMediaMoment } from '../../plugins/media-chat/bookmarks'
 import type {
   ReviewGrade,
   ReviewQueueItem,
@@ -547,6 +549,15 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                       {onOpenNote && question.origin !== 'practice-test' && (
                         <Button size="small" startIcon={<OpenInNewIcon fontSize="small" />} onClick={() => onOpenNote(question.itemId)}>
                           Open note
+                        </Button>
+                      )}
+                      {question.mediaMoment && (
+                        <Button
+                          size="small"
+                          startIcon={<PlayCircleOutlineIcon fontSize="small" />}
+                          onClick={() => openMediaMoment(question.mediaMoment!)}
+                        >
+                          Open video at {formatHms(question.mediaMoment.positionSec)}
                         </Button>
                       )}
                       {onOpenNote && question.sourceTest && (

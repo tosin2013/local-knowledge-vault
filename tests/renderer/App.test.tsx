@@ -123,4 +123,17 @@ describe('App', () => {
     act(() => handler!('new-note'))
     await waitFor(() => expect(screen.getByLabelText('Note title')).toBeInTheDocument())
   })
+
+  it('opens Media chat when a Study card asks for a video moment (#334)', async () => {
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('Vault')).toBeInTheDocument())
+    act(() => {
+      window.dispatchEvent(new CustomEvent('lkv:open-plugin', { detail: { id: 'media-chat' } }))
+    })
+    expect(await screen.findByText('Ingest YouTube')).toBeInTheDocument()
+    // Malformed events are ignored.
+    act(() => {
+      window.dispatchEvent(new CustomEvent('lkv:open-plugin', { detail: null }))
+    })
+  })
 })

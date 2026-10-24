@@ -311,4 +311,35 @@ describe('StudySession (#263)', () => {
     expect(formatDue('not a date')).toBe('')
     expect(formatDue('2026-10-09T13:00:00.000Z')).toMatch(/Oct/)
   })
+
+  it('a card made from a video bookmark opens the video at that moment (#334)', async () => {
+    const lkv = startWith()
+    lkv.study.cardQuestion.mockResolvedValueOnce({
+      ...makeCardQuestion('crd_itm_1'),
+      mediaMoment: {
+        bookmarkId: 'bmk_1',
+        videoKey: '/videos/lecture.mp4',
+        project: 'Lecture',
+        positionSec: 6300,
+        label: 'scheduler',
+        tag: 'Confused',
+        sourceType: 'local',
+      },
+    })
+    const onOpen = vi.fn()
+    window.addEventListener('lkv:open-plugin', onOpen)
+    render(<StudySession project="" />)
+    await begin()
+    answer('no idea')
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open video at 1:45:00' }))
+    window.removeEventListener('lkv:open-plugin', onOpen)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(sessionStorage.getItem('lkv.media.pendingOpen')!)).toEqual({
+      videoKey: '/videos/lecture.mp4',
+      positionSec: 6300,
+      project: 'Lecture',
+    })
+    sessionStorage.clear()
+  })
 })

@@ -1,7 +1,7 @@
 /**
  * Grounded multi-turn chat: persist sessions/messages, retrieve → LLM → cite.
  */
-import type { AnswerProvider, ChatMessage, ChatSendInput, ChatSendResult, Citation, SearchHit } from './types'
+import type { AnswerProvider, ChatMessage, ChatSendInput, ChatSendResult, Citation, Item, SearchHit } from './types'
 import {
   appendMessage,
   getPrompt,
@@ -10,7 +10,7 @@ import {
   updateSessionTitle,
 } from './db'
 import { searchQuery } from './search'
-import { itemToMediaHit, notesNearPlayhead } from './media-ingest'
+import { itemToMediaHit, notesNearPlayhead, parseTStartFromBody } from './media-ingest'
 import { llmGenerate } from './llm'
 import {
   buildGroundedMessages,
@@ -250,15 +250,29 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
   // playhead window ground the answer even when keyword search misses them, and
   // rank ahead of the keyword hits (itemToMediaHit scores them above BM25).
   let retrieval = hits
-  if (input.mediaWindow && input.filters?.project) {
-    const near = notesNearPlayhead(
-      input.filters.project,
-      input.mediaWindow.centerSec,
-      input.mediaWindow.windowSec
-    ).map(itemToMediaHit)
+  // #334: "Summarize my bookmarks" sends one window per bookmark; the chunks
+  // around each are retrieved first, in time order, without duplicates.
+  const windows = [
+    ...(input.mediaWindow ? [input.mediaWindow] : []),
+    ...(Array.isArray(input.mediaWindows) ? input.mediaWindows : []),
+  ].filter((w) => w && Number.isFinite(Number(w.centerSec)) && Number.isFinite(Number(w.windowSec)))
+  if (windows.length > 0 && input.filters?.project) {
+    const seen = new Set<string>()
+    const nearItems: { item: Item; start: number }[] = []
+    for (const w of windows) {
+      for (const it of notesNearPlayhead(input.filters.project, Number(w.centerSec), Number(w.windowSec))) {
+        if (seen.has(it.id)) continue
+        seen.add(it.id)
+        nearItems.push({ item: it, start: parseTStartFromBody(it.body) ?? 0 })
+      }
+    }
+    nearItems.sort((a, b) => a.start - b.start)
+    // Several windows may need more than the keyword limit; never more than 20.
+    const cap = windows.length > 1 ? Math.max(limit, 20) : limit
+    const near = nearItems.map((n) => itemToMediaHit(n.item)).slice(0, cap)
     if (near.length > 0) {
       const nearIds = new Set(near.map((h) => h.id))
-      retrieval = [...near, ...hits.filter((h) => !nearIds.has(h.id))].slice(0, limit)
+      retrieval = [...near, ...hits.filter((h) => !nearIds.has(h.id))].slice(0, Math.max(limit, near.length))
     }
   }
 

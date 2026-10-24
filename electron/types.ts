@@ -192,6 +192,11 @@ export interface ChatSendInput {
    * answer is grounded in the notes around the current moment.
    */
   mediaWindow?: { centerSec: number; windowSec: number }
+  /**
+   * Several playhead windows at once (#334, "Summarize my bookmarks"): the
+   * transcript chunks around each centre are retrieved first, in time order.
+   */
+  mediaWindows?: Array<{ centerSec: number; windowSec: number }>
 }
 
 export interface ChatSendResult {
@@ -677,6 +682,74 @@ export interface MediaStateInput {
   lastPositionSec?: number
   voice?: string | null
   followPlayhead?: boolean
+}
+
+/** A video bookmark in Media chat (#334): a labelled moment you can come back to. */
+export interface MediaBookmark {
+  id: string
+  /** Same stable key as Media chat state: YouTube URL or local file path. */
+  videoKey: string
+  project: string
+  videoTitle: string
+  sourceType: 'local' | 'youtube'
+  positionSec: number
+  /** Optional short label ('' when none). */
+  label: string
+  /** Review, Confused, Exam or a custom tag; null when untagged. */
+  tag: string | null
+  createdAt: string
+  updatedAt: string
+  /** The transcript text at that moment (metadata stripped, trimmed), when there is one. */
+  transcriptLine: string | null
+  /** The Study card made from this bookmark, if any. */
+  cardId: string | null
+}
+
+export interface MediaBookmarkAddInput {
+  videoKey: string
+  project: string
+  videoTitle?: string
+  sourceType?: 'local' | 'youtube'
+  positionSec: number
+  label?: string
+  tag?: string | null
+}
+
+/** Partial update: fields left out keep their stored value. */
+export interface MediaBookmarkUpdateInput {
+  id: string
+  label?: string
+  tag?: string | null
+  positionSec?: number
+}
+
+export interface MediaBookmarkCardsInput {
+  videoKey: string
+  /** The project the cards are filed under (the open media project). */
+  project: string
+  /** Transcript window around each bookmark, in seconds (default 45). */
+  windowSec?: number
+  /** Only these bookmarks (default: every bookmark on the video). */
+  ids?: string[]
+}
+
+export interface MediaBookmarkCardsResult {
+  /** Cards made by this call. */
+  created: number
+  /** Bookmarks that already had a card (left as they are). */
+  existing: number
+  cards: Array<{ bookmarkId: string; cardId: string; itemId: string; created: boolean }>
+}
+
+/** The video moment a Study card was made from (#334), so the reveal can reopen it. */
+export interface StudyMediaMoment {
+  bookmarkId: string
+  videoKey: string
+  project: string
+  positionSec: number
+  label: string
+  tag: string | null
+  sourceType: 'local' | 'youtube'
 }
 
 export interface MediaFindExistingInput {
@@ -1225,6 +1298,8 @@ export interface StudyCardQuestion {
   linkedNote?: { id: string; title: string; confirmed: boolean } | null
   /** Diagram / graph items: recall or sketch, then open the test to check. */
   openSource?: boolean
+  /** Cards made from a Media chat bookmark (#334): the moment to reopen on reveal. */
+  mediaMoment?: StudyMediaMoment | null
   /**
    * Multiple-choice practice-test cards (#324): `mc` = asked with its options,
    * `recall` = promoted to free recall (options hidden). Absent for every

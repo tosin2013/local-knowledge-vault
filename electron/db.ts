@@ -79,7 +79,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 13
+export const SCHEMA_VERSION = 14
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -124,7 +124,51 @@ function migrate(database: Database.Database): void {
   if (version < 13) {
     migrateV13(database)
   }
+  if (version < 14) {
+    migrateV14(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v14 (#334): Media chat bookmarks. Additive only: two new tables, nothing
+ * existing is touched.
+ *
+ * - `media_bookmarks`: one marker on a video, keyed by the same stable video
+ *   key as `media_state` (YouTube URL or local file path), so bookmarks
+ *   survive leaving Media chat and restarting the app. `project` follows
+ *   project renames; `label` and `tag` (Review / Confused / Exam / custom)
+ *   are optional.
+ * - `media_bookmark_cards`: the Study card made from a bookmark ("Make cards
+ *   from bookmarks"), one per bookmark, so running it again adds no
+ *   duplicates and a card can link back to its moment. Deleting the card
+ *   (or its note) drops the link; deleting the bookmark keeps the card and
+ *   its review history.
+ */
+function migrateV14(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS media_bookmarks (
+      id TEXT PRIMARY KEY,
+      video_key TEXT NOT NULL,
+      project TEXT NOT NULL DEFAULT '',
+      video_title TEXT NOT NULL DEFAULT '',
+      source_type TEXT NOT NULL DEFAULT 'local',
+      position_sec REAL NOT NULL,
+      label TEXT NOT NULL DEFAULT '',
+      tag TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_bookmarks_video ON media_bookmarks(video_key, position_sec);
+    CREATE INDEX IF NOT EXISTS idx_media_bookmarks_project ON media_bookmarks(project);
+    CREATE TABLE IF NOT EXISTS media_bookmark_cards (
+      bookmark_id TEXT PRIMARY KEY REFERENCES media_bookmarks(id) ON DELETE CASCADE,
+      card_id TEXT NOT NULL REFERENCES study_cards(id) ON DELETE CASCADE,
+      item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_bookmark_cards_card ON media_bookmark_cards(card_id);
+  `)
 }
 
 /**
@@ -957,6 +1001,7 @@ export function renameProject(from: string, to: string): ProjectResult {
       .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
       .run(next, nowIso(), prev)
     database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(next, prev)
+    database.prepare('UPDATE media_bookmarks SET project = ? WHERE project = ?').run(next, prev)
     moveProjectSettings(database, prev, next)
     return { count: items.changes }
   })()
@@ -974,6 +1019,7 @@ export function mergeProject(from: string, into: string): ProjectResult {
       .prepare('UPDATE items SET project = ?, updated_at = ? WHERE project = ?')
       .run(dst, nowIso(), src)
     database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(dst, src)
+    database.prepare('UPDATE media_bookmarks SET project = ? WHERE project = ?').run(dst, src)
     moveProjectSettings(database, src, dst)
     return { count: items.changes }
   })()
@@ -988,6 +1034,7 @@ export function deleteProject(name: string): ProjectResult {
     const items = database.prepare('DELETE FROM items WHERE project = ?').run(n)
     database.prepare('DELETE FROM chat_profiles WHERE project = ?').run(n)
     database.prepare('DELETE FROM project_settings WHERE name = ?').run(n)
+    database.prepare('DELETE FROM media_bookmarks WHERE project = ?').run(n)
     return { count: items.changes }
   })()
 }
