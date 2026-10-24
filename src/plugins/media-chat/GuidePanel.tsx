@@ -183,6 +183,10 @@ export function GuidePanel(props: GuidePanelProps) {
 
   const openCheckpoint = (end: number, chapter: string | null) => {
     if (!guide) return
+    if (end < 5) {
+      setInfo('Watch a little first — there’s nothing to sum up yet.')
+      return
+    }
     let start = anchor
     if (end - start < 5) start = Math.max(0, end - guide.checkpointMin * 60)
     setCheckpoint({ start, end, chapter })

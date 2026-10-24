@@ -169,6 +169,17 @@ describe('Study guide panel (#365)', () => {
     expect(await screen.findByText(/Checkpoints are off — press G/)).toBeInTheDocument()
   })
 
+  it('a checkpoint at the very start asks you to watch first', async () => {
+    const lkv = lkvMock()
+    await started(lkv)
+    const { onPause } = setup({ currentTime: 0, readTime: () => 2 })
+    await screen.findByText('Study guide: A+ Core 1')
+    fireEvent.click(screen.getByRole('button', { name: 'Checkpoint now (G)' }))
+    expect(await screen.findByText(/Watch a little first/)).toBeInTheDocument()
+    expect(screen.queryByTestId('guide-checkpoint')).toBeNull()
+    expect(onPause).not.toHaveBeenCalled()
+  })
+
   it('checkpoints follow chapters and show which one ends', async () => {
     const lkv = lkvMock()
     await started(lkv, makeGuide({ chapters: [{ startSec: 0, endSec: 400, title: 'Exam Objective 1.1' }, { startSec: 400, endSec: 900, title: 'Exam Objective 1.2' }] }))
