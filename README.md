@@ -131,6 +131,38 @@ exam-aware practice.
 
 <img src="docs/media/vault-practice-test-import.png" alt="Import practice test: a pasted Core 2 results page parsed as 10 items, 6 correct and 4 wrong, with Add to Study" width="720">
 
+### Study a video
+
+**Media chat** has three study tools that follow the same rule as Study: you answer or write from
+memory first, then Vault checks what you wrote against the transcript and cites it. These tools are
+built on learning research, but whether they help you learn more is still a hypothesis for Vault
+(see [the study research notes](docs/local-knowledge-vault-study-effects-on-learning.md)).
+
+- **Bookmarks.** Press **B** to mark a moment, tag it Review, Confused or Exam, and see it as a tick
+  on the timeline. Ask about it, summarize your bookmarks, or turn them into Study cards that reopen
+  the video at that time.
+- **Exam tutor.** A voice that quizzes you before it tells you anything. You answer and rate your
+  confidence. Then it reveals the cited answer and a timestamp to rewatch. Hints come one step at a
+  time.
+- **Study guide and research notes.** You write the notes. At chapter checkpoints (or every few
+  minutes) Vault pauses and asks what you understood. It then shows what you covered, what to
+  rewatch for, and anything the transcript doesn't support. Quotes must match the transcript
+  exactly, and anything Vault drafts stays an AI draft until you rewrite it in your own words.
+
+<img src="docs/media/vault-media-bookmarks.png" alt="Media chat with a lecture video: bookmark ticks on the timeline under the player and a Bookmarks panel listing Convoy effect (Review), Priority aging (Exam) and CFS vruntime, lost here (Confused), each with its time and transcript line" width="720">
+
+<p>
+  <img src="docs/media/vault-media-tutor-question.png" alt="Exam tutor, question 1 of 2 from a bookmark at 1:15:15: What does the instructor say about DNS? An empty answer box with Submit answer, I don't know, Hint (1 of 3) and Just show me. No answer is shown yet" width="360">
+  <img src="docs/media/vault-media-tutor-reveal.png" alt="Exam tutor after answering with high confidence: graded Got it, the cited answer with a quote from the CompTIA A+ transcript at 1:14:25, a Rewatch 1:14:25 button, the days left until the exam, and a Why is that? One sentence. prompt" width="360">
+</p>
+
+<p>
+  <img src="docs/media/vault-media-study-guide-check.png" alt="Study guide checkpoint for 0:00 to 1:03 of MIT 6.100L Lecture 1: the learner's own summary, then You covered (with a 0:16 timestamp), You missed, rewatch for (a question at 0:57 with a checkbox), and Not supported: Python was invented at MIT in 1975, with citations to the transcript" width="360">
+  <img src="docs/media/vault-media-research-notes.png" alt="Research notes for MIT 6.100L Lecture 1: a claim and evidence marked Transcript supports this with citations, a personal take, an open question, and a quote copied exactly from the transcript at 5:00" width="360">
+</p>
+
+The [video guide](docs/getting-started/video.md#5-study-a-video) walks through all three.
+
 ### Local model setup that explains itself
 
 <img src="docs/media/providers-first-run.png" alt="First-run card recommending ollama pull qwen3:8b" width="720">
