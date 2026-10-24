@@ -36,6 +36,18 @@ import type {
   TutorPracticeResult,
   TutorQuiz,
   TutorQuizInput,
+  GuideAddInput,
+  GuideCardsResult,
+  GuideCheckpointSaveInput,
+  GuideConfirmInput,
+  GuideConnectInput,
+  GuideDraftInput,
+  GuideRelatedNote,
+  GuideSettingsInput,
+  GuideStartInput,
+  GuideSummaryCheck,
+  GuideSummaryCheckInput,
+  MediaGuide,
   TutorReveal,
   TutorRevealInput,
   TutorWhyInput,
@@ -359,6 +371,23 @@ const api = {
     tutorPractice: (input: TutorPracticeInput): Promise<TutorPracticeResult> =>
       ipcRenderer.invoke('media:tutorPractice', input),
     tutorMisses: (videoKey: string): Promise<TutorMiss[]> => ipcRenderer.invoke('media:tutorMisses', videoKey),
+    // #365: Study guide / research notes.
+    guideList: (videoKey: string): Promise<MediaGuide[]> => ipcRenderer.invoke('media:guideList', videoKey),
+    guideGet: (guideId: string): Promise<MediaGuide> => ipcRenderer.invoke('media:guideGet', guideId),
+    guideStart: (input: GuideStartInput): Promise<MediaGuide> => ipcRenderer.invoke('media:guideStart', input),
+    guideSettings: (input: GuideSettingsInput): Promise<MediaGuide> => ipcRenderer.invoke('media:guideSettings', input),
+    guideCheckSummary: (input: GuideSummaryCheckInput): Promise<GuideSummaryCheck> =>
+      ipcRenderer.invoke('media:guideCheckSummary', input),
+    guideSaveCheckpoint: (input: GuideCheckpointSaveInput): Promise<MediaGuide> =>
+      ipcRenderer.invoke('media:guideSaveCheckpoint', input),
+    guideDraft: (input: GuideDraftInput): Promise<MediaGuide> => ipcRenderer.invoke('media:guideDraft', input),
+    guideConfirm: (input: GuideConfirmInput): Promise<MediaGuide> => ipcRenderer.invoke('media:guideConfirm', input),
+    guideAdd: (input: GuideAddInput): Promise<MediaGuide> => ipcRenderer.invoke('media:guideAdd', input),
+    guideDeleteEntry: (entryId: string): Promise<MediaGuide> => ipcRenderer.invoke('media:guideDeleteEntry', entryId),
+    guideRelated: (guideId: string, query?: string): Promise<GuideRelatedNote[]> =>
+      ipcRenderer.invoke('media:guideRelated', guideId, query),
+    guideConnect: (input: GuideConnectInput): Promise<MediaGuide> => ipcRenderer.invoke('media:guideConnect', input),
+    guideCards: (guideId: string): Promise<GuideCardsResult> => ipcRenderer.invoke('media:guideCards', guideId),
     findExistingProject: (input: MediaFindExistingInput): Promise<MediaExistingProject | null> =>
       ipcRenderer.invoke('media:findExistingProject', input),
     notesNear: (input: MediaNotesNearInput): Promise<Item[]> =>

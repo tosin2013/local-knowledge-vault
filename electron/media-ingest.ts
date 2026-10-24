@@ -6,6 +6,7 @@ import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { parseYtChapters, saveVideoChapters } from './media-chapters'
 import {
   buildTranscriptNoteBody,
   chunkCues,
@@ -35,7 +36,7 @@ import {
 } from './db'
 import { resolveUserDataDir } from './user-data'
 import { mediaProtocolUrlForPath } from './media-protocol'
-import type { ChatProfile, Item, Prompt, SearchHit } from './types'
+import type { ChatProfile, Item, MediaChapter, Prompt, SearchHit } from './types'
 
 export const MEDIA_READER_NAME = 'Media reader'
 
@@ -736,8 +737,12 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput, opts: MediaI
       { timeoutMs: 60_000, maxBuffer: 64 * 1024 * 1024, signal: opts.signal }
     )
     if (meta.aborted) throw new Error('Ingest cancelled')
+    let chapters: MediaChapter[] = []
     if (meta.status === 0 && meta.stdout) {
-      const picked = pickCaptionTrack(JSON.parse(meta.stdout) as YtDlpCaptionInfo)
+      const info = JSON.parse(meta.stdout) as YtDlpCaptionInfo
+      // #365: chapters let study-guide checkpoints fall on chapter boundaries.
+      chapters = parseYtChapters(info)
+      const picked = pickCaptionTrack(info)
       if (!picked) {
         throw new Error(
           'No English captions found for this YouTube URL. Try another URL or ingest a local SRT/VTT.'
@@ -821,6 +826,7 @@ export async function ingestYoutubeMedia(input: IngestYoutubeInput, opts: MediaI
         sourceUrl: url,
       })
     })
+    if (chapters.length) saveVideoChapters(url, chapters)
 
     const prompt = ensureMediaReaderPrompt()
     const profile = upsertMediaProfile(project, prompt.id, project)

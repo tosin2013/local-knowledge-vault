@@ -873,6 +873,177 @@ export interface TutorMiss {
   createdAt: string
 }
 
+/* ---- Study guide / research notes (#365) ---- */
+
+export type GuideMode = 'study' | 'research'
+
+/** What a guide entry is. Study: summary, gap, term. Research: claim, evidence, quote, take, question, connection. */
+export type GuideSection = 'summary' | 'gap' | 'term' | 'claim' | 'evidence' | 'quote' | 'take' | 'question' | 'connection'
+
+export interface MediaChapter {
+  startSec: number
+  endSec: number
+  title: string
+}
+
+export interface GuideCheckPoint {
+  /** The learner's point (covered) or a question to rewatch for (gap) — never a written-out answer. */
+  text: string
+  sec: number
+  itemId: string
+}
+
+export interface GuideUnsupported {
+  /** Words from the learner's own text that the transcript doesn't support. */
+  claim: string
+  note: string
+}
+
+/** Result of checking a checkpoint summary against its transcript window. */
+export interface GuideSummaryCheck {
+  startSec: number
+  endSec: number
+  covered: GuideCheckPoint[]
+  gaps: GuideCheckPoint[]
+  unsupported: GuideUnsupported[]
+  citations: Citation[]
+  notice?: string
+}
+
+/** Result of checking a key term, claim or evidence against the transcript. */
+export interface GuideTextCheck {
+  verdict: 'supported' | 'partly' | 'unsupported' | 'not-found'
+  note: string
+  sec: number | null
+  citations: Citation[]
+}
+
+export interface GuideEntry {
+  id: string
+  section: GuideSection
+  startSec: number | null
+  endSec: number | null
+  term: string | null
+  text: string
+  /** Drafted by Vault on request; not the learner's text until rewritten or confirmed. */
+  aiDraft: boolean
+  confirmed: boolean
+  check: GuideTextCheck | GuideSummaryCheck | null
+  itemRef: string | null
+  bookmarkId: string | null
+  createdAt: string
+}
+
+/** A "Review these" line: a bookmark (any tag) or an Exam tutor miss. */
+export interface GuideReviewItem {
+  kind: 'bookmark' | 'tutor-miss'
+  sec: number
+  label: string
+  tag: string | null
+  confidentWrong: boolean
+  refId: string
+}
+
+export interface MediaGuide {
+  id: string
+  videoKey: string
+  mode: GuideMode
+  project: string
+  videoTitle: string
+  sourceType: 'local' | 'youtube'
+  itemId: string | null
+  noteTitle: string
+  checkpointMin: number
+  checkpointsOff: boolean
+  snoozedUntilSec: number | null
+  lastCheckpointSec: number
+  chapters: MediaChapter[]
+  entries: GuideEntry[]
+  review: GuideReviewItem[]
+  /** True while any AI-drafted text is unconfirmed (the note is then `ai-draft`). */
+  hasUnconfirmedDraft: boolean
+  examDate: string | null
+}
+
+export interface GuideStartInput {
+  videoKey: string
+  project: string
+  videoTitle?: string
+  sourceType?: 'local' | 'youtube'
+  mode: GuideMode
+}
+
+export interface GuideSettingsInput {
+  guideId: string
+  checkpointMin?: number
+  checkpointsOff?: boolean
+  /** Snooze checkpoints until this playhead second (null clears). */
+  snoozedUntilSec?: number | null
+  lastCheckpointSec?: number
+}
+
+export interface GuideSummaryCheckInput {
+  guideId: string
+  startSec: number
+  endSec: number
+  text: string
+}
+
+export interface GuideCheckpointSaveInput {
+  guideId: string
+  startSec: number
+  endSec: number
+  /** The learner's own summary (kept verbatim). Empty = skip the summary. */
+  text: string
+  /** The check result the learner saw, if any; only the chosen gaps are kept. */
+  check?: GuideSummaryCheck | null
+  gapIndexes?: number[]
+}
+
+export interface GuideDraftInput {
+  guideId: string
+  startSec: number
+  endSec: number
+}
+
+export interface GuideConfirmInput {
+  entryId: string
+  /** The rewritten text (must differ from the draft) … */
+  text?: string
+  /** … or a one-line summary in the learner's own words. */
+  ownLine?: string
+}
+
+export interface GuideAddInput {
+  guideId: string
+  section: Exclude<GuideSection, 'summary' | 'gap' | 'connection'>
+  text: string
+  /** Key terms only. */
+  term?: string
+  /** Where in the video (the playhead). */
+  sec?: number
+}
+
+export interface GuideConnectInput {
+  guideId: string
+  itemId: string
+}
+
+export interface GuideRelatedNote {
+  itemId: string
+  title: string
+  snippet: string
+  project: string | null
+}
+
+export interface GuideCardsResult {
+  created: number
+  existing: number
+  /** Suggested next review date (YYYY-MM-DD) from the project's exam date. */
+  reviewDate: string
+  reviewNote: string
+}
+
 /** The video moment a Study card was made from (#334), so the reveal can reopen it. */
 export interface StudyMediaMoment {
   bookmarkId: string

@@ -15,6 +15,8 @@ import type {
   McpToolSummary,
   MediaBookmark,
   TutorQuiz,
+  MediaGuide,
+  GuideSummaryCheck,
   TutorReveal,
   MediaBookmarkAddInput,
   MediaBookmarkUpdateInput,
@@ -362,6 +364,44 @@ export function makeTutorReveal(overrides: Partial<TutorReveal> = {}): TutorReve
   }
 }
 
+export function makeGuide(overrides: Partial<MediaGuide> = {}): MediaGuide {
+  return {
+    id: 'gde_1',
+    videoKey: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    mode: 'study',
+    project: 'A+',
+    videoTitle: 'A+ Core 1',
+    sourceType: 'youtube',
+    itemId: 'itm_guide',
+    noteTitle: 'Study guide: A+ Core 1',
+    checkpointMin: 10,
+    checkpointsOff: false,
+    snoozedUntilSec: null,
+    lastCheckpointSec: 0,
+    chapters: [],
+    entries: [],
+    review: [],
+    hasUnconfirmedDraft: false,
+    examDate: null,
+    ...overrides,
+  }
+}
+
+export function makeGuideCheck(overrides: Partial<GuideSummaryCheck> = {}): GuideSummaryCheck {
+  return {
+    startSec: 0,
+    endSec: 600,
+    covered: [{ text: 'DHCP hands out addresses', sec: 570, itemId: 'itm_t1' }],
+    gaps: [
+      { text: 'Which port does secure web traffic use?', sec: 600, itemId: 'itm_t2' },
+      { text: 'What does DNS translate?', sec: 630, itemId: 'itm_t3' },
+    ],
+    unsupported: [{ claim: 'DNS uses port 80', note: 'The transcript here doesn’t say this.' }],
+    citations: [{ id: 'itm_t1', title: '09:30', project: 'A+' }],
+    ...overrides,
+  }
+}
+
 export function makeIngestResult(overrides: Partial<MediaIngestResult> = {}): MediaIngestResult {
   return {
     project: 'My podcast',
@@ -671,6 +711,21 @@ export function createLkvMock(): LkvMock {
       tutorWhy: vi.fn().mockResolvedValue({ verdict: 'supported', note: 'Your reason uses what the speaker says here.', citations: [] }),
       tutorPractice: vi.fn().mockResolvedValue({ bookmark: makeBookmark({ id: 'bmk_t', tag: 'Confused', positionSec: 600 }), bookmarkCreated: true, cardId: null, cardCreated: false }),
       tutorMisses: vi.fn().mockResolvedValue([]),
+      guideList: vi.fn().mockResolvedValue([]),
+      guideGet: vi.fn().mockResolvedValue(makeGuide()),
+      guideStart: vi.fn().mockImplementation((input: { mode: 'study' | 'research' }) =>
+        Promise.resolve(makeGuide(input.mode === 'research' ? { id: 'gde_r', mode: 'research', noteTitle: 'Research notes: A+ Core 1' } : {})),
+      ),
+      guideSettings: vi.fn().mockImplementation((input: Partial<MediaGuide>) => Promise.resolve(makeGuide({ ...input }))),
+      guideCheckSummary: vi.fn().mockResolvedValue(makeGuideCheck()),
+      guideSaveCheckpoint: vi.fn().mockResolvedValue(makeGuide({ lastCheckpointSec: 600 })),
+      guideDraft: vi.fn().mockResolvedValue(makeGuide()),
+      guideConfirm: vi.fn().mockResolvedValue(makeGuide()),
+      guideAdd: vi.fn().mockResolvedValue(makeGuide()),
+      guideDeleteEntry: vi.fn().mockResolvedValue(makeGuide()),
+      guideRelated: vi.fn().mockResolvedValue([]),
+      guideConnect: vi.fn().mockResolvedValue(makeGuide({ mode: 'research' })),
+      guideCards: vi.fn().mockResolvedValue({ created: 2, existing: 0, reviewDate: '2026-10-25', reviewNote: 'No exam date set — review these tomorrow; Study spaces them out after that.' }),
       notesNear: vi.fn().mockResolvedValue([]),
       youtubeEmbedUrl: vi.fn().mockResolvedValue(null),
       ensurePersonas: vi.fn().mockResolvedValue({ promptIds: [], names: [], created: [], updated: [] }),

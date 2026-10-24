@@ -102,7 +102,7 @@ async function main(): Promise<void> {
   raw.close()
   db.initDb(dbFile)
   const d = db.getDb()
-  assert(db.SCHEMA_VERSION === 15 && Number(d.pragma('user_version', { simple: true })) === 15, 'user_version is 15')
+  assert(db.SCHEMA_VERSION >= 15 && Number(d.pragma('user_version', { simple: true })) === db.SCHEMA_VERSION, 'user_version is current (≥ 15)')
   assert(!!d.prepare("SELECT name FROM sqlite_master WHERE name = 'media_tutor_questions'").get(), 'media_tutor_questions exists')
   assert(db.getItem(kept.id)?.title === 'Kept' && bm.listBookmarks(VIDEO).length === 1, 'existing notes and bookmarks survive')
 

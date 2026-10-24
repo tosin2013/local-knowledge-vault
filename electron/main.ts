@@ -93,6 +93,31 @@ import {
 import { listTutorMisses, tutorHint, tutorPractice, tutorQuiz, tutorReveal, tutorWhy } from './media-tutor'
 import type { TutorHintInput, TutorPracticeInput, TutorQuizInput, TutorRevealInput, TutorWhyInput } from './types'
 import {
+  addEntry as guideAddEntry,
+  checkSummary as guideCheckSummary,
+  confirmEntry as guideConfirmEntry,
+  connectNote as guideConnectNote,
+  deleteEntry as guideDeleteEntry,
+  draftSection as guideDraftSection,
+  getGuide,
+  listGuides,
+  makeGuideCards,
+  relatedNotes as guideRelatedNotes,
+  saveCheckpoint as guideSaveCheckpoint,
+  startGuide,
+  updateGuideSettings,
+} from './media-guide'
+import type {
+  GuideAddInput,
+  GuideCheckpointSaveInput,
+  GuideConfirmInput,
+  GuideConnectInput,
+  GuideDraftInput,
+  GuideSettingsInput,
+  GuideStartInput,
+  GuideSummaryCheckInput,
+} from './types'
+import {
   ensureMediaPersonaPrompts,
   applyMediaPersona,
   createCustomMediaPersona,
@@ -1013,6 +1038,20 @@ function registerIpc(): void {
   ipcMain.handle('media:tutorWhy', (_e, input: TutorWhyInput) => tutorWhy(input))
   ipcMain.handle('media:tutorPractice', (_e, input: TutorPracticeInput) => tutorPractice(input))
   ipcMain.handle('media:tutorMisses', (_e, videoKey: string) => listTutorMisses(String(videoKey ?? '')))
+  // #365: Study guide / research notes — you write, Vault checks and cites.
+  ipcMain.handle('media:guideList', (_e, videoKey: string) => listGuides(String(videoKey ?? '')))
+  ipcMain.handle('media:guideGet', (_e, guideId: string) => getGuide(String(guideId ?? '')))
+  ipcMain.handle('media:guideStart', (_e, input: GuideStartInput) => startGuide(input))
+  ipcMain.handle('media:guideSettings', (_e, input: GuideSettingsInput) => updateGuideSettings(input))
+  ipcMain.handle('media:guideCheckSummary', (_e, input: GuideSummaryCheckInput) => guideCheckSummary(input))
+  ipcMain.handle('media:guideSaveCheckpoint', (_e, input: GuideCheckpointSaveInput) => guideSaveCheckpoint(input))
+  ipcMain.handle('media:guideDraft', (_e, input: GuideDraftInput) => guideDraftSection(input))
+  ipcMain.handle('media:guideConfirm', (_e, input: GuideConfirmInput) => guideConfirmEntry(input))
+  ipcMain.handle('media:guideAdd', (_e, input: GuideAddInput) => guideAddEntry(input))
+  ipcMain.handle('media:guideDeleteEntry', (_e, entryId: string) => guideDeleteEntry(String(entryId ?? '')))
+  ipcMain.handle('media:guideRelated', (_e, guideId: string, query?: string) => guideRelatedNotes(String(guideId ?? ''), query))
+  ipcMain.handle('media:guideConnect', (_e, input: GuideConnectInput) => guideConnectNote(input))
+  ipcMain.handle('media:guideCards', (_e, guideId: string) => makeGuideCards(String(guideId ?? '')))
 
   ipcMain.handle('media:youtubeEmbedUrl', (_e, url: string) => youtubeEmbedUrl(url))
 
