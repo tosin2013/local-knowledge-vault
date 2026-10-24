@@ -13,6 +13,9 @@ import type {
   MarkdownImportResult,
   McpServerSummary,
   McpToolSummary,
+  MediaBookmark,
+  MediaBookmarkAddInput,
+  MediaBookmarkUpdateInput,
   MediaIngestResult,
   MediaProjectInfo,
   MediaVoicePackInfo,
@@ -301,6 +304,25 @@ export function makeVoicePack(promptId: string, name = 'Desk cohost', overrides:
     promptId,
     description: 'Media voice pack',
     builtin: true,
+    ...overrides,
+  }
+}
+
+/** A Media chat bookmark (#334) with sensible defaults. */
+export function makeBookmark(overrides: Partial<MediaBookmark> = {}): MediaBookmark {
+  return {
+    id: 'bmk_1',
+    videoKey: '/videos/lecture.mp4',
+    project: 'Lecture',
+    videoTitle: 'Lecture',
+    sourceType: 'local',
+    positionSec: 6300,
+    label: '',
+    tag: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    transcriptLine: null,
+    cardId: null,
     ...overrides,
   }
 }
@@ -596,6 +618,16 @@ export function createLkvMock(): LkvMock {
       getLatestMediaState: vi.fn().mockResolvedValue(null),
       setMediaState: vi.fn().mockResolvedValue(undefined),
       findExistingProject: vi.fn().mockResolvedValue(null),
+      listBookmarks: vi.fn().mockResolvedValue([]),
+      addBookmark: vi.fn().mockImplementation((input: MediaBookmarkAddInput) =>
+        Promise.resolve(makeBookmark({ videoKey: input.videoKey, project: input.project, positionSec: input.positionSec, label: input.label ?? '', tag: input.tag ?? null })),
+      ),
+      updateBookmark: vi.fn().mockImplementation((input: MediaBookmarkUpdateInput) =>
+        Promise.resolve(makeBookmark({ id: input.id, label: input.label ?? '', tag: input.tag ?? null })),
+      ),
+      deleteBookmark: vi.fn().mockResolvedValue(true),
+      bookmarkCards: vi.fn().mockResolvedValue({ created: 0, existing: 0, cards: [] }),
+      bookmarksMarkdown: vi.fn().mockResolvedValue(''),
       notesNear: vi.fn().mockResolvedValue([]),
       youtubeEmbedUrl: vi.fn().mockResolvedValue(null),
       ensurePersonas: vi.fn().mockResolvedValue({ promptIds: [], names: [], created: [], updated: [] }),

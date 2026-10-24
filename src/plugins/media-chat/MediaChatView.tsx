@@ -32,9 +32,20 @@ import { ProjectSelect } from '../../features/ProjectSelect'
 import type {
   ChatMessage,
   Citation,
+  MediaBookmark,
   MediaIngestResult,
   MediaProjectInfo,
 } from '../../../electron/types'
+import { BookmarkTimeline, BookmarksPanel } from './BookmarksPanel'
+import {
+  bookmarkQuestion,
+  describeBookmark,
+  formatHms,
+  isBookmarkShortcut,
+  sortBookmarks,
+  summarizeQuestion,
+  takePendingOpen,
+} from './bookmarks'
 
 function parseCitations(json: string | null): Citation[] {
   if (!json) return []
@@ -89,6 +100,8 @@ interface YTPlayer {
   seekTo(seconds: number, allowSeekAhead: boolean): void
   getCurrentTime(): number
   getPlayerState(): number
+  /** Video length in seconds (0 until known) — places bookmark ticks (#334). */
+  getDuration?(): number
   destroy(): void
   /** The iframe the player is bound to — lets us detect a detached player (#327). */
   getIframe?(): HTMLIFrameElement
@@ -244,6 +257,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [activeVoice, setActiveVoice] = useState<string>('Media reader')
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  /** #334: this video's bookmarks (kept per video across sessions). */
+  const [bookmarks, setBookmarks] = useState<MediaBookmark[]>([])
+  const [editingBookmarkId, setEditingBookmarkId] = useState<string | null>(null)
+  /** Media length, for the bookmark ticks on the timeline (#334). */
+  const [durationSec, setDurationSec] = useState<number | null>(null)
 
   const refreshProjects = useCallback(async () => {
     if (!window.lkv?.media?.listProjects) return
@@ -343,6 +361,24 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     }
   }, [active?.mediaProtocolUrl, active?.mediaPath])
 
+  // #334: the media length places bookmark ticks under the player.
+  useEffect(() => {
+    setDurationSec(null)
+    const el = videoRef.current
+    if (!el) return
+    const onDuration = () => {
+      const d = el.duration
+      setDurationSec(Number.isFinite(d) && d > 0 ? d : null)
+    }
+    onDuration()
+    el.addEventListener('loadedmetadata', onDuration)
+    el.addEventListener('durationchange', onDuration)
+    return () => {
+      el.removeEventListener('loadedmetadata', onDuration)
+      el.removeEventListener('durationchange', onDuration)
+    }
+  }, [active?.mediaProtocolUrl, active?.mediaPath, active?.mediaUrl])
+
   // Esc exits fullscreen (the old MUI Dialog handled this for us; the fullscreen
   // layout is now a CSS overlay on the same player subtree, #327).
   useEffect(() => {
@@ -379,10 +415,50 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     }
   }, [active, videoKey, sessionId, activeVoice, followPlayhead])
 
+  // #334: bookmarks belong to the video, so they come back with it.
+  useEffect(() => {
+    setEditingBookmarkId(null)
+    if (!videoKey || !window.lkv?.media?.listBookmarks) {
+      setBookmarks([])
+      return
+    }
+    let cancelled = false
+    void window.lkv.media
+      .listBookmarks(videoKey)
+      .then((list) => {
+        if (!cancelled) setBookmarks(sortBookmarks(list))
+      })
+      .catch(() => {
+        if (!cancelled) setBookmarks([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [videoKey])
+
   // #329: Media chat reopens the last video you studied when it mounts.
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      // #334: a Study card made from a bookmark asked to reopen its moment.
+      const pending = takePendingOpen()
+      if (pending) {
+        const projects = (await window.lkv?.media?.listProjects?.()) ?? []
+        if (cancelled) return
+        const proj =
+          projects.find((x) => x.mediaUrl === pending.videoKey || x.mediaPath === pending.videoKey) ??
+          projects.find((x) => !!pending.project && x.project === pending.project)
+        if (proj) {
+          await loadProject(proj)
+          if (cancelled) return
+          resumeSecRef.current = pending.positionSec
+          setCurrentTime(pending.positionSec)
+          setStatus(`Opened “${proj.project}” at ${formatHms(pending.positionSec)}`)
+          return
+        }
+        setStatus('The video for that card is no longer in Media chat.')
+        return
+      }
       const last = await window.lkv?.media?.getLatestMediaState?.()
       if (!last || cancelled) return
       const projects = (await window.lkv?.media?.listProjects?.()) ?? []
@@ -518,6 +594,8 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         try {
           const t = player.getCurrentTime()
           if (Number.isFinite(t)) setCurrentTime(t)
+          const d = player.getDuration?.()
+          if (typeof d === 'number' && Number.isFinite(d) && d > 0) setDurationSec((prev) => (prev === d ? prev : d))
         } catch {
           /* player gone */
         }
@@ -904,14 +982,30 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     }
   }
 
-  const onSend = async (opts?: { aboutMoment?: boolean }) => {
-    if (!window.lkv || !active || !chatInput.trim() || sending) return
-    const rawInput = chatInput
+  const onSend = async (opts?: { aboutMoment?: boolean; bookmark?: MediaBookmark; summarize?: MediaBookmark[] }) => {
+    if (!window.lkv || !active || sending) return
+    const bookmark = opts?.bookmark
+    const summarize = opts?.summarize?.length ? opts.summarize : undefined
+    if (!bookmark && !summarize && !chatInput.trim()) return
+    const typed = chatInput
     // Read the player at click time so a paused scrub is not sent as the old
     // position (#330); sync the chip while we're at it.
-    const momentSec = readPlayerTime()
-    setCurrentTime(momentSec)
-    const text = buildQuestion(rawInput, !!opts?.aboutMoment, momentSec)
+    const momentSec = bookmark ? bookmark.positionSec : readPlayerTime()
+    if (!bookmark) setCurrentTime(momentSec)
+    // #334: a bookmark question is about the window around the bookmark; the
+    // summary retrieves the window around every bookmark.
+    const text = bookmark
+      ? bookmarkQuestion(bookmark, typed)
+      : summarize
+        ? summarizeQuestion(summarize)
+        : buildQuestion(typed, !!opts?.aboutMoment, momentSec)
+    const rawInput = bookmark
+      ? typed.trim()
+        ? `${typed.trim()} — bookmark ${describeBookmark(bookmark)}`
+        : `Ask about bookmark ${describeBookmark(bookmark)}`
+      : summarize
+        ? 'Summarize my bookmarks'
+        : typed
     const optimisticId = `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
     setChatInput('')
     setSending(true)
@@ -951,14 +1045,15 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         displayContent: rawInput,
         filters: { project: active.project },
         promptId: active.promptId || undefined,
-        limit: 8,
         sourcesLast: false, // Media chat is chat with the video: transcripts rank normally
         // #161: Follow playhead / "Ask about this moment" scope retrieval to the
         // playhead window, so the answer is grounded in the notes around now.
         mediaWindow:
-          followPlayhead || !!opts?.aboutMoment
+          bookmark || followPlayhead || !!opts?.aboutMoment
             ? { centerSec: momentSec, windowSec: playheadWindowSec }
             : undefined,
+        mediaWindows: summarize?.map((b) => ({ centerSec: b.positionSec, windowSec: playheadWindowSec })),
+        limit: summarize ? 20 : 8,
       })
       setMessages(res.messages)
     } catch (e) {
@@ -966,10 +1061,112 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       // A failed send must not lose the question: roll back the optimistic
       // bubble and put the text back in the composer (#128).
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
-      setChatInput(rawInput)
+      setChatInput(typed)
     } finally {
       setSending(false)
       setBusy(false)
+    }
+  }
+
+  /* ---- Bookmarks (#334) ---- */
+
+  /** Bookmark the moment playing now; opens its label editor. */
+  const addBookmarkNow = async () => {
+    if (!active || !videoKey || !window.lkv?.media?.addBookmark) return
+    const sec = readPlayerTime()
+    setCurrentTime(sec)
+    try {
+      const b = await window.lkv.media.addBookmark({
+        videoKey,
+        project: active.project,
+        videoTitle: active.title,
+        sourceType: active.sourceType,
+        positionSec: sec,
+      })
+      setBookmarks((prev) => sortBookmarks([...prev.filter((x) => x.id !== b.id), b]))
+      setEditingBookmarkId(b.id)
+      setStatus(`Bookmarked ${formatHms(b.positionSec)} — add a label or tag, or keep watching.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // `B` bookmarks the moment — never while typing (Ask box, label fields), and
+  // in fullscreen too: the listener is on the window, the overlay stays put.
+  const addBookmarkRef = useRef(addBookmarkNow)
+  addBookmarkRef.current = addBookmarkNow
+  useEffect(() => {
+    if (!active) return
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBookmarkShortcut(e)) return
+      e.preventDefault()
+      void addBookmarkRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [active])
+
+  const updateBookmark = async (id: string, patch: { label: string; tag: string | null }) => {
+    if (!window.lkv?.media?.updateBookmark) return
+    try {
+      const b = await window.lkv.media.updateBookmark({ id, ...patch })
+      if (b) setBookmarks((prev) => sortBookmarks(prev.map((x) => (x.id === id ? b : x))))
+      else setBookmarks((prev) => prev.filter((x) => x.id !== id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const deleteBookmark = async (id: string) => {
+    if (!window.lkv?.media?.deleteBookmark) return
+    const b = bookmarks.find((x) => x.id === id)
+    try {
+      await window.lkv.media.deleteBookmark(id)
+      setBookmarks((prev) => prev.filter((x) => x.id !== id))
+      if (b) setStatus(`Deleted the bookmark at ${formatHms(b.positionSec)}${b.cardId ? ' (its Study card stays)' : ''}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const makeBookmarkCards = async () => {
+    if (!active || !videoKey || !window.lkv?.media?.bookmarkCards) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await window.lkv.media.bookmarkCards({ videoKey, project: active.project, windowSec: playheadWindowSec })
+      const made = res.created
+      setStatus(
+        made === 0
+          ? 'Every bookmark already has a Study card.'
+          : `Made ${made} Study card${made === 1 ? '' : 's'} in “${active.project}”` +
+              (res.existing > 0 ? ` (${res.existing} already had one)` : '') +
+              ' — Confused bookmarks come up first.',
+      )
+      const list = await window.lkv.media.listBookmarks(videoKey)
+      setBookmarks(sortBookmarks(list))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Export: the bookmarks as a Markdown note in the project, with timestamp links. */
+  const saveBookmarksAsNote = async () => {
+    if (!active || !videoKey || !onNewDraft || !window.lkv?.media?.bookmarksMarkdown) return
+    try {
+      const md = await window.lkv.media.bookmarksMarkdown({ videoKey })
+      if (!md) return
+      onNewDraft({
+        title: `Bookmarks — ${active.title}`.slice(0, 80),
+        body: md,
+        kind: 'note',
+        para: 'resources',
+        project: active.project,
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -1129,6 +1326,10 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
           </Box>
         )}
 
+        {/* #334: bookmark ticks under the player; added after the player
+            element so the <video>/<iframe> never remounts. */}
+        <BookmarkTimeline bookmarks={bookmarks} durationSec={durationSec} currentTime={currentTime} onSeek={seekTo} />
+
         {active?.mediaUrl && (
           <Typography variant="caption" color="text.secondary">
             Watch:{' '}
@@ -1154,6 +1355,23 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
             If the embedded player fails to load, use the “Watch” link above to open the video in your
             browser, or prefer local media for full seek sync.
           </Typography>
+        )}
+        {active && (
+          <BookmarksPanel
+            bookmarks={bookmarks}
+            busy={busy || sending}
+            editingId={editingBookmarkId}
+            onEdit={setEditingBookmarkId}
+            onAdd={() => void addBookmarkNow()}
+            onSeek={seekTo}
+            onUpdate={(id, patch) => void updateBookmark(id, patch)}
+            onDelete={(id) => void deleteBookmark(id)}
+            onAsk={(b) => void onSend({ bookmark: b })}
+            onSummarize={() => void onSend({ summarize: bookmarks })}
+            onMakeCards={() => void makeBookmarkCards()}
+            onSaveAsNote={onNewDraft ? () => void saveBookmarksAsNote() : undefined}
+            large={grow}
+          />
         )}
       </Paper>
     )

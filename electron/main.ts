@@ -83,6 +83,14 @@ import {
   youtubeEmbedUrl,
 } from './media-ingest'
 import {
+  addBookmark,
+  bookmarksMarkdown,
+  deleteBookmark,
+  listBookmarks,
+  makeBookmarkCards,
+  updateBookmark,
+} from './media-bookmarks'
+import {
   ensureMediaPersonaPrompts,
   applyMediaPersona,
   createCustomMediaPersona,
@@ -168,6 +176,9 @@ import type {
   MediaIngestLocalInput,
   MediaStateInput,
   MediaStateRow,
+  MediaBookmarkAddInput,
+  MediaBookmarkCardsInput,
+  MediaBookmarkUpdateInput,
   MediaIngestYoutubeInput,
   MediaNotesNearInput,
   MediaApplyPersonaInput,
@@ -982,6 +993,16 @@ function registerIpc(): void {
   ipcMain.handle('media:notesNear', (_e, input: MediaNotesNearInput) => {
     return notesNearPlayhead(input.project, input.centerSec, input.windowSec ?? 45)
   })
+
+  // #334: video bookmarks (per video, kept across sessions).
+  ipcMain.handle('media:listBookmarks', (_e, videoKey: string) => listBookmarks(videoKey))
+  ipcMain.handle('media:addBookmark', (_e, input: MediaBookmarkAddInput) => addBookmark(input))
+  ipcMain.handle('media:updateBookmark', (_e, input: MediaBookmarkUpdateInput) => updateBookmark(input))
+  ipcMain.handle('media:deleteBookmark', (_e, id: string) => deleteBookmark(id))
+  ipcMain.handle('media:bookmarkCards', (_e, input: MediaBookmarkCardsInput) => makeBookmarkCards(input))
+  ipcMain.handle('media:bookmarksMarkdown', (_e, input: { videoKey?: string; project?: string }) =>
+    bookmarksMarkdown(input),
+  )
 
   ipcMain.handle('media:youtubeEmbedUrl', (_e, url: string) => youtubeEmbedUrl(url))
 

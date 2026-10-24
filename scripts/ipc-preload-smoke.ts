@@ -316,6 +316,8 @@ async function main(): Promise<void> {
     'media:pickLocal', 'media:ingestLocal', 'media:ingestYoutube', 'media:listProjects',
     'media:findExistingProject', 'media:notesNear', 'media:youtubeEmbedUrl', 'media:ensurePersonas',
     'media:applyPersona', 'media:createPersona', 'media:listVoicePacks',
+    'media:listBookmarks', 'media:addBookmark', 'media:updateBookmark', 'media:deleteBookmark',
+    'media:bookmarkCards', 'media:bookmarksMarkdown',
     // bridge
     'bridge:status', 'bridge:getToken', 'bridge:rotateToken',
     // updates (#42)
@@ -653,6 +655,32 @@ async function main(): Promise<void> {
   assert(typeof (api.media as Record<string, unknown>).listProjects === 'function', 'media.listProjects is function')
   assert(typeof (api.media as Record<string, unknown>).findExistingProject === 'function', 'media.findExistingProject is function')
   assert(typeof (api.mcp as Record<string, unknown>).listServers === 'function', 'mcp.listServers is function')
+
+  // #334: video bookmarks round-trip through the preload surface to main.
+  {
+    const mediaApi = api.media as unknown as {
+      listBookmarks: (k: string) => Promise<Array<{ id: string; positionSec: number; label: string; tag: string | null; cardId: string | null }>>
+      addBookmark: (i: Record<string, unknown>) => Promise<{ id: string; positionSec: number }>
+      updateBookmark: (i: Record<string, unknown>) => Promise<{ label: string; tag: string | null } | null>
+      deleteBookmark: (id: string) => Promise<boolean>
+      bookmarkCards: (i: Record<string, unknown>) => Promise<{ created: number; existing: number }>
+      bookmarksMarkdown: (i: Record<string, unknown>) => Promise<string>
+    }
+    const key = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+    const added = await mediaApi.addBookmark({ videoKey: key, project: 'IPC Video', videoTitle: 'IPC Video', sourceType: 'youtube', positionSec: 6300 })
+    assert(added.positionSec === 6300, 'preload media.addBookmark reaches main (1:45:00)')
+    const listed = await mediaApi.listBookmarks(key)
+    assert(listed.length === 1 && listed[0].id === added.id, 'preload media.listBookmarks returns it')
+    const updated = await mediaApi.updateBookmark({ id: added.id, label: 'exam topic', tag: 'exam' })
+    assert(updated?.label === 'exam topic' && updated.tag === 'Exam', 'preload media.updateBookmark saves label + tag')
+    const md = await mediaApi.bookmarksMarkdown({ videoKey: key })
+    assert(md.includes('t=6300s') && md.includes('exam topic'), 'preload media.bookmarksMarkdown links the moment')
+    const cards = await mediaApi.bookmarkCards({ videoKey: key, project: 'IPC Video' })
+    const again = await mediaApi.bookmarkCards({ videoKey: key, project: 'IPC Video' })
+    assert(cards.created === 1 && again.created === 0 && again.existing === 1, 'preload media.bookmarkCards makes one card, then none')
+    assert(await mediaApi.deleteBookmark(added.id), 'preload media.deleteBookmark removes it')
+    assert((await mediaApi.listBookmarks(key)).length === 0, 'and the list is empty again')
+  }
 
   // Invoke the add-on preview/removed/bundled methods through the preload surface.
   const pluginsApi = api.plugins as Record<string, unknown>

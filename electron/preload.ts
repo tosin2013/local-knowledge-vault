@@ -25,6 +25,11 @@ import type {
   MediaProjectInfo,
   MediaStateInput,
   MediaStateRow,
+  MediaBookmark,
+  MediaBookmarkAddInput,
+  MediaBookmarkCardsInput,
+  MediaBookmarkCardsResult,
+  MediaBookmarkUpdateInput,
   MediaApplyPersonaInput,
   MediaApplyPersonaResult,
   MediaEnsurePersonasResult,
@@ -320,6 +325,21 @@ const api = {
     /** Throttled save (~5 s) of the open video's state (#329). */
     setMediaState: (input: MediaStateInput): Promise<MediaStateRow> =>
       ipcRenderer.invoke('media:setMediaState', input),
+    /** Video bookmarks (#334): sorted by time, kept per video across sessions. */
+    listBookmarks: (videoKey: string): Promise<MediaBookmark[]> =>
+      ipcRenderer.invoke('media:listBookmarks', videoKey),
+    addBookmark: (input: MediaBookmarkAddInput): Promise<MediaBookmark> =>
+      ipcRenderer.invoke('media:addBookmark', input),
+    updateBookmark: (input: MediaBookmarkUpdateInput): Promise<MediaBookmark | null> =>
+      ipcRenderer.invoke('media:updateBookmark', input),
+    deleteBookmark: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('media:deleteBookmark', id),
+    /** "Make cards from bookmarks": one Study card per bookmark, no duplicates. */
+    bookmarkCards: (input: MediaBookmarkCardsInput): Promise<MediaBookmarkCardsResult> =>
+      ipcRenderer.invoke('media:bookmarkCards', input),
+    /** Bookmarks as Markdown with timestamp links (by video, or a whole project). */
+    bookmarksMarkdown: (input: { videoKey?: string; project?: string }): Promise<string> =>
+      ipcRenderer.invoke('media:bookmarksMarkdown', input),
     findExistingProject: (input: MediaFindExistingInput): Promise<MediaExistingProject | null> =>
       ipcRenderer.invoke('media:findExistingProject', input),
     notesNear: (input: MediaNotesNearInput): Promise<Item[]> =>
