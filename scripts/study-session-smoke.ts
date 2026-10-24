@@ -331,6 +331,107 @@ async function main(): Promise<void> {
   assert(cardsMod.listCardsForItem(keep.id).length === 1, 're-opening is a no-op')
   db.closeDb()
 
+  // --- #296: the narrow/streamed queue returns exactly what the old one did ---
+  console.log('\nqueue rewrite (#296): same cards, same order as the old queue')
+  {
+    const { legacyDueQueue, asLegacyRow } = require('./fixtures/study-queue/legacy-due-queue') as typeof import('./fixtures/study-queue/legacy-due-queue')
+    db.initDb(path.join(tmp, 'queue.sqlite'))
+    const d = db.getDb()
+    const long = (n: number) =>
+      Array.from({ length: n }, (_, k) => `## Part ${k}\n\n**Term ${k}**: definition number ${k} explained in a sentence or two. ` + SECTION).join('\n\n')
+    const mk = (title: string, project: string | null, body = SECTION) =>
+      db.createItem({ title, body, kind: 'note', para: 'resources', project })
+    const glossary = (n: number) => Array.from({ length: 5 }, (_, k) => `- Term${n}x${k}: the meaning of term ${k} in list ${n}`).join('\n')
+    for (let n = 0; n < 12; n++) mk(`Alpha ${n}`, 'Alpha', n % 4 === 0 ? long(30) : n % 4 === 1 ? glossary(n) : SECTION)
+    for (let n = 0; n < 40; n++) mk(`Gamma ${n}`, 'Gamma')
+    for (let n = 0; n < 8; n++) mk(`Beta ${n}`, 'Beta', n === 3 ? long(30) : n === 5 ? glossary(100 + n) : SECTION)
+    const loose = [mk('Loose 1', null), mk('Loose 2', null, long(25))]
+    const trashed = mk('Trashed', 'Beta')
+    const archived = mk('Archived', 'Beta')
+    db.setProjectExamDate('Alpha', new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10))
+    for (const pr of ['Alpha', 'Beta', 'Gamma']) cardsMod.enrollProject(pr, { pairs: true })
+    for (const it of [...loose, trashed, archived]) cardsMod.createNoteCards(it.id)
+    db.trashItem(trashed.id)
+    d.prepare("UPDATE items SET status = 'archived' WHERE id = ?").run(archived.id)
+    const ids = (d.prepare('SELECT id FROM study_cards ORDER BY rowid').all() as { id: string }[]).map((x) => x.id)
+    const grades = ['again', 'hard', 'good', 'easy', 'again', 'good'] as const
+    ids.forEach((id, i) => {
+      if (i % 3 === 0) review.rateReview(id, grades[(i / 3) % grades.length], { targetDate: null })
+    })
+    // Spread due dates into the past (same due day for some, to exercise ties).
+    d.prepare("UPDATE card_schedule SET due_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || (rowid % 5) || ' days') WHERE last_grade IN ('good','easy') AND rowid % 2 = 0").run()
+    d.prepare("UPDATE study_cards SET priority = 1 WHERE rowid % 11 = 0").run()
+    d.prepare("UPDATE study_cards SET status = 'retired' WHERE rowid % 17 = 0").run()
+    // A card first reviewed yesterday and again today is not "new today"; a
+    // migrated row today does not count either.
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString()
+    const freshIds = (d.prepare('SELECT card_id FROM card_schedule WHERE reps = 0 AND last_reviewed_at IS NULL ORDER BY rowid LIMIT 3').all() as { card_id: string }[]).map((x) => x.card_id)
+    d.prepare("INSERT INTO review_log (id, card_id, grade, reviewed_at, migrated) VALUES ('rvl_y1', ?, 'good', ?, 0)").run(ids[0], yesterday)
+    d.prepare("INSERT INTO review_log (id, card_id, grade, reviewed_at, migrated) VALUES ('rvl_m1', ?, 'good', ?, 1)").run(freshIds[0], new Date().toISOString())
+    // Delta: only "first reviewed today" decides its allowance (25 a day,
+    // none introduced today: its one graded card was first seen yesterday).
+    for (let n = 0; n < 30; n++) mk(`Delta ${n}`, 'Delta')
+    cardsMod.enrollProject('Delta')
+    const deltaCard = (d.prepare("SELECT c.id FROM study_cards c JOIN items i ON i.id = c.item_id WHERE i.project = 'Delta' ORDER BY c.rowid LIMIT 1").get() as { id: string }).id
+    review.rateReview(deltaCard, 'again', { targetDate: null })
+    d.prepare("INSERT INTO review_log (id, card_id, grade, reviewed_at, migrated) VALUES ('rvl_y2', ?, 'hard', ?, 0)").run(deltaCard, yesterday)
+    const now = new Date()
+    const far = new Date(Date.now() + 400 * 86_400_000).toISOString()
+    const past = new Date(Date.now() - 2 * 86_400_000).toISOString()
+    let same = 0
+    let checks = 0
+    const mismatches: string[] = []
+    for (const before of [undefined, far, past]) {
+      for (const pr of [undefined, 'Alpha', 'Beta', 'Gamma', 'Delta', 'Nope']) {
+        const legacy = legacyDueQueue(d, before ?? new Date().toISOString(), pr, now)
+        for (const limit of [0, 1, 3, 7, 20, 50, 1000]) {
+          checks++
+          const got = review.listDueReviews(before, limit, pr).map(asLegacyRow)
+          const want = legacy.slice(0, limit)
+          if (JSON.stringify(got) === JSON.stringify(want)) same++
+          else mismatches.push(`${pr ?? 'all'}/${limit}/${before ? 'set' : 'now'}`)
+        }
+        checks++
+        if (review.countDueReviews(before, pr) === legacy.length) same++
+        else mismatches.push(`count ${pr ?? 'all'}/${before ? 'set' : 'now'}`)
+      }
+    }
+    assert(same === checks && checks > 0, `listDueReviews / countDueReviews match the old queue (${same}/${checks}${mismatches.length ? `; ${mismatches.slice(0, 4).join(', ')}` : ''})`)
+    const allNow = legacyDueQueue(d, new Date().toISOString(), undefined, now)
+    assert(allNow.some((q) => q.last_grade === 'again') && allNow.some((q) => q.reps === 0), 'the fixture mixes missed, reviewed and new cards')
+    assert(allNow.some((q) => q.chunk_count > 1) && allNow.some((q) => q.question), 'and chunk cards and pair cards')
+    const gammaNew = legacyDueQueue(d, far, 'Gamma', now).filter((q) => q.reps === 0).length
+    assert(gammaNew < 40, `the daily budget caps a big project's new cards (Gamma: ${gammaNew})`)
+    assert(review.getNewCardBudget('Delta', now).leftToday === review.NEW_CARDS_PER_DAY_MAX, 'a card first reviewed yesterday is not one of today\'s new cards')
+    assert(review.countDueReviews(undefined, 'Delta') === 1 + review.NEW_CARDS_PER_DAY_MAX, 'Delta queues its missed card plus a full day of new cards')
+    for (const pr of [undefined, 'Alpha', 'Gamma', 'Delta']) {
+      const st = review.getStudyStats(pr, now)
+      const p = pr ?? ''
+      const raw = d
+        .prepare(
+          `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN cs.reps = 0 AND cs.last_reviewed_at IS NULL THEN 1 ELSE 0 END), 0) AS fresh,
+                  COUNT(DISTINCT c.item_id) AS notes
+           FROM study_cards c JOIN card_schedule cs ON cs.card_id = c.id JOIN items i ON i.id = c.item_id
+           WHERE c.status = 'active' AND i.status NOT IN ('trashed', 'archived')${p ? ' AND i.project = @project' : ''}`,
+        )
+        .get({ project: p }) as { total: number; fresh: number; notes: number }
+      const legacyDue = legacyDueQueue(d, now.toISOString(), pr, now).length
+      assert(
+        st.due === legacyDue && st.totalCards === raw.total && st.newCards === raw.fresh && st.enrolledNotes === raw.notes,
+        `getStudyStats(${pr ?? 'all'}) totals and queue size unchanged (due ${st.due}, cards ${st.totalCards}, new ${st.newCards}, notes ${st.enrolledNotes})`,
+      )
+    }
+    const start296 = s.startStudySession({ limit: 20 })
+    assert(
+      JSON.stringify(start296.cards.map(asLegacyRow)) === JSON.stringify(allNow.slice(0, 20)),
+      'startStudySession serves the same 20 cards in the same order',
+    )
+    const sum296 = s.studySessionSummary('ses_none', 'Gamma', now)
+    const budget296 = review.getNewCardBudget('Gamma', now)
+    assert(sum296.dueByTomorrow >= 0 && budget296.perDay > 0, 'the session summary uses the new-card budget directly')
+    db.closeDb()
+  }
+
   fs.rmSync(tmp, { recursive: true, force: true })
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`)
   if (failed > 0) process.exit(1)

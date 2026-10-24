@@ -29,7 +29,7 @@ import { hashText } from './text-hash'
 import { VISUAL_RE } from './practice-test'
 import { projectMultipleChoice } from './db'
 import { lastWrongPick, listRepeatedPicks, mcMode, nextStreak, parseOptions, shuffleOptions, whyWrongLine } from './multiple-choice'
-import { getStudyStats, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
+import { getNewCardBudget, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
 import { calibrationSummary, clampConfidence, recordStudyAttempt } from './study'
 import type {
   SearchHit,
@@ -694,8 +694,10 @@ export function studySessionSummary(sessionId: string, project?: string, now: Da
        JOIN items i ON i.id = c.item_id WHERE ${live} AND cs.due_at <= @until${scope}`,
     )
     .get({ until: endOfTomorrow(now).toISOString(), project: p ?? '' }) as { reviewed: number; fresh: number }
-  const budget = getStudyStats(p || undefined, now)
-  const freshSoon = Math.min(Number(soon?.fresh ?? 0), budget.newLeftToday + budget.newPerDay)
+  // Only the new-card budget is needed here; the full Study home stats (queue
+  // size, repeated picks, session log) were recomputed for nothing (#296).
+  const budget = getNewCardBudget(p || undefined, now)
+  const freshSoon = Math.min(Number(soon?.fresh ?? 0), budget.leftToday + budget.perDay)
 
   const cards = firsts.length
   return {
