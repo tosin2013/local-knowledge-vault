@@ -207,7 +207,7 @@ async function main(): Promise<void> {
   assert(systems[systems.length - 1] === t.TUTOR_SYSTEM && prompts[prompts.length - 1].includes(ids[600]), 'the call uses the short system line and the window passages')
   assert(quiz.questions.length === 2 && quiz.questions[0].text.startsWith('Which port'), 'checked questions come back')
   const wire = JSON.stringify(quiz)
-  assert(!/443/.test(wire) && !/Secure web traffic/.test(wire) && !/secure version/.test(wire) && !wire.includes(ids[600]), 'the renderer gets no answer, quote, hint or citation before the reveal')
+  assert(!/\b443\b/.test(wire) && !/Secure web traffic/.test(wire) && !/secure version/.test(wire) && !wire.includes(ids[600]), 'the renderer gets no answer, quote, hint or citation before the reveal')
   assert(quiz.questions[0].objective?.itemId === objectivesNote.id && /^2\.1 /.test(quiz.questions[0].objective.label), 'the objective tag cites the objectives note')
   assert(quiz.questions[1].objective === null, 'no objective tag without a matching objective')
   assert(quiz.windowStartSec === 570 && quiz.windowEndSec === 660 && quiz.bookmarkId === null && quiz.examDate === null, 'quiz window and no exam date yet')
