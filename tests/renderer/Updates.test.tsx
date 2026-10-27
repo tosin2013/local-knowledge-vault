@@ -63,7 +63,7 @@ describe('UpdateSettings (#42)', () => {
   it('loads the setting and turns the launch check off', async () => {
     const lkv = lkvMock()
     render(<UpdateSettings />)
-    const toggle = await screen.findByRole('checkbox', { name: 'Check for updates when Vault starts' })
+    const toggle = await screen.findByRole('switch', { name: 'Check for updates when Vault starts' })
     await waitFor(() => expect(toggle).toBeChecked())
     fireEvent.click(toggle)
     await waitFor(() => expect(lkv.updates.setSettings).toHaveBeenCalledWith({ checkOnLaunch: false }))

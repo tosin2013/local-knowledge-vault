@@ -33,7 +33,13 @@ export function MoveNotesAction({ itemIds, onMoved }: MoveNotesActionProps) {
   }
 
   return (
-    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1 }}>
+    <Stack
+      direction="row"
+      spacing={0.75}
+      sx={{
+        alignItems: 'center',
+        mt: 1,
+      }}>
       <ProjectSelect
         value={target}
         onChange={setTarget}

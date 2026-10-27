@@ -50,7 +50,15 @@ export const ContentChrome = memo(function ContentChrome(props: ContentChromePro
 
   return (
     <>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ m: 1.5, alignSelf: 'flex-start', flexWrap: 'wrap' }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          m: 1.5,
+          alignSelf: 'flex-start',
+          flexWrap: 'wrap',
+        }}>
         <ToggleButtonGroup
           exclusive
           size="small"

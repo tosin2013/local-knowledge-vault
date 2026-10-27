@@ -179,7 +179,13 @@ export function CitationChips({
 }) {
   if (!citations.length) return null
   return (
-    <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 1 }}>
+    <Stack
+      direction="row"
+      sx={{
+        flexWrap: 'wrap',
+        gap: 0.75,
+        mt: 1,
+      }}>
       {citations.map((c, i) => (
         <Chip
           key={c.id}

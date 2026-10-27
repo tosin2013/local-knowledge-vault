@@ -50,14 +50,24 @@ export function pairSummary(r: Pick<StudyEnrollResult, 'pairCards' | 'pairNotes'
 function Stat({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.5, minWidth: 130, flex: '1 1 130px' }} aria-label={label}>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{
+        color: 'text.secondary',
+      }}>
         {label}
       </Typography>
-      <Typography variant="h6" component="p" fontWeight={600} sx={{ lineHeight: 1.3 }}>
+      <Typography
+        variant="h6"
+        component="p"
+        sx={{
+          fontWeight: 600,
+          lineHeight: 1.3,
+        }}>
         {value}
       </Typography>
       {detail && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           {detail}
         </Typography>
       )}
@@ -122,7 +132,14 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, p: 1.5 }} data-testid="study-home">
-      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={2}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <ProjectSelect
           value={project}
           onChange={onProjectChange}
@@ -140,7 +157,9 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
         </Alert>
       )}
       {!noProjects && !project && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: 'text.secondary',
+        }}>
           Pick the project for your course or exam to set its exam date and enroll its notes. The numbers below
           cover every project.
         </Typography>
@@ -152,7 +171,9 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
       )}
 
       {stats && (
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap data-testid="study-stats">
+        <Stack direction="row" spacing={1} useFlexGap data-testid="study-stats" sx={{
+          flexWrap: 'wrap',
+        }}>
           <Stat
             label="Exam"
             value={stats.examDate ? formatExamDate(stats.examDate) : 'No date'}
@@ -200,7 +221,14 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
         </Alert>
       )}
 
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <Button
           variant="contained"
           startIcon={<PlaylistAddCheckIcon />}
@@ -232,19 +260,25 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
         />
       </Stack>
       {!project && !noProjects && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           Study this project needs a project: it adds every note in it to review.
         </Typography>
       )}
       {stats && stats.totalCards > 0 && stats.due === 0 && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: 'text.secondary',
+        }}>
           Nothing due right now. Vault spaces your reviews; come back when cards are due.
         </Typography>
       )}
 
       {result && (
         <Alert severity={result.notes > 0 || result.pairCards > 0 ? 'success' : 'info'} onClose={() => setResult(null)}>
-          <Typography variant="body2" fontWeight={600}>
+          <Typography variant="body2" sx={{
+            fontWeight: 600,
+          }}>
             {enrollSummary(result)}
           </Typography>
           {result.pairCards > 0 && <Typography variant="body2">{pairSummary(result)}</Typography>}
@@ -276,7 +310,9 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
         </Alert>
       )}
 
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{
+        color: 'text.secondary',
+      }}>
         Each short note becomes one card; a long note or imported page becomes one card per section. A session
         asks one question per card, written from that section when the card first comes up, and you answer from
         memory before you see your note. A list of acronyms, ports or terms becomes two-way cards instead, one per

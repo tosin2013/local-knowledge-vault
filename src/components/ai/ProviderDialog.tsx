@@ -234,7 +234,9 @@ export function ProviderDialog({
             </FormControl>
           )}
           {!editing && (preset.notes || preset.keyUrl) && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>
               {preset.notes}{' '}
               {preset.keyUrl && (
                 <Link component="button" type="button" onClick={() => void window.lkv.app.openExternal(preset.keyUrl!)}>
@@ -287,14 +289,16 @@ export function ProviderDialog({
                       ? 'Stored only on this computer, encrypted with your system keychain. Never shown again.'
                       : 'Stored only on this computer (owner-only file). Never shown again.'
               }
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton size="small" aria-label={showKey ? 'Hide key' : 'Show key'} onClick={() => setShowKey((v) => !v)}>
-                      {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" aria-label={showKey ? 'Hide key' : 'Show key'} onClick={() => setShowKey((v) => !v)}>
+                        {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
           )}
@@ -303,7 +307,9 @@ export function ProviderDialog({
               {clearKey ? 'Keep saved key' : 'Remove saved key on save'}
             </Button>
           )}
-          <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={1} sx={{
+            alignItems: 'flex-start',
+          }}>
             <Autocomplete
               freeSolo
               fullWidth

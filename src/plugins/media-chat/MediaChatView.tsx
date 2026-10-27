@@ -1252,7 +1252,13 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   }, [])
 
   const renderPlayerControls = () => (
-    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        alignItems: 'center',
+        flexWrap: 'wrap',
+      }}>
       <Chip size="small" label={`Now: ${formatClock(currentTime)}`} />
       {nearCount != null && (
         <Chip size="small" variant="outlined" label={`${nearCount} notes near playhead`} />
@@ -1393,7 +1399,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
               px: 2,
             }}
           >
-            <Typography variant="body2" color="text.secondary" align="center">
+            <Typography variant="body2" align="center" sx={{
+              color: 'text.secondary',
+            }}>
               Pick a local file with an .srt/.vtt companion, or ingest YouTube captions.
             </Typography>
           </Box>
@@ -1404,7 +1412,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         <BookmarkTimeline bookmarks={bookmarks} durationSec={durationSec} currentTime={currentTime} onSeek={seekTo} />
 
         {active?.mediaUrl && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             Watch:{' '}
             <Link
               component="button"
@@ -1421,7 +1431,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
 
         {renderPlayerControls()}
         {active?.sourceType === 'youtube' && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             {ytReady
               ? 'Click a citation to seek; “Ask about this moment” uses the playhead.'
               : 'Loading the YouTube player… citation seek activates once it is ready.'}{' '}
@@ -1484,15 +1496,32 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
           height: fillHeight ? '100%' : undefined,
         }}
       >
-        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
           <Typography variant="subtitle2" sx={{ flex: 1 }}>
             Ask (grounded)
           </Typography>
           {active && <Chip size="small" label={active.project} color="primary" variant="outlined" />}
         </Stack>
         {active && voices.length > 0 && (
-          <Stack direction="row" flexWrap="wrap" gap={0.5} alignItems="center">
-            <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+          <Stack
+            direction="row"
+            sx={{
+              flexWrap: 'wrap',
+              gap: 0.5,
+              alignItems: 'center',
+            }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                mr: 0.5,
+              }}>
               Voice:
             </Typography>
             {voices.map((v) => (
@@ -1526,7 +1555,12 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
 
         <Box sx={{ flex: 1, overflow: 'auto', minHeight: fillHeight ? 160 : 120 }}>
           {messages.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                py: 2,
+              }}>
               {emptyHint}
             </Typography>
           ) : (
@@ -1599,7 +1633,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                   data-testid="answering-indicator"
                 >
                   <CircularProgress size={14} />
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: 'text.secondary',
+                  }}>
                     Answering from your notes…
                   </Typography>
                 </Box>
@@ -1608,7 +1644,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
           )}
         </Box>
 
-        <Stack direction="row" spacing={1} alignItems="flex-end">
+        <Stack direction="row" spacing={1} sx={{
+          alignItems: 'flex-end',
+        }}>
           <TextField
             size="small"
             fullWidth
@@ -1674,9 +1712,20 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
       }}
     >
       {!fullscreen && (
-        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
           <MovieIcon color="primary" fontSize="small" />
-          <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontWeight: 600,
+              flex: 1,
+            }}>
             Media chat
           </Typography>
           <IconButton
@@ -1722,7 +1771,13 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
               a one-line header, so the player, its controls and Ask fit one
               screen (a 1280×800 laptop). */}
           {active && (
-            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}>
               <TextField
                 select
                 size="small"
@@ -1798,9 +1853,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
               {!active && (
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}
-                >
+                  sx={{
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.6,
+                  }}>
                   Ingest
                 </Typography>
               )}
@@ -1812,7 +1869,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                 label="Project"
                 allLabel="Use file name"
               />
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{
+                alignItems: { sm: 'center' },
+              }}>
                 <Button variant="contained" size="small" disabled={busy} onClick={() => void onPickLocal()}>
                   Local video/audio + captions
                 </Button>
@@ -1838,8 +1897,15 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
               {ingestStage && (
                 <Stack spacing={0.75} data-testid="ingest-progress">
                   <LinearProgress />
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                  <Stack direction="row" spacing={1} sx={{
+                    alignItems: 'center',
+                  }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                        flex: 1,
+                      }}>
                       {ingestStage}
                     </Typography>
                     <Button
@@ -1852,7 +1918,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
                   </Stack>
                 </Stack>
               )}
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: 'text.secondary',
+              }}>
                 Captions become searchable transcript notes in your vault.
               </Typography>
               {!active && projects.length > 0 && (
@@ -1904,13 +1972,23 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         }
       >
         {fullscreen && (
-          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}>
             <MovieIcon color="primary" fontSize="small" />
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography id="media-chat-fullscreen-title" variant="subtitle1" fontWeight={600} noWrap>
+              <Typography id="media-chat-fullscreen-title" variant="subtitle1" noWrap sx={{
+                fontWeight: 600,
+              }}>
                 {active ? active.title : 'Media chat'}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: 'text.secondary',
+              }}>
                 Transcript notes stay in your vault · Esc to exit fullscreen
               </Typography>
             </Box>
@@ -1949,7 +2027,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
             but focus-stealing (Esc stopped exiting fullscreen). */}
         {fullscreen && fsNote && (
           <Paper variant="outlined" sx={{ p: 1.25, maxHeight: 220, overflow: 'auto', flexShrink: 0 }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{
+              alignItems: 'center',
+            }}>
               <Typography variant="subtitle2" noWrap sx={{ flex: 1, minWidth: 0 }}>
                 {fsNote.title}
               </Typography>

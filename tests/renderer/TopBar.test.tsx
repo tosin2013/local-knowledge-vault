@@ -73,7 +73,7 @@ describe('TopBar', () => {
   it('toggles advanced and theme', () => {
     const props = makeProps({ advanced: false })
     render(<TopBar {...props} />)
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('switch'))
     expect(props.onAdvanced).toHaveBeenCalledWith(true)
     fireEvent.click(screen.getByLabelText('Toggle color theme'))
     expect(props.onTheme).toHaveBeenCalled()

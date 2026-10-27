@@ -14,7 +14,9 @@ export function RepeatedPicks({ picks, onOpenNote }: RepeatedPicksProps) {
   if (!picks || picks.length === 0) return null
   return (
     <Alert severity="warning" icon={false} data-testid="repeated-picks">
-      <Typography variant="body2" fontWeight={600}>
+      <Typography variant="body2" sx={{
+        fontWeight: 600,
+      }}>
         Answers you keep picking ({picks.length})
       </Typography>
       <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>

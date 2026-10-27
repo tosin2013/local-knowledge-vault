@@ -12,7 +12,7 @@
 import { useState } from 'react'
 import { Alert, Box, Button, Chip, Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined'
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline'
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlined'
 import { CitationChips } from '../../components/answer/AnswerText'
 import type {
   StudySelfGrade,
@@ -141,7 +141,14 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
 
   return (
     <Paper variant="outlined" data-testid="tutor-panel" sx={{ p: 1.25, borderColor: 'primary.main', display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <SchoolOutlinedIcon fontSize="small" color="primary" />
         <Typography variant="subtitle2" sx={{ flex: 1 }}>
           Exam tutor · question {index + 1} of {quiz.questions.length}
@@ -158,11 +165,15 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
         </Button>
       </Stack>
       {quiz.notice && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           {quiz.notice}
         </Typography>
       )}
-      <Typography variant={large ? 'h6' : 'body1'} fontWeight={600} data-testid="tutor-question">
+      <Typography variant={large ? 'h6' : 'body1'} data-testid="tutor-question" sx={{
+        fontWeight: 600,
+      }}>
         {q.text}
       </Typography>
       {q.objective && (
@@ -190,7 +201,9 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
             placeholder="Answer from memory first"
             value={attempt}
             onChange={(e) => setAttempt(e.target.value)}
-            inputProps={{ 'aria-label': 'Your answer', maxLength: 1000 }}
+            slotProps={{
+              htmlInput: { 'aria-label': 'Your answer', maxLength: 1000 },
+            }}
           />
           {hints.length > 0 && (
             <Stack spacing={0.5} data-testid="tutor-hints">
@@ -208,7 +221,9 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
               ))}
             </Stack>
           )}
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap sx={{
+            flexWrap: 'wrap',
+          }}>
             <Button size="small" variant="contained" disabled={busy || !attempt.trim()} onClick={() => lock('typed')}>
               Submit answer
             </Button>
@@ -235,7 +250,14 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
       )}
 
       {phase === 'confidence' && (
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
           <Typography variant="body2">How sure are you?</Typography>
           <ToggleButtonGroup
             size="small"
@@ -263,9 +285,18 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
 
       {phase === 'revealed' && reveal && (
         <Box data-testid="tutor-reveal" sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}>
             <Chip size="small" color={GRADE_COLOR[reveal.grade]} label={GRADE_LABEL[reveal.grade]} data-testid="tutor-grade" />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>
               {confidence ? `${CONFIDENCE_LABEL[confidence]} confidence` : ''}
             </Typography>
             <Button size="small" startIcon={<PlayCircleOutlineIcon fontSize="small" />} onClick={() => onSeek(reveal.rewatchSec)}>
@@ -277,13 +308,22 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
             <strong>Answer:</strong> {reveal.answer}
           </Typography>
           {reveal.quote && (
-            <Typography variant="body2" color="text.secondary" sx={{ borderLeft: 3, borderColor: 'divider', pl: 1 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                borderLeft: 3,
+                borderColor: 'divider',
+                pl: 1,
+              }}>
               “{reveal.quote}”
             </Typography>
           )}
           {reveal.citations.length > 0 && <CitationChips citations={reveal.citations} onSelectCitation={onSelectCitation} />}
           {reveal.notice && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>
               {reveal.notice}
             </Typography>
           )}
@@ -295,17 +335,23 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
 
           {reveal.askWhy && (
             <Stack spacing={0.75} data-testid="tutor-why">
-              <Typography variant="body2" fontWeight={600}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600,
+              }}>
                 Why is that? One sentence.
               </Typography>
               {!whyResult ? (
-                <Stack direction="row" spacing={1} alignItems="flex-start">
+                <Stack direction="row" spacing={1} sx={{
+                  alignItems: 'flex-start',
+                }}>
                   <TextField
                     size="small"
                     fullWidth
                     value={why}
                     onChange={(e) => setWhy(e.target.value)}
-                    inputProps={{ 'aria-label': 'Why is that?', maxLength: 400 }}
+                    slotProps={{
+                      htmlInput: { 'aria-label': 'Why is that?', maxLength: 400 },
+                    }}
                   />
                   <Button size="small" variant="outlined" disabled={busy || !why.trim()} onClick={() => void checkWhy()}>
                     Check
@@ -313,7 +359,9 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
                 </Stack>
               ) : (
                 <Stack spacing={0.5}>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{
+                    alignItems: 'center',
+                  }}>
                     <Chip
                       size="small"
                       label={WHY_LABEL[whyResult.verdict]}
@@ -329,7 +377,15 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
           )}
 
           {reveal.offerPractice && (
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap data-testid="tutor-practice">
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              data-testid="tutor-practice"
+              sx={{
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}>
               <Typography variant="body2">Turn this into practice:</Typography>
               <Button size="small" variant="outlined" disabled={busy || !!practice} onClick={() => void doPractice(false)}>
                 Bookmark as Confused
@@ -338,7 +394,9 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
                 Make a Study card
               </Button>
               {practice && (
-                <Typography variant="caption" color="text.secondary" data-testid="tutor-practice-status">
+                <Typography variant="caption" data-testid="tutor-practice-status" sx={{
+                  color: 'text.secondary',
+                }}>
                   {practice.cardId
                     ? practice.cardCreated
                       ? `Study card made from a Confused bookmark at ${formatHms(practice.bookmark.positionSec)}.`
@@ -351,10 +409,18 @@ export function TutorPanel({ quiz, videoTitle, sourceType, large, onSeek, onSele
             </Stack>
           )}
 
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{
+            alignItems: 'center',
+          }}>
             {last ? (
               <>
-                <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} data-testid="tutor-score">
+                <Typography
+                  variant="body2"
+                  data-testid="tutor-score"
+                  sx={{
+                    color: 'text.secondary',
+                    flex: 1,
+                  }}>
                   Done: {score.filter((g) => g === 'got').length} got it · {score.filter((g) => g === 'partial').length} partly ·{' '}
                   {score.filter((g) => g === 'missed').length} missed
                 </Typography>

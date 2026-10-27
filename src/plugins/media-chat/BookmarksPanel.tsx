@@ -12,7 +12,7 @@ import {
   Typography,
 } from '@mui/material'
 import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd'
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined'
@@ -97,13 +97,20 @@ function BookmarkEditor({ bookmark, onSave, onCancel }: EditorProps) {
   const [custom, setCustom] = useState(builtIn ? '' : (bookmark.tag ?? ''))
   const save = () => onSave({ label: label.trim(), tag: tagChoice === CUSTOM ? custom.trim() || null : tagChoice || null })
   return (
-    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ width: '100%' }}>
+    <Stack
+      direction="row"
+      spacing={1}
+      useFlexGap
+      sx={{
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        width: '100%',
+      }}>
       <TextField
         size="small"
         label="Label"
         value={label}
         autoFocus
-        inputProps={{ maxLength: 120, 'aria-label': 'Bookmark label' }}
         onChange={(e) => setLabel(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -115,6 +122,9 @@ function BookmarkEditor({ bookmark, onSave, onCancel }: EditorProps) {
           }
         }}
         sx={{ flex: '1 1 160px' }}
+        slotProps={{
+          htmlInput: { maxLength: 120, 'aria-label': 'Bookmark label' },
+        }}
       />
       <TextField
         select
@@ -122,8 +132,10 @@ function BookmarkEditor({ bookmark, onSave, onCancel }: EditorProps) {
         label="Tag"
         value={tagChoice}
         onChange={(e) => setTagChoice(e.target.value)}
-        SelectProps={{ inputProps: { 'aria-label': 'Bookmark tag' } }}
         sx={{ minWidth: 120 }}
+        slotProps={{
+          select: { inputProps: { 'aria-label': 'Bookmark tag' } },
+        }}
       >
         <MenuItem value="">
           <em>None</em>
@@ -140,9 +152,11 @@ function BookmarkEditor({ bookmark, onSave, onCancel }: EditorProps) {
           size="small"
           label="Custom tag"
           value={custom}
-          inputProps={{ maxLength: 24, 'aria-label': 'Custom tag' }}
           onChange={(e) => setCustom(e.target.value)}
           sx={{ width: 140 }}
+          slotProps={{
+            htmlInput: { maxLength: 24, 'aria-label': 'Custom tag' },
+          }}
         />
       )}
       <Button size="small" variant="contained" onClick={save}>
@@ -188,7 +202,14 @@ export function BookmarksPanel(props: BookmarksPanelProps) {
 
   return (
     <Paper variant="outlined" sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }} data-testid="bookmarks-panel">
-      <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={0.5}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 120 }}>
           Bookmarks{list.length > 0 ? ` (${list.length})` : ''}
         </Typography>
@@ -216,7 +237,9 @@ export function BookmarksPanel(props: BookmarksPanelProps) {
         )}
       </Stack>
       {list.length === 0 ? (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           Press B (or the button) to bookmark this moment. Bookmarks stay with this video.
         </Typography>
       ) : (
@@ -238,7 +261,14 @@ export function BookmarksPanel(props: BookmarksPanelProps) {
                   }}
                 />
               ) : (
-                <Stack direction="row" alignItems="center" spacing={0.75} useFlexGap flexWrap="wrap">
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  useFlexGap
+                  sx={{
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}>
                   <Chip
                     size="small"
                     color="primary"
@@ -278,7 +308,14 @@ export function BookmarksPanel(props: BookmarksPanelProps) {
                 </Stack>
               )}
               {b.transcriptLine && (
-                <Typography variant="caption" color="text.secondary" sx={{ pl: 0.5 }} noWrap title={b.transcriptLine}>
+                <Typography
+                  variant="caption"
+                  noWrap
+                  title={b.transcriptLine}
+                  sx={{
+                    color: 'text.secondary',
+                    pl: 0.5,
+                  }}>
                   {b.transcriptLine}
                 </Typography>
               )}

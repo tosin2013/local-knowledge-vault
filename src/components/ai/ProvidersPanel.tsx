@@ -15,7 +15,7 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import type { LlmStatus, ProviderConfig } from '../../../electron/types'
 
@@ -84,23 +84,44 @@ export function ProvidersPanel({
     const canRemove = p.source === 'user' || (p.source === 'builtin' && p.id !== 'ollama' && p.id !== 'lmstudio')
     return (
       <Paper key={p.id} variant="outlined" sx={{ p: 1.25, borderRadius: 3 }} data-testid={`provider-row-${p.id}`}>
-        <Stack direction="row" alignItems="center" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{
+          alignItems: 'center',
+        }}>
           <Switch
             size="small"
             checked={p.enabled}
             onChange={(e) => void run(() => window.lkv.providers.setEnabled(p.id, e.target.checked))}
-            inputProps={{ 'aria-label': `Enable ${p.label}` }}
+            slotProps={{
+              input: { 'aria-label': `Enable ${p.label}` },
+            }}
           />
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-              <Typography variant="body2" fontWeight={600}>
+            <Stack
+              direction="row"
+              spacing={0.75}
+              useFlexGap
+              sx={{
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600,
+              }}>
                 {p.label}
               </Typography>
               <Chip size="small" variant="outlined" label={p.local ? 'Local' : 'Cloud'} color={p.local ? 'secondary' : 'default'} />
               {p.source === 'plugin' && <Chip size="small" variant="outlined" label="Plugin" />}
               {healthChip(p, activeId)}
             </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
               {p.baseUrl}
               {!p.local && (p.hasKey ? ` · key ${p.keySource === 'env' ? 'from env' : 'saved'}` : ' · no key')}
               {!p.local || !installed.length ? (p.model ? ` · ${p.model}` : p.local ? ' · auto-pick model' : '') : ''}
@@ -150,7 +171,14 @@ export function ProvidersPanel({
 
   return (
     <Stack spacing={1.25} sx={{ maxWidth: 760 }} data-testid="providers-panel">
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <FormControl size="small" sx={{ minWidth: 260 }}>
           <InputLabel id="provider-selection-label">Use</InputLabel>
           <Select
@@ -180,7 +208,13 @@ export function ProvidersPanel({
         <Button size="small" startIcon={<RefreshIcon />} onClick={onRefresh} disabled={checking}>
           {checking ? 'Checking…' : 'Re-check'}
         </Button>
-        <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 200 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            flex: 1,
+            minWidth: 200,
+          }}>
           {status.message}
         </Typography>
       </Stack>
@@ -200,15 +234,21 @@ export function ProvidersPanel({
           Fixed to one provider: Vault won’t fall back to a local model if it fails. Pick “Auto” for local-first.
         </Alert>
       )}
-      <Typography variant="overline" color="text.secondary">
+      <Typography variant="overline" sx={{
+        color: 'text.secondary',
+      }}>
         Local — nothing leaves this computer
       </Typography>
       {locals.map(row)}
-      <Typography variant="overline" color="text.secondary">
+      <Typography variant="overline" sx={{
+        color: 'text.secondary',
+      }}>
         Cloud — used only when enabled
       </Typography>
       {clouds.length ? clouds.map(row) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: 'text.secondary',
+        }}>
           No cloud providers. Add one if you don’t run a local model.
         </Typography>
       )}

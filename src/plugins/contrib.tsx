@@ -40,9 +40,17 @@ export function PluginPersonasSection({ onInstalled }: { onInstalled?: (name: st
   if (!personas.length) return null
   return (
     <Box>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          mb: 1,
+        }}>
         <ExtensionIcon fontSize="small" color="primary" />
-        <Typography variant="subtitle2" fontWeight={600}>
+        <Typography variant="subtitle2" sx={{
+          fontWeight: 600,
+        }}>
           From plugins
         </Typography>
       </Stack>
@@ -58,10 +66,20 @@ export function PluginPersonasSection({ onInstalled }: { onInstalled?: (name: st
             <Card key={key} variant="outlined">
               <CardContent sx={{ pb: 1 }}>
                 <Typography variant="subtitle2">{p.name}</Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    display: 'block',
+                  }}>
                   {p.pluginName}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                    mt: 0.5,
+                  }}>
                   {p.description ?? p.prompt.slice(0, 140)}
                 </Typography>
               </CardContent>
@@ -112,7 +130,13 @@ export function PluginMcpPresetsSection({
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            mb: 1,
+          }}>
           <ExtensionIcon fontSize="small" color="primary" />
           <Typography variant="subtitle2">Suggested by plugins</Typography>
         </Stack>
@@ -120,12 +144,21 @@ export function PluginMcpPresetsSection({
           {mcpServers.map((s) => {
             const added = have.has(norm(s.url))
             return (
-              <Stack key={`${s.pluginId}:${s.url}`} direction="row" spacing={1} alignItems="center">
+              <Stack key={`${s.pluginId}:${s.url}`} direction="row" spacing={1} sx={{
+                alignItems: 'center',
+              }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{
+                    fontWeight: 600,
+                  }}>
                     {s.name} <Chip size="small" variant="outlined" label={s.pluginName} sx={{ ml: 0.5 }} />
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                      display: 'block',
+                    }}>
                     {s.description ? `${s.description} · ` : ''}
                     {s.url}
                   </Typography>

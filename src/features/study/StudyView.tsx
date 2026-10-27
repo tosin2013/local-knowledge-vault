@@ -204,9 +204,20 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <SchoolIcon color="primary" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontWeight: 600,
+            flex: 1,
+          }}>
           Study
         </Typography>
         {onClose && (
@@ -216,7 +227,9 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
         )}
       </Stack>
 
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{
+        color: 'text.secondary',
+      }}>
         Answer from memory first, then reveal the grounded answer from your notes as feedback. Every
         Vault-specific learning effect is a hypothesis — the pilot in #218 measures it.
       </Typography>
@@ -224,10 +237,14 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
       {calibration && (
         <Card variant="outlined" data-testid="study-calibration">
           <CardContent sx={{ py: 1.5 }}>
-            <Typography variant="subtitle2" fontWeight={600}>
+            <Typography variant="subtitle2" sx={{
+              fontWeight: 600,
+            }}>
               {`${calibration.count} attempts · mean confidence ${pct(calibration.meanConfidence)} vs mean self-graded accuracy ${pct(calibration.meanScore)} · bias ${signedPts(calibration.bias)} · Brier ${pct(calibration.brier)}`}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>
               A bias above 0 means overconfidence (you felt more sure than you were); below 0 means
               underconfidence. Calibration is a hypothesis Vault may help — #218 measures it.
             </Typography>
@@ -251,7 +268,9 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
         onChange={(e) => setQuestion(e.target.value)}
         fullWidth
         size="small"
-        inputProps={{ 'aria-label': 'Question' }}
+        slotProps={{
+          htmlInput: { 'aria-label': 'Question' },
+        }}
       />
       <Box>
         <Button
@@ -275,7 +294,9 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
 
       {sampleQuestions.length > 0 && (
         <Stack spacing={0.5} data-testid="study-sample-questions">
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             Sample questions from this project — pick one to study:
           </Typography>
           {sampleQuestions.map((q) => (
@@ -306,7 +327,12 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
       {pending && !feedback && (
         <Card variant="outlined" data-testid="study-recall" sx={{ flexShrink: 0 }}>
           <CardContent>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 600,
+                mb: 1,
+              }}>
               {asked}
             </Typography>
             <TextField
@@ -319,10 +345,14 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
               maxRows={8}
               fullWidth
               disabled={dontKnow}
-              inputProps={{ 'aria-label': 'Your recall' }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Your recall' },
+              }}
             />
             <Box sx={{ mt: 2 }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: 'text.secondary',
+              }}>
                 {`How confident are you? ${confidence}%`}
               </Typography>
               <Slider
@@ -335,7 +365,14 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
                 aria-label="Confidence"
               />
             </Box>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1, flexWrap: 'wrap' }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                mt: 1,
+                flexWrap: 'wrap',
+              }}>
               <Button
                 size="small"
                 variant={dontKnow ? 'contained' : 'outlined'}
@@ -361,14 +398,26 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
         <Stack spacing={1.5}>
           <Card variant="outlined" sx={{ flexShrink: 0 }}>
             <CardContent>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  display: 'block',
+                  mb: 0.5,
+                }}>
                 Your recall
               </Typography>
               <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1.5 }}>
                 {dontKnow ? 'I don\u2019t know' : recall.trim() || '(empty)'}
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  display: 'block',
+                  mb: 0.5,
+                }}>
                 Answer from your notes (feedback)
               </Typography>
               <AnswerText text={pending.answer} citations={pending.citations} onSelectCitation={onOpenNote} />
@@ -383,7 +432,13 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
           </Card>
 
           <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+                mb: 0.5,
+              }}>
               How did you do?
             </Typography>
             <ToggleButtonGroup
@@ -407,7 +462,9 @@ export function StudyView({ onClose, onOpenNote, project: projectProp, onProject
             onChange={(e) => setSelfExplanation(e.target.value)}
             fullWidth
             size="small"
-            inputProps={{ 'aria-label': 'Explain it in your own words' }}
+            slotProps={{
+              htmlInput: { 'aria-label': 'Explain it in your own words' },
+            }}
           />
 
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>

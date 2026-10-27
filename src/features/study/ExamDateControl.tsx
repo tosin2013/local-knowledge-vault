@@ -43,9 +43,10 @@ export function ExamDateControl({ project, onChange }: ExamDateControlProps) {
 
   if (!project) {
     return (
-      <Typography variant="caption" color="text.secondary" data-testid="exam-date-none">
-        Pick a project to set its exam date. All projects use plain spacing with no exam date.
-      </Typography>
+      <Typography variant="caption" data-testid="exam-date-none" sx={{
+        color: 'text.secondary',
+      }}>Pick a project to set its exam date. All projects use plain spacing with no exam date.
+              </Typography>
     )
   }
 
@@ -68,19 +69,27 @@ export function ExamDateControl({ project, onChange }: ExamDateControlProps) {
 
   if (editing) {
     return (
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <TextField
           size="small"
           type="date"
           label="Exam date"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          inputProps={{ 'aria-label': 'Exam date' }}
           error={!!error}
           helperText={error ?? undefined}
           sx={{ width: 190 }}
-        />
+          slotProps={{
+            htmlInput: { 'aria-label': 'Exam date' },
+            inputLabel: { shrink: true },
+          }} />
         <Button size="small" variant="contained" disabled={busy || !draft} onClick={() => void save(draft)}>
           Save
         </Button>
@@ -98,7 +107,15 @@ export function ExamDateControl({ project, onChange }: ExamDateControlProps) {
 
   const days = daysToExam(examDate)
   return (
-    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap data-testid="exam-date">
+    <Stack
+      direction="row"
+      spacing={1}
+      useFlexGap
+      data-testid="exam-date"
+      sx={{
+        alignItems: 'center',
+        flexWrap: 'wrap',
+      }}>
       <EventIcon fontSize="small" color={examDate ? 'primary' : 'disabled'} />
       {examDate ? (
         <>
@@ -108,7 +125,9 @@ export function ExamDateControl({ project, onChange }: ExamDateControlProps) {
           <Chip size="small" color={days != null && days < 0 ? 'default' : 'primary'} variant="outlined" label={daysToGoLabel(days)} />
         </>
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: 'text.secondary',
+        }}>
           No exam date for {project}
         </Typography>
       )}

@@ -45,10 +45,20 @@ export function UpdateSettings() {
     <Box sx={{ mt: 2 }} data-testid="update-settings">
       <Divider sx={{ my: 1.5 }} />
       <Typography variant="subtitle2">Updates</Typography>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{
+        color: 'text.secondary',
+      }}>
         Vault only tells you when a new version exists; you download and install it yourself.
       </Typography>
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+      <Stack
+        direction="row"
+        spacing={1.5}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          mt: 0.5,
+        }}>
         <FormControlLabel
           control={<Switch size="small" checked={checkOnLaunch} onChange={(e) => void toggle(e.target.checked)} />}
           label={<Typography variant="body2">Check for updates when Vault starts</Typography>}
@@ -57,7 +67,12 @@ export function UpdateSettings() {
           {checking ? 'Checking…' : 'Check now'}
         </Button>
       </Stack>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          display: 'block',
+        }}>
         The check is one request to GitHub for the latest release. It sends nothing about you or your notes.
       </Typography>
       {result && (

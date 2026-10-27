@@ -303,16 +303,26 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
             sx={{ mb: 0.5 }}
           />
         ) : (
-          <Typography variant="body2" fontWeight={600}>
+          <Typography variant="body2" sx={{
+            fontWeight: 600,
+          }}>
             {item.question}
           </Typography>
         )}
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: 'text.secondary',
+        }}>
           {item.answer ? `Your answer: ${answerText(item)}` : 'No answer recorded.'}
           {item.correctAnswer && !item.correct ? ` · Correct: ${resolveOption(item.correctAnswer, item.options)}` : ''}
         </Typography>
         {item.explanation && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              mt: 0.25,
+            }}>
             {item.explanation}
           </Typography>
         )}
@@ -322,9 +332,20 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5, overflow: 'auto' }}>
-      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <QuizIcon color="primary" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontWeight: 600,
+            flex: 1,
+          }}>
           Import practice test
         </Typography>
         {onClose && (
@@ -334,13 +355,22 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
         )}
       </Stack>
 
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{
+        color: 'text.secondary',
+      }}>
         Paste your results or open a file. Each question you missed becomes a Study card with the test&apos;s own
         answer and explanation, first in your next session. Vault links it to your note that covers it, or drafts a
         short corrective note for you to confirm in your own words. Past exam papers belong here, not in your notes.
       </Typography>
 
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1.5}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <ProjectSelect value={project} onChange={setProject} label="Project" />
         <TextField
           size="small"
@@ -359,11 +389,15 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
           label="Date taken"
           value={testDate}
           onChange={(e) => setTestDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+          slotProps={{
+            inputLabel: { shrink: true },
+          }}
         />
       </Stack>
 
-      <Stack direction="row" spacing={1} alignItems="flex-start">
+      <Stack direction="row" spacing={1} sx={{
+        alignItems: 'flex-start',
+      }}>
         <TextField
           label="Paste practice-test results"
           placeholder={FORMAT_HINT}
@@ -376,31 +410,51 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
           minRows={6}
           maxRows={14}
           fullWidth
-          inputProps={{ 'aria-label': 'Paste practice-test results' }}
+          slotProps={{
+            htmlInput: { 'aria-label': 'Paste practice-test results' },
+          }}
         />
       </Stack>
       {(hasFileApi || fileNote) && (
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
           {hasFileApi && (
             <Button size="small" variant="outlined" startIcon={<FileOpenIcon />} onClick={() => void openFile()}>
               Open file…
             </Button>
           )}
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             {fileNote ?? 'PDF (text layer), TXT or CSV. Scanned pages need OCR first.'}
           </Typography>
         </Stack>
       )}
 
-      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
-        <Typography variant="subtitle2" fontWeight={600}>
+      <Stack
+        direction="row"
+        spacing={1.5}
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
+        <Typography variant="subtitle2" sx={{
+          fontWeight: 600,
+        }}>
           {parsing
             ? 'Parsing…'
             : `${summary.total} items · ${summary.correct} correct · ${summary.wrong} wrong`}
           {!parsing && needText.length > 0 ? ` · ${needText.length} need question text` : ''}
         </Typography>
         {!hasAnalyzeApi && (
-          <Typography variant="caption" color="warning.main">
+          <Typography variant="caption" sx={{
+            color: 'warning.main',
+          }}>
             Practice-test import is unavailable — restart Vault after updating.
           </Typography>
         )}
@@ -442,7 +496,14 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
       {items.length > 0 && (
         <Card variant="outlined" sx={{ flexShrink: 0 }}>
           <CardContent sx={{ pb: 1 }}>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              sx={{
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}>
               <Button
                 variant="contained"
                 startIcon={<SchoolIcon />}
@@ -456,13 +517,17 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
                 label="Also add the ones I got right"
               />
             </Stack>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>
               Missed questions start as Missed and come first. The ones you got right are added as low-priority cards
               only if you tick the box.
             </Typography>
             {imported && (
               <Alert severity={imported.added > 0 || imported.alreadyAdded > 0 ? 'success' : 'info'} sx={{ mt: 1 }} data-testid="import-result">
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" sx={{
+                  fontWeight: 600,
+                }}>
                   {importSummary(imported)}.
                 </Typography>
                 {linkSummary(imported) && <Typography variant="body2">{linkSummary(imported)}.</Typography>}
@@ -483,12 +548,16 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flexShrink: 0 }}>
         <Divider textAlign="left">
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             Missed ({wrongItems.length})
           </Typography>
         </Divider>
         {wrongItems.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: 'text.secondary',
+          }}>
             No incorrect items yet.
           </Typography>
         ) : (
@@ -503,7 +572,12 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
               >
                 {analyzing ? 'Drafting…' : 'Suggest fixes'}
               </Button>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  ml: 1,
+                }}>
                 Optional: drafts a grounded corrective note from your own notes for each missed question.
               </Typography>
             </Box>
@@ -511,12 +585,16 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
         )}
 
         <Divider textAlign="left">
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             Got right ({correctItems.length})
           </Typography>
         </Divider>
         {correctItems.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: 'text.secondary',
+          }}>
             No correct items yet.
           </Typography>
         ) : (
@@ -538,21 +616,40 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
         {suggestions.length > 0 && (
           <>
             <Divider textAlign="left">
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: 'text.secondary',
+              }}>
                 Suggested corrective notes
               </Typography>
             </Divider>
             {suggestions.map((suggestion, index) => (
               <Card key={`suggestion-${index}-${suggestion.question}`} variant="outlined">
                 <CardContent>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                    <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: 'center',
+                      mb: 1,
+                    }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        fontWeight: 600,
+                        flex: 1,
+                      }}>
                       {suggestion.title}
                     </Typography>
                     {savedSuggestions[index] && <Chip size="small" color="success" label="Saved" />}
                   </Stack>
                   {suggestion.yourAnswer && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                        display: 'block',
+                        mb: 0.5,
+                      }}>
                       Your answer: {suggestion.yourAnswer}
                     </Typography>
                   )}
@@ -560,7 +657,13 @@ export function TestToNotesView({ onClose, project: projectProp, onProjectChange
                     {suggestion.body}
                   </Typography>
                   {suggestion.citations.length > 0 && (
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 1 }}>
+                    <Stack
+                      direction="row"
+                      spacing={0.5}
+                      sx={{
+                        flexWrap: 'wrap',
+                        mt: 1,
+                      }}>
                       {suggestion.citations.map((c) => (
                         <Chip key={c.id} size="small" variant="outlined" label={c.title} />
                       ))}

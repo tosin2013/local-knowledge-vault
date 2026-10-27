@@ -25,7 +25,7 @@ import SendIcon from '@mui/icons-material/Send'
 import AddIcon from '@mui/icons-material/Add'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import type {
   ChatMessage,
@@ -147,7 +147,13 @@ const MessageBubble = memo(function MessageBubble({
         opacity: isSystem ? 0.85 : 1,
       }}
     >
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, textTransform: 'capitalize' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          mb: 0.25,
+          textTransform: 'capitalize',
+        }}>
         {m.role}
       </Typography>
       <Paper
@@ -174,7 +180,13 @@ const MessageBubble = memo(function MessageBubble({
           </Typography>
         )}
         {cites.length > 0 && (
-          <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 1 }}>
+          <Stack
+            direction="row"
+            sx={{
+              flexWrap: 'wrap',
+              gap: 0.75,
+              mt: 1,
+            }}>
             {cites.map((c, i) => (
               <Chip
                 key={c.id}
@@ -283,7 +295,13 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
                 }}
               >
                 AI providers
-                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                <Typography
+                  component="span"
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    ml: 1,
+                  }}>
                   · {llmStatus.message}
                 </Typography>
               </summary>
@@ -327,11 +345,21 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
                 <Typography variant="h6" color="primary" gutterBottom>
                   {askEmpty.title}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: 'text.secondary',
+                }}>
                   {askEmpty.body}
                 </Typography>
                 {quickAsks.length > 0 && (
-                  <Stack direction="row" flexWrap="wrap" gap={0.75} justifyContent="center" sx={{ mt: 2 }} data-testid="quick-asks">
+                  <Stack
+                    direction="row"
+                    data-testid="quick-asks"
+                    sx={{
+                      flexWrap: 'wrap',
+                      gap: 0.75,
+                      justifyContent: 'center',
+                      mt: 2,
+                    }}>
                     {quickAsks.map(({ q, pack }) => (
                       <Chip
                         key={`${pack}:${q}`}
@@ -358,7 +386,13 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
           ))}
           {sending && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, textTransform: 'capitalize' }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  mb: 0.25,
+                  textTransform: 'capitalize',
+                }}>
                 assistant
               </Typography>
               <Paper
@@ -376,7 +410,9 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
                 data-testid="answering-indicator"
               >
                 <CircularProgress size={14} />
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: 'text.secondary',
+                }}>
                   Answering from your notes…
                 </Typography>
               </Paper>
@@ -403,7 +439,13 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
           }}
         >
           <Stack spacing={1.25}>
-            <Stack direction="row" spacing={1} alignItems="flex-end" flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'flex-end',
+                flexWrap: 'wrap',
+              }}>
               <FormControl size="small" sx={{ flex: 1, minWidth: 192, maxWidth: 320 }}>
                 <InputLabel id="chat-profile-label">Profile</InputLabel>
                 <Select
@@ -464,14 +506,26 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
                 Customize
               </Button>
               {advanced && (
-                <Typography variant="caption" color="text.secondary" sx={{ pb: 1, whiteSpace: 'nowrap' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    pb: 1,
+                    whiteSpace: 'nowrap',
+                  }}>
                   {filterSummary}
                 </Typography>
               )}
             </Stack>
 
             {profileRenameOpen && selectedUserProfile && (
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }}>
                 <TextField
                   size="small"
                   sx={{ flex: 1, minWidth: 160 }}
@@ -503,7 +557,9 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
             )}
 
             {(stayingInGorgias || scopeCoupleHint) && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: 'text.secondary',
+              }}>
                 {stayingInGorgias ? 'Staying in Gorgias notes' : scopeCoupleHint}
               </Typography>
             )}
@@ -512,11 +568,19 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
                 <Stack spacing={1.25}>
                   {scopeCoupleHint && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: 'text.secondary',
+                    }}>
                       {scopeCoupleHint}
                     </Typography>
                   )}
-                  <Stack direction="row" spacing={1.5} alignItems="flex-end" flexWrap="wrap">
+                  <Stack
+                    direction="row"
+                    spacing={1.5}
+                    sx={{
+                      alignItems: 'flex-end',
+                      flexWrap: 'wrap',
+                    }}>
                     <FormControl size="small" sx={{ flex: 1, minWidth: 160 }}>
                       <InputLabel id="personality-label">Personality</InputLabel>
                       <Select
@@ -560,7 +624,13 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
                       Save as profile…
                     </Button>
                   ) : (
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}>
                       <TextField
                         size="small"
                         sx={{ flex: 1, minWidth: 160 }}
@@ -594,7 +664,9 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
               </Paper>
             </Collapse>
 
-            <Stack direction="row" spacing={1} alignItems="flex-end">
+            <Stack direction="row" spacing={1} sx={{
+              alignItems: 'flex-end',
+            }}>
               <TextField
                 fullWidth
                 multiline
@@ -676,13 +748,21 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
               Export citation pack
             </Button>
           )}
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             Answers from your notes
           </Typography>
         </Stack>
         <Box className="session-list" sx={{ p: 1 }}>
           {sessions.length === 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', p: 1.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                textAlign: 'center',
+                p: 1.5,
+              }}>
               No chats yet.
             </Typography>
           )}
@@ -702,7 +782,9 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
               >
                 <ListItemText
                   primary={s.title}
-                  primaryTypographyProps={{ variant: 'body2', fontWeight: 600, noWrap: true }}
+                  slotProps={{
+                    primary: { variant: 'body2', noWrap: true, sx: { fontWeight: 600 } },
+                  }}
                 />
                 <IconButton
                   size="small"

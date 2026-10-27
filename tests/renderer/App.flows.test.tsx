@@ -213,7 +213,7 @@ describe('App flows — Simple/Advanced', () => {
     expect(screen.queryByText('Personalities')).not.toBeInTheDocument()
     expect(screen.getByText('Add from URL')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /Advanced/ }))
+    fireEvent.click(screen.getByRole('switch', { name: /Advanced/ }))
 
     await waitFor(() => expect(screen.getByText('Personalities')).toBeInTheDocument())
     expect(screen.getByText('Add from URL')).toBeInTheDocument()
@@ -222,7 +222,7 @@ describe('App flows — Simple/Advanced', () => {
   it('toggling back to Simple hides advanced UI', async () => {
     seed()
     await renderApp()
-    const toggle = screen.getByRole('checkbox', { name: /Advanced/ })
+    const toggle = screen.getByRole('switch', { name: /Advanced/ })
 
     fireEvent.click(toggle)
     await waitFor(() => expect(screen.getByText('Personalities')).toBeInTheDocument())

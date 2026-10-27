@@ -33,12 +33,23 @@ export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote,
       data-testid="study-tab"
       sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}
     >
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, pt: 0.5 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          px: 2,
+          pt: 0.5,
+        }}>
         <SchoolIcon color="primary" fontSize="small" />
-        <Typography variant="h6" component="h2" fontWeight={600}>
+        <Typography variant="h6" component="h2" sx={{
+          fontWeight: 600,
+        }}>
           Study
         </Typography>
-        <Typography variant="body2" color="text.secondary" noWrap>
+        <Typography variant="body2" noWrap sx={{
+          color: 'text.secondary',
+        }}>
           Exam prep from your own notes
         </Typography>
       </Stack>
