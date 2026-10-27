@@ -29,6 +29,17 @@ import type {
   MediaBookmarkAddInput,
   MediaBookmarkCardsInput,
   MediaBookmarkCardsResult,
+  TutorHint,
+  TutorHintInput,
+  TutorMiss,
+  TutorPracticeInput,
+  TutorPracticeResult,
+  TutorQuiz,
+  TutorQuizInput,
+  TutorReveal,
+  TutorRevealInput,
+  TutorWhyInput,
+  TutorWhyResult,
   MediaBookmarkUpdateInput,
   MediaApplyPersonaInput,
   MediaApplyPersonaResult,
@@ -340,6 +351,14 @@ const api = {
     /** Bookmarks as Markdown with timestamp links (by video, or a whole project). */
     bookmarksMarkdown: (input: { videoKey?: string; project?: string }): Promise<string> =>
       ipcRenderer.invoke('media:bookmarksMarkdown', input),
+    // #364: Exam tutor.
+    tutorQuiz: (input: TutorQuizInput): Promise<TutorQuiz> => ipcRenderer.invoke('media:tutorQuiz', input),
+    tutorHint: (input: TutorHintInput): Promise<TutorHint> => ipcRenderer.invoke('media:tutorHint', input),
+    tutorReveal: (input: TutorRevealInput): Promise<TutorReveal> => ipcRenderer.invoke('media:tutorReveal', input),
+    tutorWhy: (input: TutorWhyInput): Promise<TutorWhyResult> => ipcRenderer.invoke('media:tutorWhy', input),
+    tutorPractice: (input: TutorPracticeInput): Promise<TutorPracticeResult> =>
+      ipcRenderer.invoke('media:tutorPractice', input),
+    tutorMisses: (videoKey: string): Promise<TutorMiss[]> => ipcRenderer.invoke('media:tutorMisses', videoKey),
     findExistingProject: (input: MediaFindExistingInput): Promise<MediaExistingProject | null> =>
       ipcRenderer.invoke('media:findExistingProject', input),
     notesNear: (input: MediaNotesNearInput): Promise<Item[]> =>

@@ -35,8 +35,11 @@ import type {
   MediaBookmark,
   MediaIngestResult,
   MediaProjectInfo,
+  TutorPracticeResult,
+  TutorQuiz,
 } from '../../../electron/types'
 import { BookmarkTimeline, BookmarksPanel } from './BookmarksPanel'
+import { TutorPanel, isQuizRequest } from './TutorPanel'
 import {
   bookmarkQuestion,
   describeBookmark,
@@ -262,6 +265,9 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const [editingBookmarkId, setEditingBookmarkId] = useState<string | null>(null)
   /** Media length, for the bookmark ticks on the timeline (#334). */
   const [durationSec, setDurationSec] = useState<number | null>(null)
+  // #364: the Exam tutor quiz in progress (questions only — answers stay in main).
+  const [tutorQuiz, setTutorQuiz] = useState<TutorQuiz | null>(null)
+  const [quizLoading, setQuizLoading] = useState(false)
 
   const refreshProjects = useCallback(async () => {
     if (!window.lkv?.media?.listProjects) return
@@ -418,6 +424,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   // #334: bookmarks belong to the video, so they come back with it.
   useEffect(() => {
     setEditingBookmarkId(null)
+    setTutorQuiz(null) // #364: a quiz belongs to the video it was asked on
     if (!videoKey || !window.lkv?.media?.listBookmarks) {
       setBookmarks([])
       return
@@ -982,11 +989,50 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     }
   }
 
+  /* ---- Exam tutor (#364) ---- */
+
+  /** Quiz me on the transcript around the playhead, or around a bookmark. */
+  const startQuiz = async (bookmark?: MediaBookmark) => {
+    if (!active || !videoKey || !window.lkv?.media?.tutorQuiz || quizLoading) return
+    const sec = bookmark ? bookmark.positionSec : readPlayerTime()
+    if (!bookmark) setCurrentTime(sec)
+    setQuizLoading(true)
+    setError(null)
+    try {
+      const quiz = await window.lkv.media.tutorQuiz({
+        videoKey,
+        project: active.project,
+        centerSec: sec,
+        windowSec: playheadWindowSec,
+        bookmarkId: bookmark?.id,
+        count: 2,
+      })
+      setTutorQuiz(quiz)
+      setStatus(
+        `Exam tutor: ${quiz.questions.length} question${quiz.questions.length === 1 ? '' : 's'} on ${formatHms(quiz.windowStartSec)}–${formatHms(quiz.windowEndSec)}. Answer from memory first.`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setQuizLoading(false)
+    }
+  }
+
+  const onTutorPractice = (r: TutorPracticeResult) => {
+    setBookmarks((prev) => sortBookmarks([...prev.filter((x) => x.id !== r.bookmark.id), r.bookmark]))
+  }
+
   const onSend = async (opts?: { aboutMoment?: boolean; bookmark?: MediaBookmark; summarize?: MediaBookmark[] }) => {
     if (!window.lkv || !active || sending) return
     const bookmark = opts?.bookmark
     const summarize = opts?.summarize?.length ? opts.summarize : undefined
     if (!bookmark && !summarize && !chatInput.trim()) return
+    // #364: "quiz me" starts the Exam tutor quiz at the playhead instead of a chat turn.
+    if (!bookmark && !summarize && isQuizRequest(chatInput)) {
+      setChatInput('')
+      void startQuiz()
+      return
+    }
     const typed = chatInput
     // Read the player at click time so a paused scrub is not sent as the old
     // position (#330); sync the chip while we're at it.
@@ -1176,9 +1222,11 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
   const emptyHint = useMemo(
     () =>
       active
-        ? 'Ask about this media — answers cite transcript notes (itm_). Click a citation to seek.'
+        ? activeVoice === 'Exam tutor'
+          ? 'Exam tutor quizzes you instead of answering: press “Quiz me on this part” (or type “quiz me”), answer from memory, then see the cited answer.'
+          : 'Ask about this media — answers cite transcript notes (itm_). Click a citation to seek.'
         : 'Ingest a local file + captions, or a YouTube URL, then chat grounded in the transcript.',
-    [active]
+    [active, activeVoice]
   )
 
   const exitFullscreen = useCallback(() => {
@@ -1232,6 +1280,14 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
         onClick={() => void onSend({ aboutMoment: true })}
       >
         Ask about this moment
+      </Button>
+      <Button
+        size="small"
+        variant={activeVoice === 'Exam tutor' ? 'contained' : 'outlined'}
+        disabled={!active || busy || quizLoading}
+        onClick={() => void startQuiz()}
+      >
+        {quizLoading ? 'Writing questions…' : 'Quiz me on this part'}
       </Button>
       <Button size="small" variant="text" disabled={!active || busy || sending} onClick={onNewChat}>
         New chat
@@ -1367,6 +1423,7 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
             onUpdate={(id, patch) => void updateBookmark(id, patch)}
             onDelete={(id) => void deleteBookmark(id)}
             onAsk={(b) => void onSend({ bookmark: b })}
+            onQuiz={(b) => void startQuiz(b)}
             onSummarize={() => void onSend({ summarize: bookmarks })}
             onMakeCards={() => void makeBookmarkCards()}
             onSaveAsNote={onNewDraft ? () => void saveBookmarksAsNote() : undefined}
@@ -1417,6 +1474,20 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
               />
             ))}
           </Stack>
+        )}
+
+        {tutorQuiz && (
+          <TutorPanel
+            key={tutorQuiz.quizId}
+            quiz={tutorQuiz}
+            videoTitle={active?.title}
+            sourceType={active?.sourceType}
+            large={fillHeight}
+            onSeek={seekTo}
+            onSelectCitation={(id) => void onCitationClick(id)}
+            onPractice={onTutorPractice}
+            onClose={() => setTutorQuiz(null)}
+          />
         )}
 
         <Box sx={{ flex: 1, overflow: 'auto', minHeight: fillHeight ? 160 : 120 }}>

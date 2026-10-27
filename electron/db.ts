@@ -79,7 +79,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 14
+export const SCHEMA_VERSION = 15
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -127,7 +127,61 @@ function migrate(database: Database.Database): void {
   if (version < 14) {
     migrateV14(database)
   }
+  if (version < 15) {
+    migrateV15(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v15 (#364): Exam tutor questions in Media chat. Additive only: one new table.
+ *
+ * Each row is one tutor question for a transcript window (or a bookmark). The
+ * answer key, hint, key term and supporting quote stay here in the main
+ * process until the learner has attempted the question (or said "I don't
+ * know") and picked a confidence; only then is the answer revealed. The
+ * attempt, confidence (low / medium / high), grade (missed / partial / got —
+ * Study's vocabulary), why-sentence check and any Confused bookmark made from
+ * a miss are kept for later study-log export (#218 / #230) and the study guide's
+ * "Review these" section (#365).
+ */
+function migrateV15(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS media_tutor_questions (
+      id TEXT PRIMARY KEY,
+      quiz_id TEXT NOT NULL,
+      video_key TEXT NOT NULL,
+      project TEXT NOT NULL DEFAULT '',
+      center_sec REAL NOT NULL,
+      window_sec REAL NOT NULL,
+      bookmark_id TEXT,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      hint TEXT NOT NULL DEFAULT '',
+      key_term TEXT NOT NULL DEFAULT '',
+      quote TEXT NOT NULL DEFAULT '',
+      rewatch_sec REAL NOT NULL,
+      source_ids TEXT NOT NULL DEFAULT '[]',
+      objective TEXT,
+      objective_item_id TEXT,
+      kind TEXT NOT NULL DEFAULT 'generated',
+      model TEXT,
+      hints_used INTEGER NOT NULL DEFAULT 0,
+      attempt TEXT,
+      dont_know INTEGER NOT NULL DEFAULT 0,
+      just_shown INTEGER NOT NULL DEFAULT 0,
+      confidence TEXT,
+      grade TEXT,
+      feedback TEXT,
+      why TEXT,
+      why_verdict TEXT,
+      practice_bookmark_id TEXT,
+      created_at TEXT NOT NULL,
+      revealed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_tutor_video ON media_tutor_questions(video_key, created_at);
+    CREATE INDEX IF NOT EXISTS idx_media_tutor_project ON media_tutor_questions(project);
+  `)
 }
 
 /**
@@ -1002,6 +1056,7 @@ export function renameProject(from: string, to: string): ProjectResult {
       .run(next, nowIso(), prev)
     database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(next, prev)
     database.prepare('UPDATE media_bookmarks SET project = ? WHERE project = ?').run(next, prev)
+    database.prepare('UPDATE media_tutor_questions SET project = ? WHERE project = ?').run(next, prev)
     moveProjectSettings(database, prev, next)
     return { count: items.changes }
   })()
@@ -1020,6 +1075,7 @@ export function mergeProject(from: string, into: string): ProjectResult {
       .run(dst, nowIso(), src)
     database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(dst, src)
     database.prepare('UPDATE media_bookmarks SET project = ? WHERE project = ?').run(dst, src)
+    database.prepare('UPDATE media_tutor_questions SET project = ? WHERE project = ?').run(dst, src)
     moveProjectSettings(database, src, dst)
     return { count: items.changes }
   })()
@@ -1035,6 +1091,7 @@ export function deleteProject(name: string): ProjectResult {
     database.prepare('DELETE FROM chat_profiles WHERE project = ?').run(n)
     database.prepare('DELETE FROM project_settings WHERE name = ?').run(n)
     database.prepare('DELETE FROM media_bookmarks WHERE project = ?').run(n)
+    database.prepare('DELETE FROM media_tutor_questions WHERE project = ?').run(n)
     return { count: items.changes }
   })()
 }

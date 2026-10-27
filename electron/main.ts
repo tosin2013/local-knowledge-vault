@@ -90,6 +90,8 @@ import {
   makeBookmarkCards,
   updateBookmark,
 } from './media-bookmarks'
+import { listTutorMisses, tutorHint, tutorPractice, tutorQuiz, tutorReveal, tutorWhy } from './media-tutor'
+import type { TutorHintInput, TutorPracticeInput, TutorQuizInput, TutorRevealInput, TutorWhyInput } from './types'
 import {
   ensureMediaPersonaPrompts,
   applyMediaPersona,
@@ -1003,6 +1005,14 @@ function registerIpc(): void {
   ipcMain.handle('media:bookmarksMarkdown', (_e, input: { videoKey?: string; project?: string }) =>
     bookmarksMarkdown(input),
   )
+
+  // #364: Exam tutor — quiz before telling. Answers stay in main until an attempt.
+  ipcMain.handle('media:tutorQuiz', (_e, input: TutorQuizInput) => tutorQuiz(input))
+  ipcMain.handle('media:tutorHint', (_e, input: TutorHintInput) => tutorHint(input))
+  ipcMain.handle('media:tutorReveal', (_e, input: TutorRevealInput) => tutorReveal(input))
+  ipcMain.handle('media:tutorWhy', (_e, input: TutorWhyInput) => tutorWhy(input))
+  ipcMain.handle('media:tutorPractice', (_e, input: TutorPracticeInput) => tutorPractice(input))
+  ipcMain.handle('media:tutorMisses', (_e, videoKey: string) => listTutorMisses(String(videoKey ?? '')))
 
   ipcMain.handle('media:youtubeEmbedUrl', (_e, url: string) => youtubeEmbedUrl(url))
 

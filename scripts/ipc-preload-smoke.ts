@@ -318,6 +318,7 @@ async function main(): Promise<void> {
     'media:applyPersona', 'media:createPersona', 'media:listVoicePacks',
     'media:listBookmarks', 'media:addBookmark', 'media:updateBookmark', 'media:deleteBookmark',
     'media:bookmarkCards', 'media:bookmarksMarkdown',
+    'media:tutorQuiz', 'media:tutorHint', 'media:tutorReveal', 'media:tutorWhy', 'media:tutorPractice', 'media:tutorMisses',
     // bridge
     'bridge:status', 'bridge:getToken', 'bridge:rotateToken',
     // updates (#42)
@@ -680,6 +681,25 @@ async function main(): Promise<void> {
     assert(cards.created === 1 && again.created === 0 && again.existing === 1, 'preload media.bookmarkCards makes one card, then none')
     assert(await mediaApi.deleteBookmark(added.id), 'preload media.deleteBookmark removes it')
     assert((await mediaApi.listBookmarks(key)).length === 0, 'and the list is empty again')
+  }
+
+  // #364: Exam tutor round-trips (no transcript here, so the honest refusals come back).
+  {
+    const tutorApi = api.media as unknown as {
+      tutorQuiz: (i: Record<string, unknown>) => Promise<unknown>
+      tutorHint: (i: Record<string, unknown>) => Promise<unknown>
+      tutorReveal: (i: Record<string, unknown>) => Promise<unknown>
+      tutorWhy: (i: Record<string, unknown>) => Promise<unknown>
+      tutorPractice: (i: Record<string, unknown>) => Promise<unknown>
+      tutorMisses: (k: string) => Promise<unknown[]>
+    }
+    const refused = async (p: Promise<unknown>, re: RegExp) => p.then(() => false, (e: unknown) => re.test(String(e instanceof Error ? e.message : e)))
+    assert(await refused(tutorApi.tutorQuiz({ videoKey: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', project: 'IPC Video', centerSec: 30 }), /nothing around/), 'preload media.tutorQuiz reaches main (no transcript → refusal)')
+    assert(await refused(tutorApi.tutorHint({ questionId: 'tq_none', level: 1 }), /no longer exists/), 'preload media.tutorHint reaches main')
+    assert(await refused(tutorApi.tutorReveal({ questionId: 'tq_none', attempt: 'x', confidence: 'low' }), /no longer exists/), 'preload media.tutorReveal reaches main')
+    assert(await refused(tutorApi.tutorWhy({ questionId: 'tq_none', why: 'x' }), /no longer exists/), 'preload media.tutorWhy reaches main')
+    assert(await refused(tutorApi.tutorPractice({ questionId: 'tq_none' }), /no longer exists/), 'preload media.tutorPractice reaches main')
+    assert(Array.isArray(await tutorApi.tutorMisses('https://www.youtube.com/watch?v=dQw4w9WgXcQ')), 'preload media.tutorMisses returns a list')
   }
 
   // Invoke the add-on preview/removed/bundled methods through the preload surface.

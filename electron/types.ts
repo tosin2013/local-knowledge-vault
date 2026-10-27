@@ -741,6 +741,138 @@ export interface MediaBookmarkCardsResult {
   cards: Array<{ bookmarkId: string; cardId: string; itemId: string; created: boolean }>
 }
 
+/* ---- Exam tutor (#364) ---- */
+
+/** How sure the learner was before the reveal — Study's Low / Medium / High scale. */
+export type TutorConfidence = 'low' | 'medium' | 'high'
+
+export interface TutorQuizInput {
+  videoKey: string
+  project: string
+  /** Playhead (or bookmark position) the quiz is about. */
+  centerSec: number
+  /** Half-width of the transcript window (default 45 s). */
+  windowSec?: number
+  /** Quiz a bookmark's moment instead of the playhead. */
+  bookmarkId?: string
+  /** 1–3 questions (default 2). */
+  count?: number
+}
+
+/** An exam-objective tag, only ever from a cited objectives note in the project. */
+export interface TutorObjectiveTag {
+  label: string
+  itemId: string
+  title: string
+}
+
+/** One tutor question as the renderer sees it: no answer, hint or citation until the reveal. */
+export interface TutorQuestion {
+  id: string
+  quizId: string
+  text: string
+  index: number
+  total: number
+  kind: 'generated' | 'cloze'
+  objective: TutorObjectiveTag | null
+}
+
+export interface TutorQuiz {
+  quizId: string
+  questions: TutorQuestion[]
+  centerSec: number
+  windowSec: number
+  windowStartSec: number
+  windowEndSec: number
+  bookmarkId: string | null
+  /** Why the questions were made without a model (offline, rate limited, unusable reply). */
+  notice?: string
+  examDate: string | null
+}
+
+export interface TutorHintInput {
+  questionId: string
+  /** 1 = nudge, 2 = key term, 3 = where to rewatch. */
+  level: number
+}
+
+export interface TutorHint {
+  level: 1 | 2 | 3
+  text: string
+  /** Level 3 points at the moment to rewatch. */
+  seekSec: number | null
+  /** No more hints after this one — only "Just show me". */
+  last: boolean
+}
+
+export interface TutorRevealInput {
+  questionId: string
+  attempt?: string
+  /** "I don't know" — counts as an attempt. */
+  dontKnow?: boolean
+  /** "Just show me" — the explicit skip; graded Missed. */
+  justShowMe?: boolean
+  confidence: TutorConfidence
+}
+
+export interface TutorReveal {
+  questionId: string
+  grade: StudySelfGrade
+  answer: string
+  /** What the learner missed or got wrong (or a short "well done"). */
+  feedback: string
+  quote: string
+  citations: Citation[]
+  rewatchSec: number
+  /** A correct or partly correct answer is followed by "Why is that? One sentence." */
+  askWhy: boolean
+  /** Missed, or confident but not right: offer a Confused bookmark / Study card. */
+  offerPractice: boolean
+  /** Exam-date reminder for the project, when one is set. */
+  examNote: string | null
+  notice?: string
+}
+
+export interface TutorWhyInput {
+  questionId: string
+  why: string
+}
+
+export interface TutorWhyResult {
+  verdict: 'supported' | 'partly' | 'unsupported'
+  note: string
+  citations: Citation[]
+}
+
+export interface TutorPracticeInput {
+  questionId: string
+  /** For the Confused bookmark, like "Bookmark (B)". */
+  videoTitle?: string
+  sourceType?: 'local' | 'youtube'
+  /** Also make a Study card from the Confused bookmark (no duplicates). */
+  makeCard?: boolean
+}
+
+export interface TutorPracticeResult {
+  bookmark: MediaBookmark
+  bookmarkCreated: boolean
+  cardId: string | null
+  cardCreated: boolean
+}
+
+/** A tutor miss or confident-but-wrong answer, for review lists (#365). */
+export interface TutorMiss {
+  questionId: string
+  videoKey: string
+  project: string
+  question: string
+  rewatchSec: number
+  grade: StudySelfGrade
+  confidence: TutorConfidence | null
+  confidentWrong: boolean
+  createdAt: string
+}
+
 /** The video moment a Study card was made from (#334), so the reveal can reopen it. */
 export interface StudyMediaMoment {
   bookmarkId: string
