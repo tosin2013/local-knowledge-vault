@@ -319,6 +319,9 @@ async function main(): Promise<void> {
     'media:listBookmarks', 'media:addBookmark', 'media:updateBookmark', 'media:deleteBookmark',
     'media:bookmarkCards', 'media:bookmarksMarkdown',
     'media:tutorQuiz', 'media:tutorHint', 'media:tutorReveal', 'media:tutorWhy', 'media:tutorPractice', 'media:tutorMisses',
+    'media:guideList', 'media:guideGet', 'media:guideStart', 'media:guideSettings', 'media:guideCheckSummary',
+    'media:guideSaveCheckpoint', 'media:guideDraft', 'media:guideConfirm', 'media:guideAdd', 'media:guideDeleteEntry',
+    'media:guideRelated', 'media:guideConnect', 'media:guideCards',
     // bridge
     'bridge:status', 'bridge:getToken', 'bridge:rotateToken',
     // updates (#42)
@@ -700,6 +703,44 @@ async function main(): Promise<void> {
     assert(await refused(tutorApi.tutorWhy({ questionId: 'tq_none', why: 'x' }), /no longer exists/), 'preload media.tutorWhy reaches main')
     assert(await refused(tutorApi.tutorPractice({ questionId: 'tq_none' }), /no longer exists/), 'preload media.tutorPractice reaches main')
     assert(Array.isArray(await tutorApi.tutorMisses('https://www.youtube.com/watch?v=dQw4w9WgXcQ')), 'preload media.tutorMisses returns a list')
+  }
+
+  // #365: Study guide round-trips (no transcript here, so checks say so honestly).
+  {
+    type Guide = { id: string; itemId: string | null; checkpointMin: number; entries: Array<{ id: string; section: string }> }
+    const guideApi = api.media as unknown as {
+      guideList: (k: string) => Promise<Guide[]>
+      guideGet: (id: string) => Promise<Guide>
+      guideStart: (i: Record<string, unknown>) => Promise<Guide>
+      guideSettings: (i: Record<string, unknown>) => Promise<Guide>
+      guideCheckSummary: (i: Record<string, unknown>) => Promise<{ notice?: string }>
+      guideSaveCheckpoint: (i: Record<string, unknown>) => Promise<Guide>
+      guideDraft: (i: Record<string, unknown>) => Promise<Guide>
+      guideConfirm: (i: Record<string, unknown>) => Promise<Guide>
+      guideAdd: (i: Record<string, unknown>) => Promise<Guide>
+      guideDeleteEntry: (id: string) => Promise<Guide>
+      guideRelated: (id: string, q?: string) => Promise<unknown[]>
+      guideConnect: (i: Record<string, unknown>) => Promise<Guide>
+      guideCards: (id: string) => Promise<unknown>
+    }
+    const refused = async (p: Promise<unknown>, re: RegExp) => p.then(() => false, (e: unknown) => re.test(String(e instanceof Error ? e.message : e)))
+    const key = 'https://www.youtube.com/watch?v=guide000001'
+    const started = await guideApi.guideStart({ videoKey: key, project: 'IPC Video', videoTitle: 'IPC guide', mode: 'study' })
+    assert(!!started.id && !!started.itemId, 'preload media.guideStart creates the guide and its note')
+    assert((await guideApi.guideList(key)).length === 1 && (await guideApi.guideGet(started.id)).id === started.id, 'preload media.guideList / guideGet')
+    assert((await guideApi.guideSettings({ guideId: started.id, checkpointMin: 7 })).checkpointMin === 7, 'preload media.guideSettings')
+    assert(/no transcript/.test((await guideApi.guideCheckSummary({ guideId: started.id, startSec: 0, endSec: 60, text: 'mine' })).notice ?? ''), 'preload media.guideCheckSummary reaches main')
+    const saved = await guideApi.guideSaveCheckpoint({ guideId: started.id, startSec: 0, endSec: 60, text: 'My own summary.' })
+    assert(saved.entries.some((e) => e.section === 'summary'), 'preload media.guideSaveCheckpoint saves the summary')
+    assert(await refused(guideApi.guideDraft({ guideId: started.id, startSec: 0, endSec: 60 }), /no transcript/), 'preload media.guideDraft reaches main')
+    assert(await refused(guideApi.guideConfirm({ entryId: 'gen_none', text: 'x' }), /no longer exists/), 'preload media.guideConfirm reaches main')
+    const added = await guideApi.guideAdd({ guideId: started.id, section: 'take', text: 'My take.' })
+    const take = added.entries.find((e) => e.section === 'take')!
+    assert(!!take, 'preload media.guideAdd saves an entry')
+    assert(!(await guideApi.guideDeleteEntry(take.id)).entries.some((e) => e.section === 'take'), 'preload media.guideDeleteEntry')
+    assert(Array.isArray(await guideApi.guideRelated(started.id, 'summary')), 'preload media.guideRelated returns a list')
+    assert(await refused(guideApi.guideConnect({ guideId: started.id, itemId: 'itm_none' }), /no longer exists/), 'preload media.guideConnect reaches main')
+    assert(await refused(guideApi.guideCards(started.id), /key term or keep a gap/), 'preload media.guideCards reaches main')
   }
 
   // Invoke the add-on preview/removed/bundled methods through the preload surface.

@@ -40,6 +40,7 @@ import type {
 } from '../../../electron/types'
 import { BookmarkTimeline, BookmarksPanel } from './BookmarksPanel'
 import { TutorPanel, isQuizRequest } from './TutorPanel'
+import { GuidePanel } from './GuidePanel'
 import {
   bookmarkQuestion,
   describeBookmark,
@@ -108,6 +109,8 @@ interface YTPlayer {
   destroy(): void
   /** The iframe the player is bound to — lets us detect a detached player (#327). */
   getIframe?(): HTMLIFrameElement
+  /** Pauses playback — a study-guide checkpoint pauses gently (#365). */
+  pauseVideo?(): void
 }
 
 declare global {
@@ -886,6 +889,20 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
     setStatus(`Seek target ${formatClock(sec)} — play the video first, or use local media for click-to-seek.`)
   }
 
+  /** #365: a checkpoint pauses gently — local media or the YouTube player. */
+  const pausePlayer = () => {
+    const el = videoRef.current
+    if (el) {
+      el.pause?.()
+      return
+    }
+    try {
+      ytPlayerRef.current?.pauseVideo?.()
+    } catch {
+      /* player gone */
+    }
+  }
+
   /** #329: start a fresh conversation; the previous session stays in Ask's history. */
   const onNewChat = () => {
     setMessages([])
@@ -1428,6 +1445,23 @@ export function MediaChatView({ onOpenNote, onNewDraft, onClose }: VaultPluginRe
             onMakeCards={() => void makeBookmarkCards()}
             onSaveAsNote={onNewDraft ? () => void saveBookmarksAsNote() : undefined}
             large={grow}
+          />
+        )}
+        {/* #365: notes while watching — in the player column so fullscreen keeps it. */}
+        {active && videoKey && (
+          <GuidePanel
+            videoKey={videoKey}
+            project={active.project}
+            videoTitle={active.title}
+            sourceType={active.sourceType}
+            currentTime={currentTime}
+            durationSec={durationSec}
+            large={grow}
+            readTime={readPlayerTime}
+            onSeek={seekTo}
+            onPause={pausePlayer}
+            onSelectCitation={(id) => void onCitationClick(id)}
+            onOpenNote={fullscreen ? undefined : onOpenNote}
           />
         )}
       </Paper>

@@ -79,7 +79,7 @@ export function closeDb(): void {
  * Future schema changes append `migrateV2`, `migrateV3`, … and bump
  * `SCHEMA_VERSION` rather than editing v1 in place.
  */
-export const SCHEMA_VERSION = 15
+export const SCHEMA_VERSION = 16
 
 function migrate(database: Database.Database): void {
   const version = Number(database.pragma('user_version', { simple: true }))
@@ -130,7 +130,74 @@ function migrate(database: Database.Database): void {
   if (version < 15) {
     migrateV15(database)
   }
+  if (version < 16) {
+    migrateV16(database)
+  }
   database.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v16 (#365): study guides and research notes built while watching. Additive
+ * only: three new tables.
+ *
+ * - `media_chapters`: a video's chapters (from yt-dlp metadata at ingest), so
+ *   guide checkpoints can fall on chapter boundaries.
+ * - `media_guides`: one guide per video and mode ('study' | 'research'), linked
+ *   to the project note it writes ("Study guide: <title>"), with the
+ *   per-video checkpoint settings (every N minutes, off, snoozed until) and the
+ *   last checkpoint reached.
+ * - `media_guide_entries`: the guide's content, one row per piece the learner
+ *   adds (a checkpoint summary, a key term, a claim, a quote …) or Vault
+ *   drafts on request (`ai_draft` = 1 until rewritten or confirmed). Gaps from
+ *   a summary check are kept as prompts with their timestamp; `bookmark_id` is
+ *   the bookmark-card link that "Make cards from guide" uses, so it never makes
+ *   a second card for the same entry.
+ */
+function migrateV16(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS media_chapters (
+      video_key TEXT NOT NULL,
+      start_sec REAL NOT NULL,
+      end_sec REAL NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY (video_key, start_sec)
+    );
+    CREATE TABLE IF NOT EXISTS media_guides (
+      id TEXT PRIMARY KEY,
+      video_key TEXT NOT NULL,
+      mode TEXT NOT NULL CHECK(mode IN ('study','research')),
+      project TEXT NOT NULL DEFAULT '',
+      video_title TEXT NOT NULL DEFAULT '',
+      source_type TEXT NOT NULL DEFAULT 'local',
+      item_id TEXT REFERENCES items(id) ON DELETE SET NULL,
+      checkpoint_min INTEGER NOT NULL DEFAULT 10,
+      checkpoints_off INTEGER NOT NULL DEFAULT 0,
+      snoozed_until_sec REAL,
+      last_checkpoint_sec REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (video_key, mode)
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_guides_project ON media_guides(project);
+    CREATE TABLE IF NOT EXISTS media_guide_entries (
+      id TEXT PRIMARY KEY,
+      guide_id TEXT NOT NULL REFERENCES media_guides(id) ON DELETE CASCADE,
+      section TEXT NOT NULL,
+      start_sec REAL,
+      end_sec REAL,
+      term TEXT,
+      text TEXT NOT NULL DEFAULT '',
+      ai_draft INTEGER NOT NULL DEFAULT 0,
+      draft_text TEXT,
+      confirmed_at TEXT,
+      check_json TEXT,
+      item_ref TEXT,
+      bookmark_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_guide_entries_guide ON media_guide_entries(guide_id, section, start_sec);
+  `)
 }
 
 /**
@@ -1057,6 +1124,7 @@ export function renameProject(from: string, to: string): ProjectResult {
     database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(next, prev)
     database.prepare('UPDATE media_bookmarks SET project = ? WHERE project = ?').run(next, prev)
     database.prepare('UPDATE media_tutor_questions SET project = ? WHERE project = ?').run(next, prev)
+    database.prepare('UPDATE media_guides SET project = ? WHERE project = ?').run(next, prev)
     moveProjectSettings(database, prev, next)
     return { count: items.changes }
   })()
@@ -1076,6 +1144,7 @@ export function mergeProject(from: string, into: string): ProjectResult {
     database.prepare('UPDATE chat_profiles SET project = ? WHERE project = ?').run(dst, src)
     database.prepare('UPDATE media_bookmarks SET project = ? WHERE project = ?').run(dst, src)
     database.prepare('UPDATE media_tutor_questions SET project = ? WHERE project = ?').run(dst, src)
+    database.prepare('UPDATE media_guides SET project = ? WHERE project = ?').run(dst, src)
     moveProjectSettings(database, src, dst)
     return { count: items.changes }
   })()
@@ -1092,6 +1161,7 @@ export function deleteProject(name: string): ProjectResult {
     database.prepare('DELETE FROM project_settings WHERE name = ?').run(n)
     database.prepare('DELETE FROM media_bookmarks WHERE project = ?').run(n)
     database.prepare('DELETE FROM media_tutor_questions WHERE project = ?').run(n)
+    database.prepare('DELETE FROM media_guides WHERE project = ?').run(n)
     return { count: items.changes }
   })()
 }
