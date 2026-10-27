@@ -67,7 +67,55 @@ doesn't need a model. Asking about it does.
   ready-made ones (**Desk cohost**, **Curious student**, **Skeptical investor**) or your own under
   **Plugins → Media voices**. A voice changes style only, never the citation rules.
 
-## 5. Tips and limits
+## 5. Study a video
+
+These tools follow Study's rule: you answer or write first, then Vault checks what you wrote against
+the transcript and cites it.
+
+**Bookmarks**
+
+1. Press **B**, or click **Bookmark (B)**, to mark the moment. This also works in fullscreen. Add a
+   label and a tag (**Review**, **Confused**, **Exam** or your own). Each bookmark shows as a tick
+   on the timeline.
+2. From the **Bookmarks** panel, jump back to a moment, ask about it, **Summarize my bookmarks**, or
+   **Save as note**.
+3. **Make cards from bookmarks** turns them into Study cards. Confused bookmarks come first. When a
+   card is revealed in Study, **Open video at …** reopens the video at that moment. Making cards
+   twice never makes duplicates.
+
+<img src="../media/vault-media-study-card-video.png" alt="Study session card made from a bookmark: the revealed answer quotes the transcript at 1:44:30, with Source: Bookmark 1:45:00, Open note and Open video at 1:45:00 links, and Missed, Partly, Got it grading" width="720">
+
+**Exam tutor**
+
+1. Pick the **Exam tutor** voice and click **Quiz me on this part**. You can also type "quiz me", or
+   use the cap icon on a bookmark.
+2. Answer from memory, or click **I don't know**. **Hint** helps in up to three steps without giving
+   the answer away.
+3. Rate your confidence (**Low**, **Medium** or **High**) and reveal the answer. The tutor grades it
+   Missed, Partly or Got it, cites the transcript, and offers **Rewatch** at the right time.
+4. If you got it right, it asks **Why is that?** in one sentence. If you missed it, you can bookmark
+   it as Confused or make a Study card. If the project has a note titled "objectives", questions are
+   tagged with the matching objective, but only when that note is cited.
+
+**Study guide and research notes**
+
+1. Under **Notes while watching**, click **Start study guide** or **Start research notes**. Vault
+   creates a note in the project.
+2. At each chapter boundary (or every 10 minutes, which you can change, turn off or snooze), Vault
+   pauses and asks **In your own words…**. Press **G** to open a checkpoint any time.
+3. **Check my summary** shows what you covered, questions to rewatch for (never the answers), and
+   claims this part of the transcript doesn't support, each with a timestamp. Tick what goes into
+   your guide and click **Save to guide**.
+4. Add **key terms** with your own definitions, and Vault checks each one against the transcript. In
+   research notes, add claims, evidence, quotes, your take and open questions. A quote must match
+   the transcript exactly, or Vault offers to save it as a claim. **Find related notes in my vault**
+   links to notes you already have.
+5. **Draft it for me** is there if you want it. The draft is marked AI draft until you rewrite it or
+   add a line in your own words.
+6. **Review these** lists your bookmarks and Exam tutor misses. **Make Study cards from key terms &
+   gaps** adds cards and suggests a first review date based on your exam date.
+
+## 6. Tips and limits
 
 - **Captions are required.** Vault doesn't transcribe audio itself. YouTube videos need English
   captions (uploaded or auto-generated). For local files, bring an `.srt` or `.vtt`.
@@ -79,6 +127,8 @@ doesn't need a model. Asking about it does.
 - **What goes online:** only YouTube links contact YouTube (through `yt-dlp` and the embedded
   player). Local files stay on your computer.
 - Player and chat can go fullscreen together with the fullscreen button.
+- Chapters for checkpoints come from YouTube's chapter list when you bring a YouTube video in.
+  Local files and videos without chapters use the every-N-minutes setting.
 
 ## Next steps
 
