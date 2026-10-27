@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write  # labels are issue-scoped; without it `major-update` is never created
 
 jobs:
   auto-merge:

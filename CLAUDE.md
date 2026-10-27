@@ -11,6 +11,9 @@ docs in `docs/development.md`, providers in `docs/providers.md`, plugin format i
 
 ## Commands
 
+On the Ubuntu dev box Node comes only from nvm, so a non-login shell needs
+`export PATH=$HOME/.config/nvm/versions/node/v26.9.0/bin:$PATH` first.
+
 ```bash
 npm install            # postinstall rebuilds better-sqlite3 for Electron's ABI
 npm run dev            # Electron + Vite HMR (renderer on :5173)
@@ -19,10 +22,13 @@ npm run build          # typecheck + vite build → dist/ and dist-electron/
 npm run dist:mac       # installers via electron-builder (also dist:win, dist:linux); package on the target OS
 ```
 
-There is no test framework. Tests are standalone headless smoke scripts in `scripts/` with a local `assert`
-helper that exit non-zero on failure. Run one with its npm script:
+Two kinds of tests. Main-process tests are standalone headless smoke scripts in `scripts/` with a local
+`assert` helper that exit non-zero on failure; `npm run test:ci` chains them all. Renderer tests are Vitest +
+jsdom in `tests/renderer/*.test.tsx` (`vitest.config.ts`). CI (`.github/workflows/ci.yml`) runs typecheck,
+build, `coverage` and `coverage:main`.
 
 ```bash
+npm run test:renderer       # Vitest renderer suite (coverage:renderer adds v8 coverage)
 npm run test:mvp            # DB, FTS search, citation validation, prompts/chat, ollama health when Ollama is down
 npm run test:providers      # provider registry, adapters vs mock servers, settings migration, plugin loader (offline)
 npm run test:media          # SRT/VTT caption parsing and chunking
@@ -50,8 +56,9 @@ at a throwaway profile.
 - Adding an IPC call means touching three places: the handler in `main.ts`, the method in `preload.ts`, and any
   types in `types.ts`. The renderer test mock (`tests/renderer/lkv.ts`) is typed from `LkvApi`, so `npm run typecheck`
   fails until the mock has the new method too.
-- `src/` is the React 18 renderer, styled with MUI using a Material 3 theme (`src/theme/m3Theme.ts`). `src/App.tsx`
-  is a large single component holding most of the UI (Ask home, notes rail, note peek, Simple/Advanced modes).
+- `src/` is the React 19 renderer, styled with MUI using a Material 3 theme (`src/theme/m3Theme.ts`). `src/App.tsx`
+  is the shell (Ask home, Simple/Advanced modes); views such as the notes rail, note peek, chat and settings
+  dialogs live in `src/features/`, with Study in `src/features/study/`.
 
 **Data and retrieval.** `electron/db.ts` owns the schema, migrations, CRUD and first-launch seed notes. Notes go in
 `items`, and an `items_fts` FTS5 table is kept in sync by triggers. `electron/search.ts` turns a query into an OR of
@@ -108,4 +115,6 @@ personas, URL auto-tag and the HTTP bridge.
 - The `*_RESULT.md` files at the repo root (BLINK, DAISYUI, FRIENDLY, CHAT_PROMPTS) are historical notes from UI
   experiments. They mention Tailwind/daisyUI themes, but the current UI is MUI; see `src/styles.css`.
 - Run `scripts/*.ts` directly under Electron-as-Node; prebuilt `scripts/*.bundle.cjs` artefacts were removed (#43) and are gitignored.
-- The GitHub Actions release workflow described in `docs/release.md` is not committed yet.
+- Dependabot (`.github/dependabot.yml`): packages that pin each other's exact version (`vitest` + `@vitest/*`,
+  `@mui/*`) must share a group, or each bump fails `npm ci` with ERESOLVE. Majors are labeled `major-update`
+  by `dependabot-auto-merge.yml` and merged by hand; minor/patch auto-merge after CI.

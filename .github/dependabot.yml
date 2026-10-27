@@ -17,6 +17,8 @@ updates:
         patterns: [vite, '@vitejs/*', 'vite-plugin-electron*', tailwindcss, '@tailwindcss/*']
       electron:
         patterns: [electron, electron-builder]
+      vitest:
+        patterns: [vitest, '@vitest/*']
       minor-and-patch:
         update-types: [minor, patch]
 
