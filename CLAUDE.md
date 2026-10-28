@@ -8,6 +8,7 @@ Vault (Local Knowledge Vault): an Electron desktop app for chatting with persona
 the note it came from (`[itm_…]`) or says it doesn't know. Notes live in local SQLite. Answers come from a local
 model first (Ollama / LM Studio), with optional cloud providers. User-facing docs are in `README.md`, developer
 docs in `docs/development.md`, providers in `docs/providers.md`, plugin format in `docs/plugins-authoring.md`.
+`ROADMAP.md` is the roadmap of record (rows R1…, status, order); milestones and labels are views of it.
 
 ## Commands
 
