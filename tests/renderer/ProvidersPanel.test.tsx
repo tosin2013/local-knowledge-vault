@@ -92,4 +92,10 @@ describe('ProvidersPanel', () => {
     expect(screen.getByText(/cloud providers are never used/)).toBeInTheDocument()
     expect(screen.queryByText(/Fixed to one provider/)).not.toBeInTheDocument()
   })
+
+  it('keeps the local Model label shrunk above "Auto-pick" (#373)', () => {
+    render(<ProvidersPanel {...makeProps()} />)
+    expect(screen.getByText('Auto-pick')).toBeInTheDocument()
+    expect(screen.getByText('Model', { selector: 'label' })).toHaveAttribute('data-shrink', 'true')
+  })
 })
