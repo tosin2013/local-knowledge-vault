@@ -129,7 +129,8 @@ export function ProvidersPanel({
           </Box>
           {p.local && installed.length > 0 && (
             <FormControl size="small" sx={{ minWidth: 190 }}>
-              <InputLabel id={`model-${p.id}`}>Model</InputLabel>
+              {/* displayEmpty always renders a value ("Auto-pick"), so the label must stay shrunk (#373). */}
+              <InputLabel id={`model-${p.id}`} shrink>Model</InputLabel>
               <Select
                 labelId={`model-${p.id}`}
                 label="Model"

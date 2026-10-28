@@ -35,10 +35,13 @@ body,
   min-height: 0;
 }
 
+/* The rail's controls don't shrink, so on a short window the rail scrolls as a whole
+   instead of squeezing the notes list to a single row (#374). */
 .sidebar {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .note-list,
@@ -47,6 +50,11 @@ body,
 .panel {
   overflow: auto;
   flex: 1;
+}
+
+/* Room for about six notes, whatever the controls above take (#374). */
+.note-list {
+  min-height: 240px;
 }
 
 .content {
