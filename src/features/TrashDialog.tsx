@@ -32,7 +32,9 @@ export const TrashDialog = memo(function TrashDialog(props: TrashDialogProps) {
       <DialogTitle>Trash</DialogTitle>
       <DialogContent dividers>
         {items.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: 'text.secondary',
+          }}>
             Trash is empty.
           </Typography>
         ) : (

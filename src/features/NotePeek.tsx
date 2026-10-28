@@ -83,25 +83,36 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
             bgcolor: 'rgba(0, 0, 0, 0.28)',
           },
         },
-      }}
-      PaperProps={{
-        sx: {
-          position: 'absolute',
-          width: { xs: '100%', sm: 420, md: 480 },
-          boxSizing: 'border-box',
-          display: 'flex',
-          flexDirection: 'column',
+
+        paper: {
+          sx: {
+            position: 'absolute',
+            width: { xs: '100%', sm: 420, md: 480 },
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+          },
         },
       }}
-      aria-label="Note peek"
-    >
+      aria-label="Note peek">
       <Stack
         direction="row"
-        alignItems="center"
         spacing={1}
-        sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
-      >
-        <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }} noWrap>
+        sx={{
+          alignItems: 'center',
+          px: 1.5,
+          py: 1,
+          borderBottom: 1,
+          borderColor: 'divider',
+          flexShrink: 0,
+        }}>
+        <Typography
+          variant="subtitle2"
+          noWrap
+          sx={{
+            fontWeight: 600,
+            flex: 1,
+          }}>
           {isNewDraft || draft?.id === NEW_DRAFT_ID
             ? 'New note'
             : peekEditing
@@ -135,7 +146,9 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
       <Box className="panel" sx={{ p: 2, flex: 1, minHeight: 0, overflow: 'auto' }}>
         {!draft ? (
           <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: 'text.secondary',
+            }}>
               {noteMissing
                 ? 'This note was deleted or re-ingested and no longer exists.'
                 : 'Loading note…'}
@@ -171,14 +184,18 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
                 size="small"
                 value={draft.kind}
                 onChange={(e) => onPatch('kind', e.target.value)}
-                InputProps={{ readOnly: !peekEditing }}
+                slotProps={{
+                  input: { readOnly: !peekEditing },
+                }}
               />
               <TextField
                 label="Status"
                 size="small"
                 value={draft.status}
                 onChange={(e) => onPatch('status', e.target.value)}
-                InputProps={{ readOnly: !peekEditing }}
+                slotProps={{
+                  input: { readOnly: !peekEditing },
+                }}
               />
               <Autocomplete
                 freeSolo
@@ -198,7 +215,9 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
               size="small"
               value={draft.summary ?? ''}
               onChange={(e) => onPatch('summary', e.target.value || null)}
-              InputProps={{ readOnly: !peekEditing }}
+              slotProps={{
+                input: { readOnly: !peekEditing },
+              }}
             />
             <TextField
               className="body-field"
@@ -209,8 +228,10 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
               onChange={(e) => onPatch('body', e.target.value)}
               placeholder="Write your note…"
               aria-label="Note body"
-              InputProps={{ readOnly: !peekEditing }}
               sx={{ flex: 1, '& .MuiInputBase-root': { alignItems: 'flex-start' } }}
+              slotProps={{
+                input: { readOnly: !peekEditing },
+              }}
             />
             {peekEditing &&
               !isNewDraft &&
@@ -226,10 +247,18 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
                     gap: 1,
                   }}
                 >
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: 'text.secondary',
+                  }}>
                     This is an AI draft. Confirm it by editing the note, or say it in your own words.
                   </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                    }}>
                     <TextField
                       size="small"
                       label="In your own words"
@@ -237,7 +266,9 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
                       onChange={(e) => setOwnWords(e.target.value)}
                       placeholder="One line, your words"
                       sx={{ flex: 1, minWidth: 180 }}
-                      inputProps={{ 'aria-label': 'In your own words' }}
+                      slotProps={{
+                        htmlInput: { 'aria-label': 'In your own words' },
+                      }}
                     />
                     <Button
                       color="warning"
@@ -250,8 +281,20 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
                   </Stack>
                 </Box>
               )}
-            <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center" flexWrap="wrap">
-              <Typography variant="body2" color="text.secondary" sx={{ mr: 'auto' }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  mr: 'auto',
+                }}>
                 {advanced && !isNewDraft && draft.id !== NEW_DRAFT_ID && (
                   <>
                     <Box component="code" sx={{ fontFamily: 'monospace', fontSize: 12 }}>

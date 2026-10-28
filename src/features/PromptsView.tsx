@@ -108,7 +108,13 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
         </Box>
         <Box className="session-list" sx={{ p: 1 }}>
           {prompts.length === 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', p: 1.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                textAlign: 'center',
+                p: 1.5,
+              }}>
               No personalities yet.
             </Typography>
           )}
@@ -127,11 +133,15 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
                   borderColor: 'primary.main',
                 }}
               >
-                <Typography variant="body2" fontWeight={600} noWrap>
+                <Typography variant="body2" noWrap sx={{
+                  fontWeight: 600,
+                }}>
                   {personalityDisplayName(p)}
                 </Typography>
                 {p.description && (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: 'text.secondary',
+                  }}>
                     {p.description}
                   </Typography>
                 )}
@@ -147,7 +157,9 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
               <Typography variant="h6" color="primary" gutterBottom>
                 Personalities
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: 'text.secondary',
+              }}>
                 Pick how Ask should answer. You can add your own personalities.
               </Typography>
             </Paper>
@@ -180,7 +192,12 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
 
             {!advanced && !promptBodyOpen ? (
               <Box sx={{ mt: 1 }}>
-                <Typography variant="body2" color="text.secondary" paragraph>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                    marginBottom: '16px',
+                  }}>
                   {editingPrompt
                     ? 'This personality is ready to use in Ask. Open Edit to change how it answers.'
                     : 'Add a name, then Edit to write the personality instructions.'}
@@ -202,15 +219,30 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
             ) : (
               <>
                 <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 1.5 }}>
-                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 0.5,
+                    }}>
                     What a personality can change
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: 'text.secondary',
+                  }}>
                     {PERSONALITY_CAN_CHANGE}
                   </Typography>
                 </Box>
-                <Stack direction="row" flexWrap="wrap" alignItems="center" gap={0.75}>
-                  <Typography variant="caption" color="text.secondary">
+                <Stack
+                  direction="row"
+                  sx={{
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 0.75,
+                  }}>
+                  <Typography variant="caption" sx={{
+                    color: 'text.secondary',
+                  }}>
                     Start from a template:
                   </Typography>
                   {PERSONALITY_TEMPLATES.map((t) => (
@@ -235,12 +267,22 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
                     onDirty(true)
                   }}
                   placeholder="Tone and format guidance. The grounding and citation rules always apply…"
-                  InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }}
+                  slotProps={{
+                    input: { sx: { fontFamily: 'monospace', fontSize: 13 } },
+                  }}
                 />
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: 'text.secondary',
+                }}>
                   Answers still come from your notes. These instructions only change tone and format.
                 </Typography>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}>
                   <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => void copyHelperPrompt()}>
                     {copied ? 'Copied' : 'Copy helper prompt'}
                   </Button>
@@ -254,7 +296,13 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
                     Personality guide
                   </Link>
                 </Stack>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}>
                   <Button
                     size="small"
                     variant="outlined"
@@ -274,12 +322,20 @@ export const PromptsView = memo(function PromptsView(props: PromptsViewProps) {
                     </>
                   )}
                   {shareNotice && (
-                    <Typography variant="caption" color="success.main">
+                    <Typography variant="caption" sx={{
+                      color: 'success.main',
+                    }}>
                       {shareNotice}
                     </Typography>
                   )}
                 </Stack>
-                <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                  }}>
                   {editingPrompt && (
                     <Button color="error" variant="outlined" onClick={onDeletePrompt}>
                       Delete

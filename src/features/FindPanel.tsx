@@ -23,7 +23,9 @@ export const FindPanel = memo(function FindPanel(props: FindPanelProps) {
     <Box className="panel" sx={{ p: 2 }}>
       {askResult && (
         <>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          <Typography variant="subtitle1" gutterBottom sx={{
+            fontWeight: 600,
+          }}>
             Answer
           </Typography>
           {askResult.offline && (
@@ -36,10 +38,21 @@ export const FindPanel = memo(function FindPanel(props: FindPanelProps) {
           </Paper>
           {askResult.citations.length > 0 && (
             <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  mb: 1,
+                }}>
                 From your notes
               </Typography>
-              <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+              <Stack
+                direction="row"
+                sx={{
+                  flexWrap: 'wrap',
+                  gap: 1,
+                  mb: 2,
+                }}>
                 {askResult.citations.map((c) => (
                   <Chip
                     key={c.id}
@@ -56,16 +69,34 @@ export const FindPanel = memo(function FindPanel(props: FindPanelProps) {
         </>
       )}
 
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mt: askResult ? 1 : 0, mb: 0.5 }}>
+      <Typography
+        variant="subtitle1"
+        sx={{
+          fontWeight: 600,
+          mt: askResult ? 1 : 0,
+          mb: 0.5,
+        }}>
         {hits.length > 0 ? `Results (${hits.length})` : 'Results'}
       </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          display: 'block',
+          mb: 1.25,
+        }}>
         {filterSummary === 'All notes'
           ? 'All notes'
           : `Filtering by ${filterSummary}`}
       </Typography>
       {hits.length === 0 ? (
-        <Stack alignItems="center" spacing={1.5} sx={{ p: 4, color: 'text.secondary' }}>
+        <Stack
+          spacing={1.5}
+          sx={{
+            alignItems: 'center',
+            p: 4,
+            color: 'text.secondary',
+          }}>
           <Typography variant="body2">
             {searchText.trim() || filters.para || filters.kind || filters.status || filters.project
               ? 'No notes match these filters'
@@ -93,15 +124,29 @@ export const FindPanel = memo(function FindPanel(props: FindPanelProps) {
                 '&:hover': { borderColor: 'primary.main' },
               }}
             >
-              <Typography variant="body2" fontWeight={600}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600,
+              }}>
                 {h.title}{' '}
-                <Typography component="span" variant="caption" color="text.secondary" fontWeight={400}>
+                <Typography
+                  component="span"
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontWeight: 400,
+                  }}>
                   {h.project && !h.title.includes(h.project) && <>{h.project} · </>}
                   {advanced && <>score {h.score.toFixed(2)} · </>}
                   {paraLabel(h.para)}
                 </Typography>
               </Typography>
-              <Typography className="snippet" variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              <Typography
+                className="snippet"
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  mt: 0.5,
+                }}>
                 {h.snippet}
               </Typography>
             </Paper>

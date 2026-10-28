@@ -192,9 +192,20 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5 }}>
-      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <RecordVoiceOverIcon color="primary" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontWeight: 600,
+            flex: 1,
+          }}>
           Media voices
         </Typography>
         <Button size="small" variant="outlined" disabled={busy || !hasEnsureApi} onClick={() => void ensureAll()}>
@@ -210,13 +221,26 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
       {/* Easy Add — top of panel so it is visible without scrolling */}
       <Card variant="outlined" sx={{ borderColor: 'primary.main', borderWidth: 1.5, flexShrink: 0 }}>
         <CardContent>
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              mb: 1,
+            }}>
             <AddIcon color="primary" fontSize="small" />
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="subtitle1" sx={{
+              fontWeight: 600,
+            }}>
               Add voice
             </Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 1.5,
+            }}>
             Invent a voice without editing code. Grounding rules stay the same; your vibe only shapes style.
           </Typography>
           {!hasCreateApi && (
@@ -289,12 +313,16 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
         }}
       />
 
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{
+        color: 'text.secondary',
+      }}>
         Voice packs work with any ingested media (not one voice per video). Install built-ins below, or use
         Add voice above, then pick them as chips in Media chat.
       </Typography>
 
-      <Typography variant="subtitle2" fontWeight={600}>
+      <Typography variant="subtitle2" sx={{
+        fontWeight: 600,
+      }}>
         Built-in voice packs
       </Typography>
       <Box
@@ -310,8 +338,19 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
           return (
             <Card key={def.id} variant="outlined" sx={{ display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flex: 1 }}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                    mb: 1,
+                  }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 600,
+                      flex: 1,
+                    }}>
                     {def.name}
                   </Typography>
                   <Typography
@@ -322,7 +361,9 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
                     {installedLabel}
                   </Typography>
                 </Stack>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: 'text.secondary',
+                }}>
                   {def.description}
                 </Typography>
               </CardContent>
@@ -335,7 +376,13 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
                 >
                   {prompt ? 'Refresh prompt' : 'Install'}
                 </Button>
-                <Typography variant="caption" color="text.secondary" sx={{ width: '100%', px: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    width: '100%',
+                    px: 0.5,
+                  }}>
                   Available in Media chat voice chips
                 </Typography>
               </CardActions>
@@ -346,11 +393,15 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
 
       <Divider />
 
-      <Typography variant="subtitle2" fontWeight={600}>
+      <Typography variant="subtitle2" sx={{
+        fontWeight: 600,
+      }}>
         Custom voice packs
       </Typography>
       {customPacks.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: 'text.secondary',
+        }}>
           No custom voices yet — use Add voice above.
         </Typography>
       ) : (
@@ -367,24 +418,44 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
           {customPacks.map((pack) => (
             <Card key={pack.promptId} variant="outlined" sx={{ display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flex: 1 }}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                    mb: 1,
+                  }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 600,
+                      flex: 1,
+                    }}>
                     {pack.name}
                   </Typography>
                   <Typography
                     variant="caption"
-                    color="success.main"
-                    sx={{ textTransform: 'uppercase', letterSpacing: 0.4 }}
-                  >
+                    sx={{
+                      color: 'success.main',
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.4,
+                    }}>
                     Custom
                   </Typography>
                 </Stack>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: 'text.secondary',
+                }}>
                   {pack.description.replace(/^Media voice pack:\s*/i, '') || 'Custom grounded Media voice.'}
                 </Typography>
               </CardContent>
               <CardActions sx={{ px: 2, pb: 2, pt: 0, flexWrap: 'wrap', gap: 0.5 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    px: 0.5,
+                  }}>
                   Available in Media chat voice chips (any media)
                 </Typography>
               </CardActions>
@@ -403,11 +474,19 @@ export function MediaPersonasView({ onClose }: VaultPluginRenderProps) {
 
       {hasProjectsApi && (
         <Box sx={{ mt: 1, opacity: 0.95 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              mb: 1,
+            }}>
             Advanced (optional): also save an Ask profile for one project. Not required — voice packs already
             work across all media.
           </Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'flex-start' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{
+            alignItems: { sm: 'flex-start' },
+          }}>
             <TextField
               select
               size="small"

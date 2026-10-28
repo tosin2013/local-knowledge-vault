@@ -28,7 +28,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import SearchIcon from '@mui/icons-material/Search'
 import type { Item, ItemFilters, Para } from '../../electron/types'
 import { isValidHttpUrl, KIND_OPTIONS, PARA_OPTIONS, paraLabel, STATUS_OPTIONS } from '../domain'
@@ -140,10 +140,19 @@ const NoteRow = memo(function NoteRow({
           checked={bulkSelected}
           onClick={(e) => e.stopPropagation()}
           onChange={() => onToggleBulk(it.id)}
-          inputProps={{ 'aria-label': `Select ${it.title}` }}
           sx={{ p: 0, mr: 0.5, mt: -0.25 }}
+          slotProps={{
+            input: { 'aria-label': `Select ${it.title}` },
+          }}
         />
-        <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, mt: 0.25 }}>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            fontWeight: 600,
+            flex: 1,
+            mt: 0.25,
+          }}>
           {it.title}
         </Typography>
         <IconButton
@@ -159,7 +168,13 @@ const NoteRow = memo(function NoteRow({
           <DeleteOutlineIcon fontSize="small" />
         </IconButton>
       </Box>
-      <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
+      <Stack
+        direction="row"
+        sx={{
+          flexWrap: 'wrap',
+          gap: 0.5,
+          mt: 0.5,
+        }}>
         <Chip
           size="small"
           label={paraLabel(it.para)}
@@ -358,7 +373,12 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
             sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75, bgcolor: 'action.hover' }}
             data-testid="remove-samples"
           >
-            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                lineHeight: 1.35,
+              }}>
               The “Vault guide” project teaches the app with real notes.
             </Typography>
             <Button size="small" color="error" variant="outlined" onClick={onRemoveSamples}>
@@ -380,7 +400,9 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
               Trash {bulkSelected.size} selected
             </Button>
             {/* #276: bulk "Move to project" for an existing import. */}
-            <Stack direction="row" spacing={0.75} alignItems="center">
+            <Stack direction="row" spacing={0.75} sx={{
+              alignItems: 'center',
+            }}>
               <ProjectSelect
                 value={bulkMoveTarget}
                 onChange={setBulkMoveTarget}
@@ -414,10 +436,21 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
         )}
 
         <Stack spacing={0.5}>
-          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              textTransform: 'uppercase',
+              letterSpacing: 0.6,
+            }}>
             Add from URL
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              lineHeight: 1.35,
+            }}>
             Public https pages / articles. Import enables when the URL looks like https://… — may take a few seconds.
           </Typography>
           <Stack direction="row" spacing={0.75}>
@@ -454,7 +487,9 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
           </Stack>
         </Stack>
 
-        <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack direction="row" spacing={0.5} sx={{
+          alignItems: 'center',
+        }}>
           <FormControl fullWidth size="small">
             <InputLabel id="project-filter-label">Project</InputLabel>
             <Select
@@ -483,7 +518,14 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
         </Stack>
 
         {advanced && (
-          <Stack direction="row" flexWrap="wrap" gap={0.75} role="group" aria-label="Group">
+          <Stack
+            direction="row"
+            role="group"
+            aria-label="Group"
+            sx={{
+              flexWrap: 'wrap',
+              gap: 0.75,
+            }}>
             <Chip
               size="small"
               label="All"
@@ -581,15 +623,19 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
           value={railQuery}
           onChange={(e) => onRailQuery(e.target.value)}
           aria-label="Filter notes"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" color="action" />
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            },
           }}
         />
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{
+          alignItems: 'center',
+        }}>
           <FormControl size="small" sx={{ minWidth: 110 }}>
             <InputLabel id="rail-sort-label">Sort</InputLabel>
             <Select
@@ -617,7 +663,9 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
           />
         </Stack>
 
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           {filterSummary} · {items.length} notes
         </Typography>
       </Stack>
@@ -631,8 +679,16 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
       >
         {items.length === 0 &&
           (isEmpty ? (
-            <Stack spacing={1} alignItems="center" sx={{ textAlign: 'center', p: 2 }}>
-              <Typography variant="body2" color="text.secondary">
+            <Stack
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                textAlign: 'center',
+                p: 2,
+              }}>
+              <Typography variant="body2" sx={{
+                color: 'text.secondary',
+              }}>
                 Your vault is empty.
               </Typography>
               <Button
@@ -643,12 +699,24 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
               >
                 Create your first note
               </Button>
-              <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  lineHeight: 1.35,
+                }}>
                 Or import Markdown notes or add a URL above.
               </Typography>
             </Stack>
           ) : (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', p: 2 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+                textAlign: 'center',
+                p: 2,
+              }}>
               No notes match filters.
             </Typography>
           ))}

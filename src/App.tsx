@@ -369,10 +369,14 @@ export default function App() {
           }}
         >
           <Paper sx={{ p: 4, maxWidth: 420, borderRadius: 5, textAlign: 'center' }}>
-            <Typography variant="h5" color="primary" fontWeight={600} gutterBottom>
+            <Typography variant="h5" color="primary" gutterBottom sx={{
+              fontWeight: 600,
+            }}>
               Vault
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: 'text.secondary',
+            }}>
               Run inside Electron (`npm run dev`) so the preload API is available.
             </Typography>
           </Paper>

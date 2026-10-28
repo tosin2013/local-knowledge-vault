@@ -98,9 +98,20 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, p: 1.5, gap: 1.5, overflow: 'auto' }}>
-      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <SchoolIcon color="primary" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontWeight: 600,
+            flex: 1,
+          }}>
           Study session
         </Typography>
         {stats && <Chip size="small" color={stats.due > 0 ? 'primary' : 'default'} label={`${stats.due} due`} />}
@@ -111,7 +122,14 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
         )}
       </Stack>
 
-      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={2}
+        useFlexGap
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <ProjectSelect value={project} onChange={setProject} label="Project" />
         <ExamDateControl project={project} />
       </Stack>
@@ -123,7 +141,9 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
         </Alert>
       )}
       {stats && stats.newPerDay > 0 && (
-        <Typography variant="caption" color="text.secondary" data-testid="new-budget">
+        <Typography variant="caption" data-testid="new-budget" sx={{
+          color: 'text.secondary',
+        }}>
           New cards today: {stats.newLeftToday} of {stats.newPerDay}. Missed cards come first, then due cards, then
           new ones.
         </Typography>
@@ -143,12 +163,20 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
       <StudySession key={`${project}-${sessionKey}`} project={project} onOpenNote={onOpenNote} onGraded={() => void refreshStats()} />
 
       <Divider textAlign="left">
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           Add notes to Study
         </Typography>
       </Divider>
 
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <TextField
           size="small"
           label="Search your notes"
@@ -157,8 +185,10 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
           onKeyDown={(e) => {
             if (e.key === 'Enter') void runSearch()
           }}
-          inputProps={{ 'aria-label': 'Search your notes' }}
           sx={{ flex: 1, minWidth: 200 }}
+          slotProps={{
+            htmlInput: { 'aria-label': 'Search your notes' },
+          }}
         />
         <Button size="small" variant="contained" disabled={searching} onClick={() => void runSearch()}>
           {searching ? 'Searching…' : 'Search'}
@@ -171,10 +201,13 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
             <Stack
               key={hit.id}
               direction="row"
-              alignItems="center"
               spacing={1}
-              sx={{ borderBottom: 1, borderColor: 'divider', pb: 0.5 }}
-            >
+              sx={{
+                alignItems: 'center',
+                borderBottom: 1,
+                borderColor: 'divider',
+                pb: 0.5,
+              }}>
               <Typography variant="body2" sx={{ flex: 1 }}>
                 {hit.title}
               </Typography>
@@ -195,14 +228,18 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
         </Stack>
       )}
 
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{
+        color: 'text.secondary',
+      }}>
         Intervals are SM-2-style and expand as you recall a card; spacing your reviews beats cramming.
         With a project exam date, the first interval is anchored to it and no review is scheduled past it;
         the last one lands the day before.
       </Typography>
 
       {!hasSearchApi && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           Note search is unavailable in this build.
         </Typography>
       )}

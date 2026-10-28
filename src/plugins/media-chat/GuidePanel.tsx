@@ -352,7 +352,13 @@ export function GuidePanel(props: GuidePanelProps) {
   if (!guide) {
     return (
       <Paper variant="outlined" sx={{ p: 1.25 }} data-testid="guide-panel">
-        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: 'center',
+            gap: 1,
+            flexWrap: 'wrap',
+          }}>
           <EditNoteIcon fontSize="small" color="action" />
           <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 140 }}>
             Notes while watching
@@ -364,7 +370,9 @@ export function GuidePanel(props: GuidePanelProps) {
             Start research notes
           </Button>
         </Stack>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: 'text.secondary',
+        }}>
           You write; Vault checks what you write against the transcript and cites it.
         </Typography>
         {guides.length > 0 && (
@@ -393,7 +401,13 @@ export function GuidePanel(props: GuidePanelProps) {
 
   return (
     <Paper variant="outlined" sx={{ p: 1.25, display: 'flex', flexDirection: 'column', gap: 1 }} data-testid="guide-panel">
-      <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: 'center',
+          gap: 1,
+          flexWrap: 'wrap',
+        }}>
         <EditNoteIcon fontSize="small" color="action" />
         <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 140 }} noWrap title={guide.noteTitle}>
           {guide.noteTitle}
@@ -414,7 +428,14 @@ export function GuidePanel(props: GuidePanelProps) {
       </Stack>
 
       {/* Checkpoint settings */}
-      <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap" data-testid="guide-settings">
+      <Stack
+        direction="row"
+        data-testid="guide-settings"
+        sx={{
+          alignItems: 'center',
+          gap: 1,
+          flexWrap: 'wrap',
+        }}>
         <TextField
           select
           size="small"
@@ -439,7 +460,9 @@ export function GuidePanel(props: GuidePanelProps) {
             Snooze 5 min
           </Button>
         )}
-        <Typography variant="caption" color="text.secondary" data-testid="guide-next">
+        <Typography variant="caption" data-testid="guide-next" sx={{
+          color: 'text.secondary',
+        }}>
           {guide.checkpointsOff
             ? 'Checkpoints are off — press G whenever you want one.'
             : next
@@ -466,7 +489,9 @@ export function GuidePanel(props: GuidePanelProps) {
             Checkpoint {formatHms(checkpoint.start)}–{formatHms(checkpoint.end)}
             {checkpoint.chapter ? ` · ${checkpoint.chapter}` : ''}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: 'text.secondary',
+          }}>
             Paused. In your own words, what was this part about? Vault checks it against the transcript.
           </Typography>
           <TextField
@@ -480,11 +505,19 @@ export function GuidePanel(props: GuidePanelProps) {
               setSummary(e.target.value)
               setCheck(null)
             }}
-            inputProps={{ 'aria-label': 'Your summary' }}
             sx={{ mt: 1 }}
+            slotProps={{
+              htmlInput: { 'aria-label': 'Your summary' },
+            }}
           />
           {!check && (
-            <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mt: 1 }}>
+            <Stack
+              direction="row"
+              sx={{
+                gap: 1,
+                flexWrap: 'wrap',
+                mt: 1,
+              }}>
               <Button size="small" variant="contained" disabled={busy || !summary.trim()} onClick={() => void runCheck()}>
                 Check my summary
               </Button>
@@ -511,11 +544,20 @@ export function GuidePanel(props: GuidePanelProps) {
               )}
               {check.covered.length > 0 && (
                 <>
-                  <Typography variant="caption" fontWeight={600}>
+                  <Typography variant="caption" sx={{
+                    fontWeight: 600,
+                  }}>
                     You covered
                   </Typography>
                   {check.covered.map((c, i) => (
-                    <Stack key={`c${i}`} direction="row" gap={1} alignItems="center" data-testid="guide-covered">
+                    <Stack
+                      key={`c${i}`}
+                      direction="row"
+                      data-testid="guide-covered"
+                      sx={{
+                        gap: 1,
+                        alignItems: 'center',
+                      }}>
                       {ts(c.sec)}
                       <Typography variant="body2">{c.text}</Typography>
                     </Stack>
@@ -524,11 +566,24 @@ export function GuidePanel(props: GuidePanelProps) {
               )}
               {check.gaps.length > 0 && (
                 <>
-                  <Typography variant="caption" fontWeight={600} component="div" sx={{ mt: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    sx={{
+                      fontWeight: 600,
+                      mt: 0.5,
+                    }}>
                     You missed — rewatch for (tick what goes in your guide)
                   </Typography>
                   {check.gaps.map((g, i) => (
-                    <Stack key={`g${i}`} direction="row" gap={0.5} alignItems="center" data-testid="guide-gap">
+                    <Stack
+                      key={`g${i}`}
+                      direction="row"
+                      data-testid="guide-gap"
+                      sx={{
+                        gap: 0.5,
+                        alignItems: 'center',
+                      }}>
                       <Checkbox
                         size="small"
                         checked={chosen.has(i)}
@@ -540,7 +595,9 @@ export function GuidePanel(props: GuidePanelProps) {
                             return s
                           })
                         }
-                        inputProps={{ 'aria-label': `Keep: ${g.text}` }}
+                        slotProps={{
+                          input: { 'aria-label': `Keep: ${g.text}` },
+                        }}
                       />
                       {ts(g.sec)}
                       <Typography variant="body2">{g.text}</Typography>
@@ -550,7 +607,13 @@ export function GuidePanel(props: GuidePanelProps) {
               )}
               {check.unsupported.length > 0 && (
                 <>
-                  <Typography variant="caption" fontWeight={600} component="div" sx={{ mt: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    sx={{
+                      fontWeight: 600,
+                      mt: 0.5,
+                    }}>
                     Not supported by this part of the transcript
                   </Typography>
                   {check.unsupported.map((u, i) => (
@@ -564,7 +627,13 @@ export function GuidePanel(props: GuidePanelProps) {
                 <Typography variant="body2">Nothing to flag.</Typography>
               )}
               <CitationChips citations={check.citations} onSelectCitation={onSelectCitation} />
-              <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mt: 1 }}>
+              <Stack
+                direction="row"
+                sx={{
+                  gap: 1,
+                  flexWrap: 'wrap',
+                  mt: 1,
+                }}>
                 <Button size="small" variant="contained" disabled={busy} onClick={() => void saveCheckpoint(true)}>
                   Save to guide
                 </Button>
@@ -583,9 +652,19 @@ export function GuidePanel(props: GuidePanelProps) {
       {/* ai-drafts waiting for the learner */}
       {drafts.map((e) => (
         <Paper key={e.id} variant="outlined" sx={{ p: 1.25, borderColor: 'warning.main' }} data-testid="guide-draft">
-          <Stack direction="row" gap={1} alignItems="center">
+          <Stack
+            direction="row"
+            sx={{
+              gap: 1,
+              alignItems: 'center',
+            }}>
             {ts(e.startSec)}
-            <Typography variant="caption" color="warning.main" fontWeight={600}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'warning.main',
+                fontWeight: 600,
+              }}>
               ai-draft — rewrite to confirm
             </Typography>
           </Stack>
@@ -595,14 +674,25 @@ export function GuidePanel(props: GuidePanelProps) {
             size="small"
             value={rewrite[e.id] ?? e.text}
             onChange={(ev) => setRewrite((p) => ({ ...p, [e.id]: ev.target.value }))}
-            inputProps={{ 'aria-label': 'Rewrite the draft' }}
             sx={{ mt: 1 }}
+            slotProps={{
+              htmlInput: { 'aria-label': 'Rewrite the draft' },
+            }}
           />
-          <Stack direction="row" gap={1} sx={{ mt: 1 }} alignItems="center" flexWrap="wrap">
+          <Stack
+            direction="row"
+            sx={{
+              gap: 1,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              mt: 1,
+            }}>
             <Button size="small" variant="outlined" disabled={busy} onClick={() => void confirm(e, false)}>
               Confirm rewrite
             </Button>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>
               or
             </Typography>
             <TextField
@@ -610,8 +700,10 @@ export function GuidePanel(props: GuidePanelProps) {
               placeholder="One line in your own words"
               value={ownLine[e.id] ?? ''}
               onChange={(ev) => setOwnLine((p) => ({ ...p, [e.id]: ev.target.value }))}
-              inputProps={{ 'aria-label': 'One line in your own words' }}
               sx={{ flex: 1, minWidth: 180 }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'One line in your own words' },
+              }}
             />
             <Button size="small" disabled={busy || !(ownLine[e.id] ?? '').trim()} onClick={() => void confirm(e, true)}>
               Confirm with my line
@@ -625,7 +717,14 @@ export function GuidePanel(props: GuidePanelProps) {
 
       {/* Key terms (study) / research entries */}
       {mode === 'study' ? (
-        <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" data-testid="guide-term-form">
+        <Stack
+          direction="row"
+          data-testid="guide-term-form"
+          sx={{
+            gap: 1,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}>
           <TextField size="small" label="Key term" value={term} onChange={(e) => setTerm(e.target.value)} sx={{ width: 150 }} />
           <TextField
             size="small"
@@ -649,7 +748,14 @@ export function GuidePanel(props: GuidePanelProps) {
           </Button>
         </Stack>
       ) : (
-        <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" data-testid="guide-research-form">
+        <Stack
+          direction="row"
+          data-testid="guide-research-form"
+          sx={{
+            gap: 1,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}>
           <TextField select size="small" label="Add" value={rSection} onChange={(e) => setRSection(e.target.value as ResearchSection)} sx={{ width: 150 }}>
             {RESEARCH_SECTIONS.map((s) => (
               <MenuItem key={s.value} value={s.value}>
@@ -662,8 +768,10 @@ export function GuidePanel(props: GuidePanelProps) {
             placeholder={RESEARCH_SECTIONS.find((s) => s.value === rSection)?.placeholder}
             value={rText}
             onChange={(e) => setRText(e.target.value)}
-            inputProps={{ 'aria-label': 'Research entry' }}
             sx={{ flex: 1, minWidth: 180 }}
+            slotProps={{
+              htmlInput: { 'aria-label': 'Research entry' },
+            }}
           />
           <Button
             size="small"
@@ -690,10 +798,20 @@ export function GuidePanel(props: GuidePanelProps) {
           {visibleEntries.map((e) => {
             const c = e.check && 'verdict' in e.check ? (e.check as GuideTextCheck) : null
             return (
-              <Stack key={e.id} direction="row" gap={1} alignItems="flex-start" sx={{ py: 0.25 }} data-testid="guide-entry">
+              <Stack
+                key={e.id}
+                direction="row"
+                data-testid="guide-entry"
+                sx={{
+                  gap: 1,
+                  alignItems: 'flex-start',
+                  py: 0.25,
+                }}>
                 <Box sx={{ minWidth: 72 }}>{ts(e.startSec)}</Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: 'text.secondary',
+                  }}>
                     {SECTION_LABEL[e.section]}
                     {e.term ? ` · ${e.term}` : ''}
                     {e.aiDraft ? ' · confirmed draft' : ''}
@@ -702,9 +820,17 @@ export function GuidePanel(props: GuidePanelProps) {
                     {e.section === 'quote' ? `“${e.text}”` : e.text}
                   </Typography>
                   {c && (
-                    <Stack direction="row" gap={0.5} alignItems="center" flexWrap="wrap">
+                    <Stack
+                      direction="row"
+                      sx={{
+                        gap: 0.5,
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}>
                       <Chip size="small" color={VERDICT_COLOR[c.verdict]} label={VERDICT_LABEL[c.verdict]} data-testid="guide-verdict" />
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: 'text.secondary',
+                      }}>
                         {c.note}
                       </Typography>
                       <CitationChips citations={c.citations} onSelectCitation={onSelectCitation} />
@@ -727,12 +853,21 @@ export function GuidePanel(props: GuidePanelProps) {
             Find related notes in my vault
           </Button>
           {related && related.length === 0 && (
-            <Typography variant="caption" color="text.secondary" component="div">
+            <Typography variant="caption" component="div" sx={{
+              color: 'text.secondary',
+            }}>
               No related notes found yet — write a few entries first.
             </Typography>
           )}
           {related?.map((r) => (
-            <Stack key={r.itemId} direction="row" gap={1} alignItems="center" data-testid="guide-related">
+            <Stack
+              key={r.itemId}
+              direction="row"
+              data-testid="guide-related"
+              sx={{
+                gap: 1,
+                alignItems: 'center',
+              }}>
               <Typography variant="body2" sx={{ flex: 1 }} noWrap title={r.snippet}>
                 {r.title}
               </Typography>
@@ -747,11 +882,19 @@ export function GuidePanel(props: GuidePanelProps) {
       {/* Review these */}
       {guide.review.length > 0 && (
         <Box data-testid="guide-review">
-          <Typography variant="caption" fontWeight={600}>
+          <Typography variant="caption" sx={{
+            fontWeight: 600,
+          }}>
             Review these
           </Typography>
           {guide.review.map((r) => (
-            <Stack key={`${r.kind}-${r.refId}`} direction="row" gap={1} alignItems="center">
+            <Stack
+              key={`${r.kind}-${r.refId}`}
+              direction="row"
+              sx={{
+                gap: 1,
+                alignItems: 'center',
+              }}>
               {ts(r.sec)}
               <Typography variant="body2" noWrap title={r.label} sx={{ flex: 1, minWidth: 0 }}>
                 {r.kind === 'tutor-miss' ? `Exam tutor${r.confidentWrong ? ' (confident but wrong)' : ' miss'}: ${r.label}` : r.label}
@@ -762,7 +905,13 @@ export function GuidePanel(props: GuidePanelProps) {
         </Box>
       )}
 
-      <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+      <Stack
+        direction="row"
+        sx={{
+          gap: 1,
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
         <Button size="small" variant="outlined" disabled={busy} onClick={() => void makeCards()}>
           Make Study cards from key terms &amp; gaps
         </Button>

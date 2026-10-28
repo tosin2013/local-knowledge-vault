@@ -55,7 +55,9 @@ export function BridgeSettings() {
     <Box sx={{ mt: 2 }}>
       <Divider sx={{ my: 1.5 }} />
       <Typography variant="subtitle2">Vault Bridge</Typography>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{
+        color: 'text.secondary',
+      }}>
         Local HTTP API for Obsidian / scripts. {statusText}
       </Typography>
       {status?.error && !status.running && (
@@ -68,15 +70,23 @@ export function BridgeSettings() {
           {error}
         </Alert>
       )}
-      <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'flex-start',
+          mt: 1,
+        }}>
         <TextField
           size="small"
           fullWidth
           label="Bearer token"
           value={token}
-          inputProps={{ readOnly: true }}
           onFocus={(e) => e.currentTarget.select()}
           helperText="Send as “Authorization: Bearer <token>” to /v1/ask and /v1/projects."
+          slotProps={{
+            htmlInput: { readOnly: true },
+          }}
         />
         <Button
           size="small"

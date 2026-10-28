@@ -70,7 +70,9 @@ export function PersonalityPreviewDialog({
     offline?: boolean,
   ) => (
     <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
-      <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+      <Typography variant="subtitle2" gutterBottom sx={{
+        fontWeight: 600,
+      }}>
         {title}
       </Typography>
       {offline && (
@@ -81,7 +83,9 @@ export function PersonalityPreviewDialog({
       {text ? (
         <AnswerText text={text} citations={citations ?? []} />
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: 'text.secondary',
+        }}>
           (no answer)
         </Typography>
       )}
@@ -94,7 +98,9 @@ export function PersonalityPreviewDialog({
       <DialogTitle>Preview{name.trim() ? `: ${name.trim()}` : ''}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: 'text.secondary',
+          }}>
             Ask a real question against your own notes. This does not save anything, and the answer
             still comes from your notes with the same citation rules.
           </Typography>
@@ -122,7 +128,9 @@ export function PersonalityPreviewDialog({
           {busy && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CircularProgress size={18} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: 'text.secondary',
+              }}>
                 Answering from your notes…
               </Typography>
             </Box>

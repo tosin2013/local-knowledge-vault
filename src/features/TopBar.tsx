@@ -82,7 +82,13 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
   return (
     <AppBar position="sticky" sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', color: 'text.primary' }}>
       <Toolbar variant="dense" sx={{ gap: 1.5, minHeight: 56, px: 1.5 }}>
-        <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexShrink: 0 }}>
+        <Stack
+          direction="row"
+          spacing={1.25}
+          sx={{
+            alignItems: 'center',
+            flexShrink: 0,
+          }}>
           <Box
             className="vault-mark"
             aria-hidden
@@ -94,10 +100,18 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
             </svg>
           </Box>
           <Box sx={{ minWidth: 0, lineHeight: 1.15 }}>
-            <Typography variant="subtitle1" fontWeight={600} noWrap>
+            <Typography variant="subtitle1" noWrap sx={{
+              fontWeight: 600,
+            }}>
               Vault
             </Typography>
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ letterSpacing: 0.4 }}>
+            <Typography
+              variant="caption"
+              noWrap
+              sx={{
+                color: 'text.secondary',
+                letterSpacing: 0.4,
+              }}>
               Local knowledge
             </Typography>
           </Box>
@@ -116,30 +130,38 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
             }}
             aria-label="Find notes"
             sx={{ maxWidth: 560, '& .MuiOutlinedInput-root': { borderRadius: 999 } }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" color="action" />
-                </InputAdornment>
-              ),
-              endAdornment: (
-                <InputAdornment position="end">
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={onRunSearch}
-                    disabled={busy}
-                    sx={{ mr: -0.5, borderRadius: 999 }}
-                  >
-                    Search
-                  </Button>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={onRunSearch}
+                      disabled={busy}
+                      sx={{ mr: -0.5, borderRadius: 999 }}
+                    >
+                      Search
+                    </Button>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
         </Box>
 
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            flexShrink: 0,
+          }}>
           <Chip
             size="small"
             label={aiStatusText}
@@ -198,10 +220,18 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
                 onClick={() => onSelectPlugin(plug.id)}
               >
                 <Box>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{
+                    fontWeight: 600,
+                  }}>
                     {plug.name}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 280 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                      display: 'block',
+                      maxWidth: 280,
+                    }}>
                     {plug.description}
                   </Typography>
                 </Box>
@@ -213,10 +243,18 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
               onClick={() => onSelectPlugin(MANAGE_PLUGINS_ID)}
             >
               <Box>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" sx={{
+                  fontWeight: 600,
+                }}>
                   Add-ons…
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 280 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    display: 'block',
+                    maxWidth: 280,
+                  }}>
                   Add AI providers, answer styles and connections
                 </Typography>
               </Box>
@@ -239,7 +277,9 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
                 size="small"
               />
             }
-            label={<Typography variant="caption" color="text.secondary">Advanced</Typography>}
+            label={<Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>Advanced</Typography>}
             title="Show developer details and fuller filters"
             sx={{ m: 0, ml: 0.5 }}
           />

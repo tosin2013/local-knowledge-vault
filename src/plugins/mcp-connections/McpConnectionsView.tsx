@@ -239,9 +239,20 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
     const waiting = status === 'authorizing' || busyId === id
     if (!waiting) return null
     return (
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          mt: 1,
+        }}>
         <CircularProgress size={16} />
-        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            flex: 1,
+          }}>
           Waiting for authorization…
         </Typography>
         <Button size="small" color="warning" onClick={() => void cancelAuth(id)}>
@@ -259,9 +270,16 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
 
   return (
     <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5, height: '100%', overflow: 'auto' }}>
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack direction="row" spacing={1} sx={{
+        alignItems: 'center',
+      }}>
         <HubIcon color="primary" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }}>
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontWeight: 600,
+            flex: 1,
+          }}>
           MCP connections
         </Typography>
         <Button
@@ -279,7 +297,9 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
         )}
       </Stack>
 
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{
+        color: 'text.secondary',
+      }}>
         Connect Notion (or another MCP server) so Vault can search and update that workspace. Sign-in
         opens in your browser; when it finishes, tools appear below.
       </Typography>
@@ -303,7 +323,13 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
 
       <Card variant="outlined">
         <CardContent>
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              mb: 1,
+            }}>
             <Typography variant="subtitle2" sx={{ flex: 1 }}>
               Notion
             </Typography>
@@ -315,17 +341,33 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
               />
             )}
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 1,
+            }}>
             Official Notion MCP · browser sign-in
           </Typography>
           {notionServer?.workspaceId && (
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+              }}>
               Workspace: {notionServer.workspaceId}
               {notionServer.emailDomain ? ` · ${notionServer.emailDomain}` : ''}
             </Typography>
           )}
           {notionServer?.error && notionServer.status !== 'connected' && (
-            <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="caption"
+              color="error"
+              sx={{
+                display: 'block',
+                mt: 0.5,
+              }}>
               {notionServer.error}
             </Typography>
           )}
@@ -379,7 +421,9 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
         {notionServer && (toolsById[notionServer.id]?.length || notionServer.toolCount) ? (
           <Box sx={{ px: 2, pb: 2 }}>
             <Divider sx={{ mb: 1 }} />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: 'text.secondary',
+            }}>
               Tools ({toolsById[notionServer.id]?.length ?? notionServer.toolCount ?? 0})
             </Typography>
             <List dense disablePadding>
@@ -388,9 +432,10 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
                   <ListItemText
                     primary={t.name}
                     secondary={t.description}
-                    primaryTypographyProps={{ variant: 'body2', fontFamily: 'monospace' }}
-                    secondaryTypographyProps={{ variant: 'caption' }}
-                  />
+                    slotProps={{
+                      primary: { variant: 'body2', sx: { fontFamily: 'monospace' } },
+                      secondary: { variant: 'caption' },
+                    }} />
                 </ListItem>
               ))}
             </List>
@@ -407,17 +452,30 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
       {otherServers.map((s) => (
         <Card key={s.id} variant="outlined">
           <CardContent>
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                mb: 0.5,
+              }}>
               <Typography variant="subtitle2" sx={{ flex: 1 }}>
                 {s.name}
               </Typography>
               <Chip size="small" label={statusLabel(s.status)} color={statusColor(s.status)} />
             </Stack>
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+              }}>
               <code>{s.url}</code>
             </Typography>
             {s.error && s.status !== 'connected' && (
-              <Typography variant="caption" color="error" display="block">
+              <Typography variant="caption" color="error" sx={{
+                display: 'block',
+              }}>
                 {s.error}
               </Typography>
             )}
@@ -460,9 +518,10 @@ export function McpConnectionsView({ onClose }: VaultPluginRenderProps) {
                     <ListItemText
                       primary={t.name}
                       secondary={t.description}
-                      primaryTypographyProps={{ variant: 'body2', fontFamily: 'monospace' }}
-                      secondaryTypographyProps={{ variant: 'caption' }}
-                    />
+                      slotProps={{
+                        primary: { variant: 'body2', sx: { fontFamily: 'monospace' } },
+                        secondary: { variant: 'caption' },
+                      }} />
                   </ListItem>
                 ))}
               </List>

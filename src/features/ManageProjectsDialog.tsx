@@ -67,7 +67,9 @@ export const ManageProjectsDialog = memo(function ManageProjectsDialog(props: Ma
       <DialogTitle>Manage projects</DialogTitle>
       <DialogContent dividers>
         {projects.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: 'text.secondary',
+          }}>
             No projects yet. Assign a project to a note (its Project picker) to create one.
           </Typography>
         ) : (
@@ -82,7 +84,9 @@ export const ManageProjectsDialog = memo(function ManageProjectsDialog(props: Ma
                   disableGutters
                   sx={{ flexDirection: 'column', alignItems: 'stretch', py: 1 }}
                 >
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{
+                    alignItems: 'center',
+                  }}>
                     <ListItemText primary={p.name} secondary={projectSecondary(p)} />
                     {!isRenaming && !isMerging && !isDating && (
                       <Stack direction="row" spacing={0.5}>
@@ -121,7 +125,13 @@ export const ManageProjectsDialog = memo(function ManageProjectsDialog(props: Ma
                   </Stack>
 
                   {isRenaming && (
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: 'center',
+                        mt: 1,
+                      }}>
                       <TextField
                         size="small"
                         fullWidth
@@ -148,16 +158,24 @@ export const ManageProjectsDialog = memo(function ManageProjectsDialog(props: Ma
                   )}
 
                   {isDating && onSetExamDate && (
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: 'center',
+                        mt: 1,
+                      }}>
                       <TextField
                         size="small"
                         type="date"
                         label={`Exam date for ${p.name}`}
                         value={dateValue}
                         onChange={(e) => setDateValue(e.target.value)}
-                        InputLabelProps={{ shrink: true }}
                         sx={{ flex: 1 }}
                         autoFocus
+                        slotProps={{
+                          inputLabel: { shrink: true },
+                        }}
                       />
                       <Button
                         variant="contained"
@@ -190,7 +208,13 @@ export const ManageProjectsDialog = memo(function ManageProjectsDialog(props: Ma
                   )}
 
                   {isMerging && (
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: 'center',
+                        mt: 1,
+                      }}>
                       <FormControl size="small" fullWidth>
                         <InputLabel id={`merge-target-${p.name}`}>Merge into</InputLabel>
                         <Select

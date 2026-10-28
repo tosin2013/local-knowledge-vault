@@ -20,7 +20,7 @@ import {
 } from '@mui/material'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline'
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlined'
 import { formatHms, openMediaMoment } from '../../plugins/media-chat/bookmarks'
 import type {
   ReviewGrade,
@@ -272,10 +272,17 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
       {(phase === 'idle' || phase === 'starting') && (
         <Card variant="outlined" sx={{ flexShrink: 0 }}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="subtitle1" sx={{
+              fontWeight: 600,
+            }}>
               {dueCount ? `${plural(dueCount, 'card')} ready` : 'Study session'}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mb: 1.5,
+              }}>
               One question at a time. Answer from memory first, say how sure you are, then check it against your
               note and grade yourself.
             </Typography>
@@ -300,8 +307,21 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
         <Card variant="outlined" sx={{ flexShrink: 0 }} key={`${current.card_id}-${index}`} data-testid="session-card">
           <LinearProgress variant="determinate" value={(index / Math.max(queue.length, 1)) * 100} />
           <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              sx={{
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                mb: 1,
+              }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  flex: 1,
+                }}>
                 Card {index + 1} of {queue.length}
               </Typography>
               <Chip size="small" variant="outlined" label={ORIGIN_LABEL[current.origin] ?? 'Card'} />
@@ -323,9 +343,17 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
             </Stack>
 
             {!question ? (
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 2 }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                  py: 2,
+                }}>
                 <CircularProgress size={18} />
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: 'text.secondary',
+                }}>
                   Writing a question from your note…
                 </Typography>
               </Stack>
@@ -346,7 +374,13 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                 )}
 
                 {question.mode === 'recall' && !revealed && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                      display: 'block',
+                      mb: 1,
+                    }}>
                     You picked the right option twice in a row, so this time answer from memory. A miss brings the
                     options back.
                   </Typography>
@@ -380,11 +414,15 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                       fullWidth
                       autoFocus
                       disabled={dontKnow}
-                      inputProps={{ 'aria-label': 'Your answer' }}
+                      slotProps={{
+                        htmlInput: { 'aria-label': 'Your answer' },
+                      }}
                     />
                     )}
                     <Box sx={{ mt: 1.5, maxWidth: 420 }}>
-                      <Typography variant="caption" color="text.secondary" id="session-confidence-label">
+                      <Typography variant="caption" id="session-confidence-label" sx={{
+                        color: 'text.secondary',
+                      }}>
                         {dontKnow ? 'Confidence: 0% (you don’t know yet)' : `How sure are you? ${confidence}%`}
                       </Typography>
                       <Slider
@@ -398,7 +436,14 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         aria-label="Confidence"
                       />
                     </Box>
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      useFlexGap
+                      sx={{
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}>
                       <Button
                         size="small"
                         variant={dontKnow ? 'contained' : 'outlined'}
@@ -414,7 +459,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         {isMc ? 'Check answer' : 'Reveal answer'}
                       </Button>
                       {!canReveal && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: 'text.secondary',
+                        }}>
                           {isMc ? 'Pick an option or choose “I don’t know” first.' : 'Type your answer or choose “I don’t know” first.'}
                         </Typography>
                       )}
@@ -452,7 +499,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                                   bgcolor: right ? 'success.50' : undefined,
                                 }}
                               >
-                                <Typography variant="body2" fontWeight={right || mine ? 600 : 400}>
+                                <Typography variant="body2" sx={{
+                                  fontWeight: right || mine ? 600 : 400,
+                                }}>
                                   {LETTERS[i]}. {o.text}
                                   {right ? '  ✓ answer' : mine ? '  ✗ your pick' : ''}
                                 </Typography>
@@ -460,7 +509,13 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                             )
                           })}
                         </List>
-                        <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }} data-testid="mc-result">
+                        <Typography
+                          variant="body2"
+                          data-testid="mc-result"
+                          sx={{
+                            fontWeight: 600,
+                            mt: 0.5,
+                          }}>
                           {dontKnow
                             ? `You didn’t know; the answer is ${optionLabel(question, question.answerKey ?? '')}. Graded Missed.`
                             : pickedRight
@@ -468,7 +523,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                               : `You picked ${optionLabel(question, picked ?? '')}; the answer is ${optionLabel(question, question.answerKey ?? '')}. Graded Missed.`}
                         </Typography>
                         {!dontKnow && !pickedRight && picked && question.whyWrong?.[picked] && question.lastPick?.key !== picked && (
-                          <Typography variant="body2" color="text.secondary" data-testid="mc-why-wrong">
+                          <Typography variant="body2" data-testid="mc-why-wrong" sx={{
+                            color: 'text.secondary',
+                          }}>
                             Why not {question.options!.find((o) => o.key === picked)?.text}: {question.whyWrong[picked]}
                           </Typography>
                         )}
@@ -476,7 +533,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                     )}
                     {!isMc && (
                     <Box>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: 'text.secondary',
+                      }}>
                         Your answer · {dontKnow ? 'confidence 0%' : `confidence ${confidence}%`}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -487,30 +546,40 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                     <Divider />
                     {question.answer && !isMc && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: 'text.secondary',
+                        }}>
                           Answer
                         </Typography>
-                        <Typography variant="body1" fontWeight={600} data-testid="session-answer">
+                        <Typography variant="body1" data-testid="session-answer" sx={{
+                          fontWeight: 600,
+                        }}>
                           {question.answer}
                         </Typography>
                       </Box>
                     )}
                     {question.origin === 'practice-test' && !question.answer && (
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" sx={{
+                        color: 'text.secondary',
+                      }}>
                         The test didn&apos;t include the correct answer.{' '}
                         {question.linkedNote?.confirmed ? 'Check it against your note.' : 'Check your notes or the test.'}
                       </Typography>
                     )}
                     {question.explanation && (
                       <Box data-testid="session-explanation">
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: 'text.secondary',
+                        }}>
                           Why (from the test)
                         </Typography>
                         <Typography variant="body2">{question.explanation}</Typography>
                       </Box>
                     )}
                     {question.linkedNote && !question.linkedNote.confirmed && (
-                      <Typography variant="caption" color="text.secondary" data-testid="draft-waiting">
+                      <Typography variant="caption" data-testid="draft-waiting" sx={{
+                        color: 'text.secondary',
+                      }}>
                         A corrective draft for this question is in your notes. Confirm it in your own words and it will
                         be linked here.
                       </Typography>
@@ -525,7 +594,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                     )}
                     {question.origin !== 'practice-test' && (question.kind === 'explain' || !question.answer) && (
                       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, maxHeight: 260, overflow: 'auto' }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: 'text.secondary',
+                        }}>
                           Compare with your note
                         </Typography>
                         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -533,7 +604,14 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         </Typography>
                       </Box>
                     )}
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      useFlexGap
+                      sx={{
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}>
                       {question.citations.map((c) => (
                         <Chip
                           key={c.id}
@@ -582,11 +660,15 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         </Typography>
                       </Box>
                     </Collapse>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: 'text.secondary',
+                    }}>
                       How did you do?
                     </Typography>
                     {isMc ? (
-                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <Stack direction="row" spacing={1} useFlexGap sx={{
+                        flexWrap: 'wrap',
+                      }}>
                         {pickedRight && !dontKnow ? (
                           <>
                             <Button size="small" variant="contained" disabled={grading} onClick={() => void grade('good')}>
@@ -603,7 +685,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                         )}
                       </Stack>
                     ) : (
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{
+                      flexWrap: 'wrap',
+                    }}>
                       {STUDY_GRADES.map(({ grade: g, label }) => (
                         <Button
                           key={g}
@@ -629,14 +713,21 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
       {phase === 'summary' && (
         <Card variant="outlined" sx={{ flexShrink: 0 }} data-testid="session-summary">
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 600,
+                mb: 1,
+              }}>
               Session complete
             </Typography>
             {!report ? (
               <CircularProgress size={18} />
             ) : (
               <Stack spacing={1.5}>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap aria-label="Grades">
+                <Stack direction="row" spacing={1} useFlexGap aria-label="Grades" sx={{
+                  flexWrap: 'wrap',
+                }}>
                   <Chip color="primary" label={`${gradeLabel('good')}: ${report.got}`} />
                   <Chip color="warning" variant="outlined" label={`${gradeLabel('hard')}: ${report.partial}`} />
                   <Chip color="error" variant="outlined" label={`${gradeLabel('again')}: ${report.missed}`} />
@@ -653,7 +744,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                 </Typography>
                 {report.confidentMisses.length > 0 && (
                   <Alert severity="warning" data-testid="confident-misses">
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 600,
+                    }}>
                       Confident but missed ({report.confidentMisses.length})
                     </Typography>
                     <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
@@ -678,10 +771,14 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                 <RepeatedPicks picks={report.repeatedPicks} onOpenNote={onOpenNote} />
                 {report.revisit.length > 0 && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: 'text.secondary',
+                    }}>
                       Notes to revisit
                     </Typography>
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                    <Stack direction="row" spacing={0.5} useFlexGap sx={{
+                      flexWrap: 'wrap',
+                    }}>
                       {report.revisit.map((r) => (
                         <Chip
                           key={r.itemId}
@@ -694,7 +791,9 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
                     </Stack>
                   </Box>
                 )}
-                <Typography variant="body2" color="text.secondary" data-testid="whats-next">
+                <Typography variant="body2" data-testid="whats-next" sx={{
+                  color: 'text.secondary',
+                }}>
                   {report.nextDueAt
                     ? `What’s next: ${plural(report.dueByTomorrow, 'card')} due by tomorrow; the next one is due ${formatDue(report.nextDueAt)}.`
                     : report.dueByTomorrow > 0

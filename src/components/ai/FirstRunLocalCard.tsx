@@ -19,9 +19,9 @@ function CopyCommand({ command }: { command: string }) {
   return (
     <Stack
       direction="row"
-      alignItems="center"
       spacing={1}
       sx={{
+        alignItems: 'center',
         px: 1.5,
         py: 0.75,
         borderRadius: 2,
@@ -29,8 +29,7 @@ function CopyCommand({ command }: { command: string }) {
         border: 1,
         borderColor: 'divider',
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      }}
-    >
+      }}>
       <Typography component="code" variant="body2" sx={{ fontFamily: 'inherit', flex: 1, userSelect: 'all' }}>
         {command}
       </Typography>
@@ -79,7 +78,12 @@ export function FirstRunLocalCard({
       <Typography variant="h6" color="primary" gutterBottom>
         Vault runs on local models
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          mb: 1.5,
+        }}>
         {ollamaRunningNoModels
           ? 'Ollama is running but has no models yet. Pull one and we’ll pick it up automatically.'
           : 'Start Ollama or LM Studio and we’ll detect it — your notes never leave this computer. Search works either way.'}
@@ -89,11 +93,25 @@ export function FirstRunLocalCard({
         Recommended model: <b>{rec.name}</b>
       </Typography>
       <CopyCommand command={rec.command} />
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, mb: 1.5 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          display: 'block',
+          mt: 0.5,
+          mb: 1.5,
+        }}>
         {rec.why} Using LM Studio instead? Search for “Qwen3 8B” in its model browser and load it.
       </Typography>
 
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}>
         <Button variant="contained" onClick={onRecheck} disabled={checking}>
           {checking ? 'Checking…' : 'Re-check'}
         </Button>

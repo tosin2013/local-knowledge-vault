@@ -58,7 +58,9 @@ export function MultipleChoiceSetting({ project }: MultipleChoiceSettingProps) {
             checked={on}
             disabled={busy}
             onChange={(e) => void change(e.target.checked)}
-            inputProps={{ 'aria-label': 'Ask multiple-choice questions as multiple choice' }}
+            slotProps={{
+              input: { 'aria-label': 'Ask multiple-choice questions as multiple choice' },
+            }}
           />
         }
         label={<Typography variant="body2">Ask multiple-choice questions as multiple choice</Typography>}
