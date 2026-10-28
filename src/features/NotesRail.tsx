@@ -90,6 +90,11 @@ export const INITIAL_NOTES_SHOWN = 100
 export const NOTES_SHOWN_STEP = 200
 /** Extend the window when the reader is within this many pixels of the bottom. */
 const EXTEND_THRESHOLD_PX = 600
+/**
+ * #374: the note list never shrinks below this (four to six rows: 64–92 px each). When
+ * the window is too short for it plus the controls above, the whole rail scrolls.
+ */
+export const NOTE_LIST_MIN_HEIGHT_PX = 400
 
 interface NoteRowProps {
   it: Item
@@ -284,7 +289,14 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
       component="aside"
       className="sidebar"
       square
-      sx={{ bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', borderRadius: 0 }}
+      sx={{
+        bgcolor: 'background.paper',
+        borderRight: 1,
+        borderColor: 'divider',
+        borderRadius: 0,
+        overflowX: 'hidden',
+        overflowY: 'auto',
+      }}
     >
       <Stack spacing={1.25} sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
         <Button
@@ -675,7 +687,7 @@ export const NotesRail = memo(function NotesRail(props: NotesRailProps) {
         data-testid="note-list"
         ref={listRef}
         onScroll={handleListScroll}
-        sx={{ p: 1 }}
+        sx={{ p: 1, flex: 1, minHeight: NOTE_LIST_MIN_HEIGHT_PX, overflowY: 'auto' }}
       >
         {items.length === 0 &&
           (isEmpty ? (
