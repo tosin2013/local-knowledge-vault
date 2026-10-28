@@ -4,6 +4,29 @@ All notable changes to Vault. Versions match the `vX.Y.Z` tags on the
 [Releases page](https://github.com/tosin2013/local-knowledge-vault/releases); the release workflow
 uses the matching section below as the release notes.
 
+## [0.6.0] — Study a video
+
+Media chat becomes a place to study a lecture, not just ask about it: mark moments, get quizzed
+before you're told, and write your own study guide while Vault checks it against the transcript.
+
+### Media chat
+- **Video bookmarks**: press **B** to save the playhead, then label and tag it, see it as a tick on the timeline, jump back, ask about it, summarize them all, or turn them into Study cards. (#334)
+- **Exam tutor voice**: a built-in Media voice that asks first, gives hints in steps, and shows the cited answer only after you've tried. (#364)
+- **Notes while watching**: start a study guide or research notes beside the player (fullscreen too). You write at checkpoints (chapter boundaries or every N minutes) and Vault checks your entry against the transcript and cites it. (#365)
+
+### Study
+- Study home, session start and the session summary load only the cards a session shows, and count the queue without loading every card body. (#296)
+
+### UI
+- Moved to MUI 9. Switches are announced as switches to screen readers. (#372)
+- At 1280×800 the notes list keeps room for several notes, and the local **Model** label no longer overlaps "Auto-pick". (#373, #374)
+
+### Platform
+- Electron 45. (#358)
+
+### Docs
+- README "Study a video" section and video guide screenshots for bookmarks, Exam tutor and the study guide. (#268)
+
 ## [0.5.0] — Media chat you can study with
 
 Media chat goes from a preview to a real study tool. Local videos (file + captions) and YouTube

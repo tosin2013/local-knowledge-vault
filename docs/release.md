@@ -45,6 +45,45 @@ If a tag was pushed by mistake (e.g. before the bump), delete it locally and on 
 
 **Dry run:** **Actions → Release → Run workflow** (or `gh workflow run release.yml --ref <branch>`)
 runs verify and build, uploads installers as workflow artifacts, and never publishes, even on a tag ref.
+Run it on the PR branch before merging an Electron major or a release-prep PR.
+
+## Release candidate, then final
+
+Each installer is built by CI, but it is only *verified* by installing it on a real machine. So a
+release goes out as a release candidate first:
+
+1. In the release-prep PR, set `npm version X.Y.Z-rc.1 --no-git-tag-version` and add the
+   `## [X.Y.Z] — Title` CHANGELOG section. Run the dry run on the branch, then merge.
+2. Tag `vX.Y.Z-rc.1` and push it. The workflow publishes a **pre-release** with every installer
+   and the `[X.Y.Z]` CHANGELOG section as notes. GitHub's "latest release" ignores pre-releases,
+   so no installed copy of Vault is told about it.
+3. Install the RC on each OS and work through the checklist below. Record the results on the
+   release's tracking issue. A failure means a fix PR, then `-rc.2`.
+4. When all three OSes pass, set `npm version X.Y.Z` in a PR, merge, tag `vX.Y.Z` and push it.
+
+Notes:
+- The in-app update check can't parse `X.Y.Z-rc.N`, so an RC install shows no update notice, not
+  even for the final release. Testers update by hand.
+- `.deb` and `.rpm` may sort `X.Y.Z-rc.1` *after* `X.Y.Z`, so the package manager could call the
+  final a downgrade (inference from dpkg version ordering; confirm on the first RC). Remove the
+  RC (`sudo apt remove local-knowledge-vault`) before installing the final.
+
+### Per-OS checklist
+
+Use a fresh profile so first-launch behaviour is tested (`LKV_USER_DATA_DIR=$(mktemp -d)` on
+Linux/macOS, or a new Windows user), and a window of about 1280×800.
+
+- [ ] Installs, and the OS warning matches the README (macOS "Open Anyway", Windows SmartScreen)
+- [ ] First launch seeds the **Vault guide** project
+- [ ] Header chip finds the local model (Ollama or LM Studio), or the setup card shows otherwise
+- [ ] Ask answers a guide question with a `[1]` citation, and the chip opens the note
+- [ ] Ask something not in the notes: "I couldn't find that in your notes"
+- [ ] Import Markdown or a PDF finishes (exercises the packaged job worker)
+- [ ] Media chat plays a local video with captions; a citation seeks; **B** adds a bookmark
+- [ ] Study: start a session on a project, attempt, reveal, rate, see the summary
+- [ ] The notes list shows several notes; Settings → All providers: "Model" doesn't overlap "Auto-pick"
+- [ ] Settings → Updates → Check now says "You're up to date (Vault X.Y.Z-rc.N)": right version, no update offered
+- [ ] Quit and relaunch: notes and the Media chat session are still there
 
 ## Artifacts
 

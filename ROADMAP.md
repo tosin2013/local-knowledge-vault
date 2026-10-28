@@ -35,7 +35,7 @@ date, with a pass/fail result. That this is the right user is a **hypothesis**; 
 
 | ID | Feature | One-line scope (in / out) | Outcome | Depends on | Order | Milestone | Status | Spec dir | Issue / PR |
 |---|---|---|---|---|---|---|---|---|---|
-| R1 | Usable at 1280×800 | in: notes-rail height, provider label overlap / out: other layout | the rail shows ≥5 notes and the Model label doesn't overlap "Auto-pick" at 1280×800 | — | 1 | v0.6.0 | building | — | #373, #374, PR #377 |
+| R1 | Usable at 1280×800 | in: notes-rail height, provider label overlap / out: other layout | the rail shows ≥5 notes and the Model label doesn't overlap "Auto-pick" at 1280×800 | — | 1 | v0.6.0 | building | — | #373, #374, PR #377, PR #375, PR #376 |
 | R2 | Release v0.6.0 on Linux, Windows, macOS | in: pre-release tag support, CHANGELOG, release dry run, per-OS checklist, RC then final / out: code signing (R11) | v0.6.0 published after the `docs/release.md` checklist passes on all three OSes | R1 | 2 | v0.6.0 | building | — | PR #378 |
 | R3 | Adopt Spec Kit (L0) | in: inventory, constitution from the real code (grounding contract, local-first, keys never over IPC, tests land with code, builder-written tests alone never mean done), recorded test baseline / out: Ralph, sandbox, unattended runs | an approved constitution and test baseline are committed | — | 3 | v0.7.0 | planned | — | — |
 | R4 | Retrieval eval on a long certification text | in: one openly licensed long certification-style text, about 50 exam-style questions each with a gold passage, a repeatable script reporting recall@5 and the false "not found" rate / out: embeddings, UI | baseline numbers recorded, plus a written build/skip decision for R5 | R3 | 4 | v0.7.0 | planned | — | #219 (partial) |
