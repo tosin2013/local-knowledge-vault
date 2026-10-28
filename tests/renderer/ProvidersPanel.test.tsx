@@ -93,9 +93,14 @@ describe('ProvidersPanel', () => {
     expect(screen.queryByText(/Fixed to one provider/)).not.toBeInTheDocument()
   })
 
-  it('keeps the local Model label shrunk above "Auto-pick" (#373)', () => {
+  // #373: Auto-pick is the empty value, so MUI would leave the label unshrunk on top of the rendered text.
+  it('keeps the local model label shrunk above the Auto-pick value (#373)', () => {
     render(<ProvidersPanel {...makeProps()} />)
-    expect(screen.getByText('Auto-pick')).toBeInTheDocument()
-    expect(screen.getByText('Model', { selector: 'label' })).toHaveAttribute('data-shrink', 'true')
+    const row = screen.getByTestId('provider-row-ollama')
+    const label = row.querySelector('#model-ollama') as HTMLElement
+    expect(label).toHaveTextContent('Model')
+    expect(label).toHaveAttribute('data-shrink', 'true')
+    expect(row.querySelector('.MuiOutlinedInput-notchedOutline legend span')).toHaveTextContent('Model')
+    expect(row).toHaveTextContent('Auto-pick')
   })
 })

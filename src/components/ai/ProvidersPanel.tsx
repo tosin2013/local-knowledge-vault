@@ -129,11 +129,14 @@ export function ProvidersPanel({
           </Box>
           {p.local && installed.length > 0 && (
             <FormControl size="small" sx={{ minWidth: 190 }}>
-              {/* displayEmpty always renders a value ("Auto-pick"), so the label must stay shrunk (#373). */}
-              <InputLabel id={`model-${p.id}`} shrink>Model</InputLabel>
+              {/* #373: the value is '' for Auto-pick but renderValue shows text, so keep the label shrunk. */}
+              <InputLabel id={`model-${p.id}`} shrink>
+                Model
+              </InputLabel>
               <Select
                 labelId={`model-${p.id}`}
                 label="Model"
+                notched
                 value={installed.includes(p.model) ? p.model : ''}
                 onChange={(e) => void setModel(p, String(e.target.value))}
                 displayEmpty
