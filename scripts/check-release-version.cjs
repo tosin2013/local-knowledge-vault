@@ -9,7 +9,8 @@ const { version } = require('../package.json')
 const lock = require('../package-lock.json')
 const tag = process.argv[2] || process.env.GITHUB_REF_NAME || ''
 const problems = []
-if (!/^v\d+\.\d+\.\d+$/.test(tag)) problems.push(`tag "${tag}" is not vX.Y.Z`)
+// A hyphenated suffix (v0.6.0-rc.1) is a pre-release; the release job publishes it as one.
+if (!/^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(tag)) problems.push(`tag "${tag}" is not vX.Y.Z or vX.Y.Z-pre`)
 if (tag && tag.slice(1) !== version) problems.push(`tag ${tag} does not match package.json version ${version}`)
 if (lock.version !== version) problems.push(`package-lock.json version ${lock.version} does not match package.json ${version}`)
 if (problems.length) {

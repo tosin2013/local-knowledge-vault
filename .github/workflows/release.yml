@@ -163,7 +163,9 @@ jobs:
       - name: Release notes from CHANGELOG.md
         id: notes
         run: |
+          # A pre-release (v0.6.0-rc.1) uses its final version's section ([0.6.0]).
           version="${GITHUB_REF_NAME#v}"
+          version="${version%%-*}"
           awk -v v="$version" '
             /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, "## " v) || index($0, "## v" v)) { found=1; next } }
             found { print }
