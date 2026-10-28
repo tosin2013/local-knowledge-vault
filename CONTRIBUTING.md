@@ -15,6 +15,9 @@ Found a security problem? Don't open an issue; report it privately as described 
 
 ## Start from an issue
 
+What gets built, and in what order, is in [ROADMAP.md](ROADMAP.md), the roadmap of record.
+Milestones and labels are views of it.
+
 Every change starts from a GitHub issue. The repository is governed by
 [Repo Governor](https://github.com/tosin2013/repo-governor), which reads two labels:
 
