@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { INITIAL_NOTES_SHOWN, NOTES_SHOWN_STEP, NotesRail } from '../../src/features/NotesRail'
+import { INITIAL_NOTES_SHOWN, NOTE_LIST_MIN_HEIGHT_PX, NOTES_SHOWN_STEP, NotesRail } from '../../src/features/NotesRail'
 import { makeItem, lkvMock } from './lkv'
 import type { Item } from '../../electron/types'
 
@@ -198,3 +198,21 @@ describe('NotesRail bulk move (#276)', () => {
     expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled()
   })
 })
+
+// #374: at 1280x800 the controls above used to squeeze the list to ~16px.
+describe('NotesRail list height (#374)', () => {
+  it('keeps room for several rows and lets the rail scroll instead of squeezing the list', () => {
+    const { container } = renderRail(manyItems(8))
+    const list = screen.getByTestId('note-list')
+    const listStyle = getComputedStyle(list)
+    expect(NOTE_LIST_MIN_HEIGHT_PX).toBeGreaterThanOrEqual(5 * 64)
+    expect(listStyle.minHeight).toBe(`${NOTE_LIST_MIN_HEIGHT_PX}px`)
+    expect(listStyle.overflowY).toBe('auto')
+    expect(listStyle.flexGrow).toBe('1')
+    const rail = container.querySelector('aside.sidebar') as HTMLElement
+    expect(getComputedStyle(rail).overflowY).toBe('auto')
+    expect(getComputedStyle(rail).overflowX).toBe('hidden')
+    expect(renderedRowCount()).toBe(8)
+  })
+})
+
