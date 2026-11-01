@@ -541,6 +541,14 @@ async function main(): Promise<void> {
     'tokenizeFts lowercases and drops stopwords'
   )
   assert(
+    buildFtsQuery('What is PARA?') === '"para"',
+    'buildFtsQuery strips a question mark so the last word still matches (#383)'
+  )
+  assert(
+    JSON.stringify(tokenizeFts('Really?! node.js, e.g. ...')) === '["really","node.js","e.g"]',
+    'tokenizeFts strips edge punctuation, keeps inner dots, drops punctuation-only terms'
+  )
+  assert(
     buildFtsQuery('alpha beta alpha Alpha beta') === '"alpha" OR "beta"',
     'buildFtsQuery deduplicates repeated terms (#196)'
   )
@@ -560,6 +568,13 @@ async function main(): Promise<void> {
   const strongHits = searchQuery({ text: 'kayak paddle budget quarterly forecast zephyr marigold lantern', limit: 5 })
   assert(strongHits.hits[0]?.id === strong.id, 'a strong multi-term match is returned first, not filtered out (#196)')
   assert(strongHits.hits[0]?.score < -15, 'the strong match scores below the old -15 floor (regression guard for #196)')
+
+  // --- A question's last word matches despite the "?" (#383) ---
+  const para = createItem({ title: 'Folders', body: 'Vault organises notes into four PARA groups.', kind: 'note', project: 'para' })
+  assert(
+    searchQuery({ text: 'What is PARA?', limit: 5 }).hits.some((h: { id: string }) => h.id === para.id),
+    'the empty-screen example "What is PARA?" finds the note (#383)'
+  )
 
   // --- CJK substring search via trigram (#37) ---
   const cjk = createItem({ title: 'CJK note', body: '今日の東京の天気は晴れです', kind: 'note' })

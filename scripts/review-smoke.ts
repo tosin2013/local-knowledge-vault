@@ -500,6 +500,8 @@ violate the CompTIA Candidate Agreement. ${words(200)}`
   assert(looksLikeContentsSection(flatToc), 'a flattened PDF contents page is a contents section')
   assert(!looksLikeContentsSection(`See Section 3.2 ${'. '.repeat(10)}14 for the details. ${words(80)}`), 'one dot-leader reference is not')
   assert(!looksLikeContentsSection(`Wait... then... it... works... ${words(40)}`), 'ellipses in prose are not')
+  const shortBook = `1 Rivers ........ 2 2 Glaciers ........ 3 3 Deltas ........ 4 Rivers carry water downhill. ${words(120)}`
+  assert(!looksLikeContentsSection(shortBook), 'a short book merged into one note (contents plus its text) is studied (#386)')
   const realNote = `Photosynthesis converts light energy into chemical energy. ${words(30)}`
   assert(boilerplateReason(realNote) === null, 'a real note is kept')
   assert(

@@ -538,13 +538,19 @@ export function boilerplateReason(body: string): string | null {
   return null
 }
 
+/** A contents entry ("Purpose of this guide . . . 1") runs 2–6 words; real text averages far more per leader. */
+const CONTENTS_MAX_WORDS_PER_ENTRY = 12
+
 /**
  * Is this section a table of contents? True when it holds three or more
  * dot-leader runs that end in a page number ("Introduction . . . . . 1"),
- * which survive the PDF importer flattening a page to one line. Pure.
+ * which survive the PDF importer flattening a page to one line, and is mostly
+ * those entries: a short book merged into one note keeps its contents list
+ * and its real text in the same section, and that section is studied (#386). Pure.
  */
 export function looksLikeContentsSection(text: string): boolean {
-  return ((text ?? '').match(/(?:\.\s?){5,}\s*(?:\d+|[ivxlc]+)\b/gi) ?? []).length >= 3
+  const entries = ((text ?? '').match(/(?:\.\s?){5,}\s*(?:\d+|[ivxlc]+)\b/gi) ?? []).length
+  return entries >= 3 && contentWords(text).length / entries <= CONTENTS_MAX_WORDS_PER_ENTRY
 }
 
 export interface EnrollCandidate {

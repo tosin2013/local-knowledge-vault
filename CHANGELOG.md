@@ -16,7 +16,10 @@ before you're told, and write your own study guide while Vault checks it against
 
 ### Study
 - Study home, session start and the session summary load only the cards a session shows, and count the queue without loading every card body. (#296)
-- Imported books no longer get cards for their table of contents, and a section the model finds nothing to study in is skipped and taken out of the queue, instead of becoming an "explain the main idea" prompt. (found testing 0.6.0-rc.1)
+- Imported books no longer get cards for their table of contents, and a section the model finds nothing to study in is skipped and taken out of the queue, instead of becoming an "explain the main idea" prompt. A short book merged into one note is still studied. (found testing 0.6.0-rc.1, #386)
+
+### Ask
+- A question's last word now counts in search: "What is PARA?" searched for "para?" and never matched. (#383)
 
 ### UI
 - Moved to MUI 9. Switches are announced as switches to screen readers. (#372)
