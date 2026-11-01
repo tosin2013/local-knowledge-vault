@@ -17,9 +17,15 @@ before you're told, and write your own study guide while Vault checks it against
 ### Study
 - Study home, session start and the session summary load only the cards a session shows, and count the queue without loading every card body. (#296)
 - Imported books no longer get cards for their table of contents, and a section the model finds nothing to study in is skipped and taken out of the queue, instead of becoming an "explain the main idea" prompt. A short book merged into one note is still studied. (found testing 0.6.0-rc.1, #386)
+- A session that asks fewer cards than are due says so, and the "Enrolling notes" banner clears when enrolling is done. (#385)
+- Fill-the-gap cards no longer blank a chapter heading that PDF text runs into the first sentence. (#387)
+
+### Import
+- PDF books: contents pages are left out, each chapter or numbered section starts its own note, and a contents line is never used as a note title. (#386)
 
 ### Ask
 - A question's last word now counts in search: "What is PARA?" searched for "para?" and never matched. (#383)
+- **New chat** keeps the selected Profile instead of switching to "Custom". (#384)
 
 ### UI
 - Moved to MUI 9. Switches are announced as switches to screen readers. (#372)
