@@ -202,11 +202,36 @@ function sentencesOf(source: string): string[] {
   const out: string[] = []
   for (const line of lines) {
     for (const s of line.split(/(?<=[.!?])\s+(?=[A-Z0-9("'])/)) {
-      const t = s.trim()
+      const t = stripLeadingHeading(s.trim())
       if (t) out.push(t)
     }
   }
   return out
+}
+
+/**
+ * "Chapter 2", "Section 3.1:", "Part IV." — a heading label that PDF text runs
+ * into the first sentence. A stray page number in front of it (the end of a
+ * contents leader, "Index ........ 9 Chapter 1 …") is part of the label.
+ */
+const HEADING_LABEL = /^(?:\d+\s+)?(?:chapter|section|part|unit|lesson|module|appendix)\s+(?:\d+(?:\.\d+)*|[ivxlcdm]+|[a-z])\b[.:)]?\s+/i
+
+/**
+ * Drop a heading that runs straight into a sentence, so its words can't be
+ * chosen as the gap (#387). PDF text loses the line break, giving e.g.
+ * "Chapter 2 Glaciers Glaciers are slow rivers of ice": after the label, the
+ * heading is the run of capitalised words, and the sentence starts at the
+ * last of them ("Glaciers are slow rivers of ice"). Pure.
+ */
+export function stripLeadingHeading(sentence: string): string {
+  const label = HEADING_LABEL.exec(sentence)
+  if (!label) return sentence
+  const tokens = sentence.slice(label[0].length).split(/\s+/).filter(Boolean)
+  let run = 0
+  while (run < tokens.length && /^[A-Z0-9]/.test(tokens[run])) run++
+  // A heading with no sentence after it (or nothing but capitalised words) is not a sentence.
+  if (run === 0 || run >= tokens.length) return run === 0 ? tokens.join(' ') : ''
+  return tokens.slice(run - 1).join(' ')
 }
 
 /** Words people write in capitals for emphasis or as site chrome; not acronyms worth a gap. */
