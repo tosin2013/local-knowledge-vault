@@ -123,9 +123,17 @@ export default function App() {
   useEffect(() => {
     if (!hasApi) return
     return window.lkv.jobs.onJobProgress((p) => {
-      setStatusMsg(`${p.label}: ${p.done} / ${p.total}`)
+      const prefix = `${p.label}: `
+      if (p.total > 0 && p.done >= p.total) {
+        // The job is done: drop its progress line instead of leaving
+        // "Enrolling notes: 9 / 9" up for the whole session (#385). A newer
+        // message (an import result, say) is left alone.
+        setStatusMsgState((cur) => (cur?.startsWith(prefix) ? null : cur))
+        return
+      }
+      setStatusMsg(`${prefix}${p.done} / ${p.total}`)
     })
-  }, [hasApi])
+  }, [hasApi, setStatusMsg])
 
   // When left-rail filters change while Find is showing an active query, re-run search.
   useEffect(() => {

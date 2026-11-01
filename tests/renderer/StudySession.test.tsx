@@ -38,6 +38,13 @@ describe('StudySession (#263)', () => {
     expect(lkv.study.startSession).toHaveBeenCalledWith({ project: 'Biology', limit: 20 })
   })
 
+  it('says a session asks 20 of 21 due cards (#385)', async () => {
+    const lkv = lkvMock()
+    lkv.review.count.mockResolvedValue(21)
+    render(<StudySession project="Biology" />)
+    expect(await screen.findByText('20 of 21 cards ready')).toBeInTheDocument()
+  })
+
   it('asks a question, requires an attempt before reveal, then shows feedback and grades', async () => {
     const lkv = startWith()
     const onGraded = vi.fn()

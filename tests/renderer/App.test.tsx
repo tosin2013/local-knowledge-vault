@@ -19,6 +19,28 @@ describe('App', () => {
     expect(screen.getByText(/Ask anything grounded in your notes/)).toBeInTheDocument()
   })
 
+  it('shows job progress, then drops it once the job finishes (#385)', async () => {
+    render(<App />)
+    const jobs = (window as unknown as { lkv: { jobs: { onJobProgress: ReturnType<typeof vi.fn> } } }).lkv.jobs
+    await waitFor(() => expect(jobs.onJobProgress).toHaveBeenCalled())
+    const onProgress = jobs.onJobProgress.mock.calls.at(-1)![0] as (p: { label: string; done: number; total: number }) => void
+    act(() => onProgress({ label: 'Enrolling notes', done: 4, total: 9 }))
+    expect(await screen.findByText('Enrolling notes: 4 / 9')).toBeInTheDocument()
+    act(() => onProgress({ label: 'Enrolling notes', done: 9, total: 9 }))
+    await waitFor(() => expect(screen.queryByText(/Enrolling notes:/)).not.toBeInTheDocument())
+  })
+
+  it('keeps a newer status message when a finished job reports in late (#385)', async () => {
+    render(<App />)
+    const jobs = (window as unknown as { lkv: { jobs: { onJobProgress: ReturnType<typeof vi.fn> } } }).lkv.jobs
+    await waitFor(() => expect(jobs.onJobProgress).toHaveBeenCalled())
+    const onProgress = jobs.onJobProgress.mock.calls.at(-1)![0] as (p: { label: string; done: number; total: number }) => void
+    act(() => onProgress({ label: 'Importing', done: 1, total: 2 }))
+    expect(await screen.findByText('Importing: 1 / 2')).toBeInTheDocument()
+    act(() => onProgress({ label: 'Enrolling notes', done: 3, total: 3 }))
+    expect(screen.getByText('Importing: 1 / 2')).toBeInTheDocument()
+  })
+
   it('switches to Find mode and back', async () => {
     render(<App />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Find' })).toBeInTheDocument())

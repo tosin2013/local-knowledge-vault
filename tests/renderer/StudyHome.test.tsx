@@ -54,6 +54,14 @@ describe('StudyHome (#262)', () => {
     expect(onStartReview).toHaveBeenCalled()
   })
 
+  it('says the session asks 20 of 21 due cards instead of promising all 21 (#385)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 20 }])
+    lkv.review.stats.mockResolvedValue({ ...BIO_STATS, due: 21 })
+    renderHome()
+    expect(await screen.findByRole('button', { name: 'Start session (20 of 21 due)' })).toBeEnabled()
+  })
+
   it('enrolls the project and reports notes → cards, skipped with reasons', async () => {
     const lkv = lkvMock()
     lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 20 }])
