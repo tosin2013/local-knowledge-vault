@@ -33,7 +33,9 @@ const RRF_K = 60
 
 /**
  * Turn user text into safe FTS5 query terms. Lowercases, strips FTS special
- * characters, then drops stopwords. Terms shorter than 3 characters are kept:
+ * characters and sentence punctuation at a term's edges (the trigram index
+ * would look for "ra?" in "para?", so a question's last word never matched,
+ * #383), then drops stopwords. Inner dots stay ("node.js"). Terms shorter than 3 characters are kept:
  * the trigram tokenizer matches nothing for them (it never errors), and keeping
  * them means a short query like "it's" yields "no results" instead of degrading
  * to an empty query that would list every note (#37).
@@ -44,6 +46,7 @@ export function tokenizeFts(text: string): string[] {
     .toLowerCase()
     .replace(/["'*(){}[\]^:~]/g, ' ')
     .split(/\s+/)
+    .map((t) => t.replace(/^[?!.,;]+|[?!.,;]+$/g, ''))
     .filter((t) => t.length > 0)
     .filter((t) => !STOPWORDS.has(t))
 }
