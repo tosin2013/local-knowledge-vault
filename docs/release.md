@@ -64,9 +64,9 @@ release goes out as a release candidate first:
 Notes:
 - The in-app update check can't parse `X.Y.Z-rc.N`, so an RC install shows no update notice, not
   even for the final release. Testers update by hand.
-- `.deb` and `.rpm` may sort `X.Y.Z-rc.1` *after* `X.Y.Z`, so the package manager could call the
-  final a downgrade (inference from dpkg version ordering; confirm on the first RC). Remove the
-  RC (`sudo apt remove local-knowledge-vault`) before installing the final.
+- The `.deb` is versioned `X.Y.Z~rc.1`, which dpkg sorts before `X.Y.Z`, so the final installs
+  over the RC as an upgrade (checked on 0.6.0-rc.1). The `.rpm` ordering is unchecked; if dnf calls
+  the final a downgrade, remove the RC first.
 
 ### Per-OS checklist
 

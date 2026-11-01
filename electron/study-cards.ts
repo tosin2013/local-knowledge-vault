@@ -45,6 +45,17 @@ export function cardUnitsForNote(body: string, chunks: string[]): CardUnit[] {
   return chunks.map((chunk, i) => ({ chunkIndex: i, text: chunk }))
 }
 
+/**
+ * The units a note is studied by: {@link cardUnitsForNote} minus table-of-contents
+ * sections of imported pages. A PDF page is flattened to one line, so one page
+ * can hold the contents list and the first real section side by side; each
+ * section is judged on its own.
+ */
+function studyUnitsForNote(body: string, kind: string, chunks: string[]): CardUnit[] {
+  const units = cardUnitsForNote(body, chunks)
+  return IMPORTED_KINDS.has(kind) ? units.filter((u) => !looksLikeContentsSection(u.text)) : units
+}
+
 /** The idempotency key for a note-origin card. */
 export function noteCardKey(itemId: string, chunkIndex: number | null): string {
   return chunkIndex == null ? `note:${itemId}` : `note:${itemId}#${chunkIndex}`
@@ -113,9 +124,11 @@ export interface CreateNoteCardsOptions {
 /** Insert section cards (and schedules) for every section of a note. Returns the new card ids. */
 function addSectionCards(itemId: string): string[] {
   const database = getDb()
-  const item = database.prepare('SELECT body FROM items WHERE id = ?').get(itemId) as { body: string } | undefined
+  const item = database.prepare('SELECT body, kind FROM items WHERE id = ?').get(itemId) as
+    | { body: string; kind: string }
+    | undefined
   if (!item) return []
-  const units = cardUnitsForNote(item.body, chunkBodies(itemId))
+  const units = studyUnitsForNote(item.body, item.kind, chunkBodies(itemId))
   const noteHash = hashText(item.body)
   const ts = nowIso()
   const insertCard = database.prepare(
@@ -321,7 +334,9 @@ export function syncNoteCards(itemId: string, before: NoteBodyBefore): SectionSy
     .prepare(`SELECT id, chunk_index, chunk_hash, status FROM study_cards WHERE item_id = ? AND origin = 'note'`)
     .all(itemId) as Array<{ id: string; chunk_index: number | null; chunk_hash: string | null; status: string }>
   if (rows.length === 0) return result
-  const item = database.prepare('SELECT body FROM items WHERE id = ?').get(itemId) as { body: string } | undefined
+  const item = database.prepare('SELECT body, kind FROM items WHERE id = ?').get(itemId) as
+    | { body: string; kind: string }
+    | undefined
   if (!item) return result
 
   const cards: SectionCard[] = rows.map((r) => ({
@@ -331,7 +346,7 @@ export function syncNoteCards(itemId: string, before: NoteBodyBefore): SectionSy
     status: r.status as StudyCardStatus,
     textBefore: r.chunk_index == null ? before.body : (before.chunks[Number(r.chunk_index)] ?? null),
   }))
-  const plan = planSectionSync(cards, cardUnitsForNote(item.body, chunkBodies(itemId)))
+  const plan = planSectionSync(cards, studyUnitsForNote(item.body, item.kind, chunkBodies(itemId)))
   const noteHash = hashText(item.body)
   const ts = nowIso()
 
@@ -521,6 +536,15 @@ export function boilerplateReason(body: string): string | null {
     return 'boilerplate (cover, instructions, copyright or site chrome)'
   }
   return null
+}
+
+/**
+ * Is this section a table of contents? True when it holds three or more
+ * dot-leader runs that end in a page number ("Introduction . . . . . 1"),
+ * which survive the PDF importer flattening a page to one line. Pure.
+ */
+export function looksLikeContentsSection(text: string): boolean {
+  return ((text ?? '').match(/(?:\.\s?){5,}\s*(?:\d+|[ivxlc]+)\b/gi) ?? []).length >= 3
 }
 
 export interface EnrollCandidate {
