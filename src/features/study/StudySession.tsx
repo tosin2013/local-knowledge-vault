@@ -30,6 +30,7 @@ import type {
 } from '../../../electron/types'
 import { STUDY_GRADES, gradeLabel } from './grades'
 import { RepeatedPicks } from './RepeatedPicks'
+import { SESSION_CARDS, sessionReadyLabel } from './sessionSize'
 
 export interface StudySessionProps {
   /** The Study project ('' = every project). */
@@ -90,7 +91,7 @@ export function formatDue(iso: string | null): string {
  * Roediger 2008), calibration (Bjork, Dunlosky & Kornell 2013). Every
  * Vault-specific effect is a hypothesis (#218).
  */
-export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: StudySessionProps) {
+export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CARDS }: StudySessionProps) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [dueCount, setDueCount] = useState<number | null>(null)
   const [sessionId, setSessionId] = useState('')
@@ -289,7 +290,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
             <Typography variant="subtitle1" sx={{
               fontWeight: 600,
             }}>
-              {dueCount ? `${plural(dueCount, 'card')} ready` : 'Study session'}
+              {dueCount ? sessionReadyLabel(dueCount, limit) : 'Study session'}
             </Typography>
             <Typography
               variant="body2"

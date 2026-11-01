@@ -52,6 +52,7 @@ export const CARD_QUESTION_MAX_TOKENS = 1500
 /** Budget for the single retry after an empty reply. */
 export const CARD_QUESTION_RETRY_MAX_TOKENS = 3000
 /** Default and maximum cards in one session. */
+// Mirrored by SESSION_CARDS in src/features/study/sessionSize.ts (#385).
 export const SESSION_DEFAULT_CARDS = 20
 export const SESSION_MAX_CARDS = 100
 /** A first try at or above this confidence that wasn't Got it is "confident but missed". */

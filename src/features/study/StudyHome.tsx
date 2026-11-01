@@ -22,6 +22,7 @@ import { MultipleChoiceSetting } from './MultipleChoiceSetting'
 import { RepeatedPicks } from './RepeatedPicks'
 import { NEW_CARDS_PER_DAY_MAX, daysToExam, daysToGoLabel, formatExamDate } from './examDate'
 import { readPairsPref, writePairsPref } from './pairsPref'
+import { startSessionLabel } from './sessionSize'
 
 export interface StudyHomeProps {
   project: string
@@ -243,7 +244,7 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
           disabled={!stats || stats.due === 0}
           onClick={onStartReview}
         >
-          {stats && stats.due > 0 ? `Start session (${stats.due} due)` : 'Nothing due'}
+          {startSessionLabel(stats?.due ?? 0)}
         </Button>
         <FormControlLabel
           control={
