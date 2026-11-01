@@ -195,13 +195,18 @@ export function useChat(deps: UseChatDeps) {
       setMessages([])
       setChatOffline(false)
       setMode('chat')
-      // New sessions keep the last Profile (Personality + Project).
+      // New sessions keep the last Profile (Personality + Project). Keep the
+      // selected profile id as-is: re-deriving it from Personality + Project
+      // turned the first-run "Grounded helper" (scoped to the Vault guide)
+      // and saved user profiles into "Custom" (#384).
       const promptId =
         selectedPromptId || findGroundedDefaultPrompt(prompts)?.id || prompts[0]?.id || ''
       const nextProject = project
       if (promptId) {
         persistProfile(
-          matchProfileId(promptId, nextProject, prompts),
+          selectedPromptId
+            ? selectedProfileId
+            : matchProfileId(promptId, nextProject, prompts, userProfiles),
           promptId,
           nextProject,
         )
@@ -209,7 +214,7 @@ export function useChat(deps: UseChatDeps) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-  }, [selectedPromptId, project, prompts, persistProfile, refreshSessions, setMode, setError])
+  }, [selectedPromptId, selectedProfileId, project, prompts, userProfiles, persistProfile, refreshSessions, setMode, setError])
 
   const onSelectSession = useCallback(
     async (id: string) => {
