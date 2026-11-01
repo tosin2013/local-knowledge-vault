@@ -291,7 +291,19 @@ async function main(): Promise<void> {
   console.log('\nShort book PDFs (#386)')
   assert(isContentsLine('1 Rivers ........ 2') && isContentsLine('Preface . . . . . iv'), 'dot-leader entries are contents lines')
   assert(!isContentsLine('Chapter 1 Rivers') && !isContentsLine('It was 3 p.m. on day 2'), 'headings and prose are not contents lines')
-  assert(isContentsPage(['Contents', 'Rivers']) && isContentsPage(['Table of Contents']), 'a page headed "Contents" is a contents page')
+  assert(isContentsPage(['Table of Contents']), 'a page that is only the "Contents" heading is a contents page')
+  assert(isContentsPage(['Contents', 'Rivers 2', 'Glaciers 3', 'Preface iv']), 'entries without leaders under a "Contents" heading count')
+  assert(
+    !isContentsPage([
+      'Contents',
+      '1 Rivers ........ 2',
+      'Chapter 1 Rivers',
+      'Rivers carry sediment from mountains to the sea, wearing down the land as they go.',
+      'Meanders form as water erodes the outer bank and deposits sand on the inner bank.',
+      'Floodplains are built from the silt a river leaves behind when it overflows.',
+    ]),
+    'a "Contents" heading followed by a chapter is kept, so the chapter is not lost'
+  )
   assert(isContentsPage(['1 Rivers ........ 2', '2 Glaciers ........ 3', '3 Deserts ........ 4', 'Index ........ 9']), 'a page of leader entries is a contents page')
   assert(!isContentsPage(['See Rivers ........ 2', 'and Glaciers ........ 3', 'Body text.', 'More body.', 'Even more.', 'Last line.', 'Really last.']), 'a few leaders in body text are not a contents page')
   assert(!isContentsPage([]) && !isContentsPage(['Chapter 1 Rivers', 'Rivers carry sediment.']), 'empty and chapter pages are not contents pages')

@@ -278,15 +278,25 @@ export function isContentsLine(text: string): boolean {
   return CONTENTS_LEADER_RE.test(text.trim())
 }
 
+/** Under a "Contents" heading, an entry may skip the leader: "Rivers 2", "Preface iv". */
+const BARE_ENTRY_RE = /^\S.{0,58}\s(?:\d+|[ivxlcdm]+)$/i
+
 /**
- * Is this page a table of contents? True when it opens with "Contents" /
- * "Table of contents", or holds three or more dot-leader entries that make up
- * at least half of its lines. Pure (#386).
+ * Is this page a table of contents? True when it holds three or more
+ * dot-leader entries that make up at least half of its lines, or opens with
+ * "Contents" / "Table of contents" and the rest is mostly entries (with or
+ * without leaders). A page that is blanked loses its text, so a "Contents"
+ * heading followed by a chapter's prose is kept (short books print both on one
+ * page). Pure (#386).
  */
 export function isContentsPage(lines: string[]): boolean {
   const list = lines.map((l) => l.trim()).filter(Boolean)
   if (list.length === 0) return false
-  if (CONTENTS_HEADING_RE.test(list[0])) return true
+  if (CONTENTS_HEADING_RE.test(list[0])) {
+    const rest = list.slice(1)
+    const entries = rest.filter((l) => isContentsLine(l) || BARE_ENTRY_RE.test(l)).length
+    return entries * 2 >= rest.length
+  }
   const entries = list.filter(isContentsLine).length
   return entries >= 3 && entries * 2 >= list.length
 }
