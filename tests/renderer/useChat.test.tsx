@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { useChat, type UseChatDeps } from '../../src/hooks/useChat'
 import { lkvMock, makeMessage, makeProfile, makePrompt, makeSendResult, makeSession } from './lkv'
 import type { ChatSendResult } from '../../electron/types'
+import { LAST_PROFILE_KEY } from '../../src/domain'
 
 function makeDeps(overrides: Partial<UseChatDeps> = {}): UseChatDeps {
   return {
@@ -227,6 +228,60 @@ describe('useChat', () => {
     })
     await waitFor(() => expect(result.current.project).toBe('Vault guide'))
     expect(result.current.askEmpty.title).toBe('Ask about the Vault guide')
+  })
+
+  it('keeps the first-run Grounded helper profile on New chat (#384)', async () => {
+    const lkv = lkvMock()
+    lkv.profiles.list.mockResolvedValue([])
+    lkv.chat.createSession.mockResolvedValue(makeSession('s_9', 'New chat'))
+    const prompts = [makePrompt('prm_1', 'Grounded default')]
+    const { result } = renderHook(() => useChat(makeDeps({ prompts })))
+    await act(async () => {
+      await result.current.refreshProfiles()
+    })
+    await waitFor(() => expect(result.current.project).toBe('Vault guide'))
+    expect(result.current.selectedProfileId).toBe('grounded-helper')
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    expect(result.current.selectedProfileId).toBe('grounded-helper')
+    expect(result.current.selectedPromptId).toBe('prm_1')
+    expect(result.current.project).toBe('Vault guide')
+    expect(JSON.parse(localStorage.getItem(LAST_PROFILE_KEY) ?? '{}').profileId).toBe('grounded-helper')
+  })
+
+  it('keeps a saved user profile on New chat (#384)', async () => {
+    const lkv = lkvMock()
+    lkv.profiles.list.mockResolvedValue([makeProfile('prf_1')])
+    lkv.chat.createSession.mockResolvedValue(makeSession('s_9', 'New chat'))
+    const prompts = [makePrompt('prm_1', 'Grounded default')]
+    const { result } = renderHook(() => useChat(makeDeps({ prompts })))
+    await act(async () => {
+      await result.current.refreshProfiles()
+    })
+    await waitFor(() => expect(result.current.selectedPromptId).toBe('prm_1'))
+    act(() => result.current.onProfileChange('prf_1'))
+    const before = result.current.selectedProfileId
+    expect(before).toBe('prf_1')
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    expect(result.current.selectedProfileId).toBe('prf_1')
+  })
+
+  it('picks a profile from the default prompt on New chat when none is selected', async () => {
+    const lkv = lkvMock()
+    lkv.chat.createSession.mockResolvedValue(makeSession('s_9', 'New chat'))
+    const prompts = [makePrompt('prm_1', 'Grounded default')]
+    const { result } = renderHook(() => useChat(makeDeps({ prompts })))
+    expect(result.current.selectedPromptId).toBe('')
+    await act(async () => {
+      await result.current.onNewChat()
+    })
+    expect(JSON.parse(localStorage.getItem(LAST_PROFILE_KEY) ?? '{}')).toMatchObject({
+      profileId: 'grounded-helper',
+      promptId: 'prm_1',
+    })
   })
 
   it('exposes the scope hint and ask-empty copy', () => {
