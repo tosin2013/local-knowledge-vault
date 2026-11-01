@@ -475,7 +475,7 @@ const CHAPTER_OPENING = /^(?:chapter|part|section|unit|lesson|module)$/i
  */
 export function isShortChapter(words: string[]): boolean {
   if (words.length < MIN_CHAPTER_WORDS) return false
-  return CHAPTER_OPENING.test(words[0] ?? '') && /^(?:\d+|[ivxlcdm]+)[.:]?$/i.test(words[1] ?? '')
+  return CHAPTER_OPENING.test(words[0]) && /^(?:\d+|[ivxlcdm]+)[.:]?$/i.test(words[1])
 }
 
 /** A page this short that matches a boilerplate signal is treated as boilerplate. */

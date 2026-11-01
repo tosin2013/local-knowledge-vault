@@ -275,7 +275,7 @@ const CONTENTS_HEADING_RE = /^(?:table of )?contents$/i
 
 /** A line of a table of contents: never a title (#386). */
 export function isContentsLine(text: string): boolean {
-  return CONTENTS_LEADER_RE.test((text ?? '').trim())
+  return CONTENTS_LEADER_RE.test(text.trim())
 }
 
 /**
@@ -284,7 +284,7 @@ export function isContentsLine(text: string): boolean {
  * at least half of its lines. Pure (#386).
  */
 export function isContentsPage(lines: string[]): boolean {
-  const list = (lines ?? []).map((l) => (l ?? '').trim()).filter(Boolean)
+  const list = lines.map((l) => l.trim()).filter(Boolean)
   if (list.length === 0) return false
   if (CONTENTS_HEADING_RE.test(list[0])) return true
   const entries = list.filter(isContentsLine).length
