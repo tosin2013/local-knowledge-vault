@@ -463,6 +463,21 @@ export function contentWords(body: string): string[] {
 
 /** Fewer real words than this is too little to quiz on. */
 export const MIN_STUDY_WORDS = 20
+/** A short chapter ("Chapter 1 Rivers …") needs at least this many real words to be studied. */
+export const MIN_CHAPTER_WORDS = 10
+const CHAPTER_OPENING = /^(?:chapter|part|section|unit|lesson|module)$/i
+
+/**
+ * Does this short imported page open with a labelled chapter heading
+ * ("Chapter 1 Rivers Rivers carry …")? The PDF importer now gives each short
+ * chapter its own note (#386); a one-paragraph chapter is real material, not a
+ * cover page, so it is studied even under {@link MIN_STUDY_WORDS}. Pure.
+ */
+export function isShortChapter(words: string[]): boolean {
+  if (words.length < MIN_CHAPTER_WORDS) return false
+  return CHAPTER_OPENING.test(words[0] ?? '') && /^(?:\d+|[ivxlcdm]+)[.:]?$/i.test(words[1] ?? '')
+}
+
 /** A page this short that matches a boilerplate signal is treated as boilerplate. */
 const SHORT_PAGE_WORDS = 120
 
@@ -524,7 +539,7 @@ export function boilerplateReason(body: string): string | null {
   const text = body ?? ''
   const words = contentWords(text)
   if (words.length === 0) return 'empty'
-  if (words.length < MIN_STUDY_WORDS) return 'too short to quiz on'
+  if (words.length < MIN_STUDY_WORDS && !isShortChapter(words)) return 'too short to quiz on'
   const groups = new Set<string>()
   let logistics = 0
   for (const { group, patterns } of BOILERPLATE_GROUPS) {

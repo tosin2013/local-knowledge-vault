@@ -29,6 +29,7 @@ import {
 } from '../electron/db'
 import {
   boilerplateReason,
+  isShortChapter,
   cardUnitsForNote,
   looksLikeContentsSection,
   contentWords,
@@ -479,6 +480,12 @@ function main(): void {
   assert(contentWords('Source: bio.pdf\nPage: 3\n\nOne two three').length === 3, 'import header lines are not content')
   assert(boilerplateReason('') === 'empty', 'an empty body is empty')
   assert(boilerplateReason('Source: x.pdf\nPage: 1\n\nCover') === 'too short to quiz on', 'a near-empty page is too short')
+  // #386: a one-paragraph chapter from a short book PDF is material, not a cover.
+  const shortChapter = 'Source: landforms.pdf\nPage: 2\n\nChapter 1 Rivers Rivers carry sediment from mountains to the sea. Meanders form as water erodes the outer bank.'
+  assert(boilerplateReason(shortChapter) === null, 'a short labelled chapter is studied')
+  assert(boilerplateReason('Source: x.pdf\nPage: 2\n\nChapter 1 Rivers Rivers flow.') === 'too short to quiz on', 'a chapter heading with almost no text is still too short')
+  assert(boilerplateReason('Source: x.pdf\nPage: 2\n\nChapter One begins the story of the river and the sea here.') === 'too short to quiz on', 'a short page without a numbered chapter label is still too short')
+  assert(!isShortChapter(['Chapter']) && isShortChapter('Part IV The coast is shaped by waves and tides here'.split(' ')), 'isShortChapter needs a label, a number and enough words')
   const regentsCover = `Source: regents.pdf\nPage: 1\n\nLIVING ENVIRONMENT The University of the State of New York REGENTS HIGH SCHOOL EXAMINATION
 Student Name______________ School Name______________
 The possession or use of any communications device is strictly prohibited when taking this examination.

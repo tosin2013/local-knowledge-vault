@@ -12,6 +12,7 @@ import os from 'os'
 import path from 'path'
 import JSZip from 'jszip'
 import { closeDb, initDb, listItems } from '../electron/db'
+import { enrollProject } from '../electron/study-cards'
 import {
   chapterNoteTitle,
   detectBookFormat,
@@ -21,6 +22,8 @@ import {
   epubTextFromHtml,
   extractPageLines,
   groupPages,
+  isContentsLine,
+  isContentsPage,
   normalizeLetterSpacing,
   parseEpub,
   stripGutenbergBoilerplate,
@@ -145,6 +148,39 @@ function buildMinimalPdf(text: string, title: string): Buffer {
   return Buffer.from(pdf, 'latin1')
 }
 
+/** Hand-build a multi-page PDF; each page is a list of lines (#386). */
+function buildPagedPdf(pages: string[][], title: string): Buffer {
+  const esc = (t: string) => t.replace(/[\\()]/g, (c) => `\\${c}`)
+  const bodies: string[] = ['<< /Type /Catalog /Pages 2 0 R >>', '', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>']
+  const kids: number[] = []
+  for (const lines of pages) {
+    const stream = `BT /F1 11 Tf 50 740 Td 14 TL ${lines.map((l) => `(${esc(l)}) '`).join(' ')} ET`
+    bodies.push(`<< /Length ${Buffer.byteLength(stream, 'latin1')} >>\nstream\n${stream}\nendstream`)
+    bodies.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${bodies.length} 0 R >>`)
+    kids.push(bodies.length)
+  }
+  bodies[1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`
+  let pdf = '%PDF-1.4\n'
+  const offsets: number[] = []
+  bodies.forEach((body, i) => {
+    offsets.push(Buffer.byteLength(pdf, 'latin1'))
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`
+  })
+  const xrefOffset = Buffer.byteLength(pdf, 'latin1')
+  pdf += `xref\n0 ${bodies.length + 1}\n0000000000 65535 f \n`
+  for (const off of offsets) pdf += `${String(off).padStart(10, '0')} 00000 n \n`
+  pdf += `trailer\n<< /Size ${bodies.length + 1} /Root 1 0 R /Info << /Title (${title}) >> >>\nstartxref\n${xrefOffset}\n%%EOF\n`
+  return Buffer.from(pdf, 'latin1')
+}
+
+/** The short book from #386: a contents page, then three one-page chapters. */
+const LANDFORMS_PAGES = [
+  ['Contents', '1 Rivers ........ 2', '2 Glaciers ........ 3', '3 Deserts ........ 4'],
+  ['Chapter 1 Rivers', 'Rivers carry sediment from mountains to the sea.', 'Meanders form as water erodes the outer bank.'],
+  ['Chapter 2 Glaciers', 'Glaciers are slow rivers of ice that carve U-shaped valleys.', 'Moraines are ridges of debris left by glaciers.'],
+  ['Chapter 3 Deserts', 'Deserts receive less than 250 mm of rain per year.', 'Sand dunes migrate in the direction of the prevailing wind.'],
+]
+
 async function main(): Promise<void> {
   console.log('\n=== Local Knowledge Vault — book import (#162) ===\n')
 
@@ -250,6 +286,38 @@ async function main(): Promise<void> {
     [L('Section Heading', 18), L('More body text.')],
   ])
   assert(sized.sectionTitles[1] === 'Section Heading', 'detects a larger-font heading')
+
+  // --- Short books: contents pages and chapter breaks (#386) ---
+  console.log('\nShort book PDFs (#386)')
+  assert(isContentsLine('1 Rivers ........ 2') && isContentsLine('Preface . . . . . iv'), 'dot-leader entries are contents lines')
+  assert(!isContentsLine('Chapter 1 Rivers') && !isContentsLine('It was 3 p.m. on day 2'), 'headings and prose are not contents lines')
+  assert(isContentsPage(['Contents', 'Rivers']) && isContentsPage(['Table of Contents']), 'a page headed "Contents" is a contents page')
+  assert(isContentsPage(['1 Rivers ........ 2', '2 Glaciers ........ 3', '3 Deserts ........ 4', 'Index ........ 9']), 'a page of leader entries is a contents page')
+  assert(!isContentsPage(['See Rivers ........ 2', 'and Glaciers ........ 3', 'Body text.', 'More body.', 'Even more.', 'Last line.', 'Really last.']), 'a few leaders in body text are not a contents page')
+  assert(!isContentsPage([]) && !isContentsPage(['Chapter 1 Rivers', 'Rivers carry sediment.']), 'empty and chapter pages are not contents pages')
+
+  const book = cleanPdfPages(LANDFORMS_PAGES.map((lines) => lines.map((t) => L(t))))
+  assert(book.contentsPages === 1 && book.pages[0] === '', 'the contents page is detected and left out')
+  assert(book.sectionTitles[0] === null, 'a contents line never becomes a section title')
+  assert(book.sectionTitles.slice(1).join('|') === 'Chapter 1 Rivers|Chapter 2 Glaciers|Chapter 3 Deserts', `chapter headings are the section titles (got ${book.sectionTitles.join('|')})`)
+  assert(book.startsSection.join(',') === 'false,true,true,true', 'each chapter page starts a section')
+  const chapters = groupPages(book.pages, { breakBefore: book.startsSection })
+  assert(chapters.length === 3 && chapters.map((g) => g.startPage).join(',') === '2,3,4', `short chapters stay separate notes (got ${chapters.map((g) => `${g.startPage}-${g.endPage}`).join(',')})`)
+  assert(groupPages(book.pages).length === 1, 'without breaks the short chapters would merge into one')
+  const carried = groupPages(['First page ends mid', 'Chapter 2 starts here.'], { breakBefore: [false, true] })
+  assert(carried.length === 2 && carried[0].text === 'First page ends mid', 'no sentence fragment is carried into a new chapter')
+  const leaderTitle = cleanPdfPages([[L('1 Rivers ........ 2'), L('Rivers carry sediment to the sea and more.')]])
+  assert(leaderTitle.sectionTitles[0] === null && leaderTitle.contentsPages === 0, 'a stray leader line is kept as text but never titles the page')
+
+  // Long books keep merging: a running header with a page number is not a chapter break.
+  const running = cleanPdfPages([
+    [L('12 Introduction to Biology'), L('Cells are the basic unit of life.')],
+    [L('13 Introduction to Biology'), L('Membranes control what enters a cell.')],
+  ])
+  assert(running.startsSection.every((b) => !b), 'a page-number running header does not start a section')
+  assert(groupPages(running.pages, { breakBefore: running.startsSection }).length === 1, 'short pages with running headers still merge')
+  const dotted = cleanPdfPages([[L('Body.')], [L('8.2 The Calvin Cycle'), L('Carbon is fixed.')], [L('Larger Heading', 18), L('Body text.')]])
+  assert(dotted.startsSection.join(',') === 'false,true,true', 'dotted section numbers and larger fonts start sections')
 
   // --- EPUB import (temp dir + real DB) ---
   console.log('\nEPUB import (temp tree)')
@@ -358,6 +426,23 @@ async function main(): Promise<void> {
   )
   const blankPdf = await importBookFromPath(pdfPath, undefined, '   ')
   assert(blankPdf.project === 'Minimal PDF Book', 'blank project keeps the title-derived project')
+
+  // --- Short book PDF end to end (#386) ---
+  console.log('\nShort book PDF import and Study (#386)')
+  const landformsPath = path.join(tmp, 'landforms.pdf')
+  fs.writeFileSync(landformsPath, buildPagedPdf(LANDFORMS_PAGES, 'Landforms'))
+  const landforms = await importBookFromPath(landformsPath)
+  assert(landforms.imported === 3 && landforms.skipped === 1 && landforms.emptyPages === 0, `3 chapter notes, the contents page skipped (got ${landforms.imported}/${landforms.skipped}/${landforms.emptyPages})`)
+  const lfTitles = listItems().filter((it) => landforms.itemIds.includes(it.id)).map((it) => it.title).sort()
+  assert(
+    lfTitles.join('|') === 'Landforms · p.2 · Chapter 1 Rivers|Landforms · p.3 · Chapter 2 Glaciers|Landforms · p.4 · Chapter 3 Deserts',
+    `titles come from the chapter headings (got ${lfTitles.join(' | ')})`,
+  )
+  assert(!lfTitles.some((t) => /\.{3}/.test(t)), 'no title is a dot-leader contents line')
+  const lfBodies = listItems().filter((it) => landforms.itemIds.includes(it.id)).map((it) => it.body)
+  assert(lfBodies.every((b) => !/\.{3}|Contents/.test(b)), 'no contents text leaks into a chapter note')
+  const lfEnroll = enrollProject('Landforms', { pairs: false })
+  assert(lfEnroll.notes === 3 && lfEnroll.cards >= 3 && lfEnroll.skipped.length === 0, `Study makes cards from every chapter (got ${JSON.stringify({ notes: lfEnroll.notes, cards: lfEnroll.cards, skipped: lfEnroll.skipped })})`)
 
   closeDb()
   fs.rmSync(tmp, { recursive: true, force: true })
