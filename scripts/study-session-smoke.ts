@@ -127,6 +127,19 @@ async function main(): Promise<void> {
   const portCloze = s.buildCloze('Source: notes\n# Ports\nSecure web traffic uses port 443 over TCP by default today.')
   assert(portCloze?.answer === '443' || portCloze?.answer === 'TCP', `numbers and acronyms make gaps (${portCloze?.answer})`)
   assert(s.buildCloze('too short') === null, 'no usable sentence → null')
+  // #387: a PDF heading that runs into the first sentence is not gap material.
+  assert(s.stripLeadingHeading('Chapter 2 Glaciers Glaciers are slow rivers of ice that carve U-shaped valleys.') === 'Glaciers are slow rivers of ice that carve U-shaped valleys.', 'stripLeadingHeading drops "Chapter 2 Glaciers"')
+  assert(s.stripLeadingHeading('Section 3.1: The Water Cycle Water evaporates from the sea.') === 'Water evaporates from the sea.', 'stripLeadingHeading drops a multi-word section heading')
+  assert(s.stripLeadingHeading('Part IV. Deserts receive little rain.') === 'Deserts receive little rain.', 'stripLeadingHeading drops a roman-numbered part label')
+  assert(s.stripLeadingHeading('9 Chapter 1 Rivers Rivers carry sediment to the sea.') === 'Rivers carry sediment to the sea.', 'a page number left by a contents leader goes with the label')
+  assert(s.stripLeadingHeading('Chapter 2 Glaciers') === '', 'a bare heading is not a sentence')
+  assert(s.stripLeadingHeading('Chapter 7 covers how rivers erode their banks.') === 'covers how rivers erode their banks.', 'label with no capitalised heading → just the label dropped')
+  assert(s.stripLeadingHeading('Glaciers carve valleys.') === 'Glaciers carve valleys.', 'no heading → unchanged')
+  const headed = 'Source: geography-book.pdf\nPages: 3\n\nChapter 2 Glaciers Glaciers are slow rivers of ice that carve U-shaped valleys (note 1 on glaciers).'
+  const headedCloze = s.buildCloze(headed)
+  assert(!!headedCloze && !/Chapter|_____ _____/.test(headedCloze.question), `cloze leaves the heading out (${headedCloze?.question})`)
+  assert(!!headedCloze && headed.includes(headedCloze.quote) && headedCloze.quote.startsWith('Glaciers are'), `cloze quote starts at the sentence (${headedCloze?.quote})`)
+  assert(s.buildCloze('Chapter 4 Coasts Waves erode cliffs into arches and stacks over many centuries here.')?.answer !== 'Coasts', 'heading word never becomes the answer')
   assert(s.explainPrompt('Cells', 1, 4).includes('part 2 of 4') && s.explainPrompt('Cells', null, 1).includes('“Cells”'), 'explain prompt names the note and part')
 
   // --- getCardQuestion ---
