@@ -187,11 +187,13 @@ export function epubSectionTitle(html: string): string | null {
 
 /**
  * Group consecutive PDF pages into notes. Short, adjacent pages merge up to
- * `maxChars`; empty pages are dropped; page numbers are 1-based. A page range
+ * `maxChars`, except into a page flagged in `breakBefore` (it starts a new
+ * chapter or section); empty pages are dropped; page numbers are 1-based. A page range
  * only ever covers adjacent pages, so `p.N–M` never implies a skipped page.
  */
-export function groupPages(pages: string[], opts?: { maxChars?: number }): PageGroup[] {
+export function groupPages(pages: string[], opts?: { maxChars?: number; breakBefore?: boolean[] }): PageGroup[] {
   const maxChars = opts?.maxChars ?? DEFAULT_GROUP_CHARS
+  const breakBefore = opts?.breakBefore ?? []
   const groups: PageGroup[] = []
   let buf: string[] = []
   let bufChars = 0
@@ -225,7 +227,10 @@ export function groupPages(pages: string[], opts?: { maxChars?: number }): PageG
     const pageNo = i + 1
     const adjacent = buf.length > 0 && endPage === pageNo - 1
     const nextChars = bufChars + (buf.length > 0 ? 2 : 0) + clean.length
-    if (buf.length > 0 && (!adjacent || nextChars > maxChars)) flush(true)
+    // A page that opens a chapter or section starts its own note, so short
+    // chapters are not merged into one (#386). Nothing is carried across it.
+    if (buf.length > 0 && breakBefore[i]) flush(false)
+    else if (buf.length > 0 && (!adjacent || nextChars > maxChars)) flush(true)
     if (buf.length === 0) {
       startPage = pageNo
       bufChars = 0
@@ -258,6 +263,33 @@ const BANNER_PATTERNS: RegExp[] = [
 
 /** A numbered section heading like "8.1 Overview of Photosynthesis". */
 const SECTION_HEADING_RE = /^\d{1,3}(?:\.\d+)*\s+\S.{2,}/
+
+/** A labelled heading like "Chapter 2 Glaciers", "Part IV" or "Appendix A: Tables". */
+const LABELLED_HEADING_RE = /^(?:chapter|part|section|unit|lesson|module|appendix)\s+(?:\d+(?:\.\d+)*|[ivxlcdm]+|[a-z])\b/i
+
+/** A contents entry: a dot leader that ends in a page number ("1 Rivers ........ 2"). */
+const CONTENTS_LEADER_RE = /(?:\.\s?){3,}\s*(?:\d+|[ivxlcdm]+)\s*$/i
+
+/** A contents page's own heading. */
+const CONTENTS_HEADING_RE = /^(?:table of )?contents$/i
+
+/** A line of a table of contents: never a title (#386). */
+export function isContentsLine(text: string): boolean {
+  return CONTENTS_LEADER_RE.test(text.trim())
+}
+
+/**
+ * Is this page a table of contents? True when it opens with "Contents" /
+ * "Table of contents", or holds three or more dot-leader entries that make up
+ * at least half of its lines. Pure (#386).
+ */
+export function isContentsPage(lines: string[]): boolean {
+  const list = lines.map((l) => l.trim()).filter(Boolean)
+  if (list.length === 0) return false
+  if (CONTENTS_HEADING_RE.test(list[0])) return true
+  const entries = list.filter(isContentsLine).length
+  return entries >= 3 && entries * 2 >= list.length
+}
 
 export interface PdfLine {
   text: string
@@ -296,6 +328,10 @@ export interface CleanedPdfPages {
   pages: string[]
   /** A detected section heading per page (1-based index), or null. */
   sectionTitles: Array<string | null>
+  /** Per page: its first line is a heading, so the page starts a new note (#386). */
+  startsSection: boolean[]
+  /** Table-of-contents pages left out (their text is blanked in `pages`) (#386). */
+  contentsPages: number
   removedLines: number
 }
 
@@ -306,11 +342,23 @@ function minLineHeight(lines: PdfLine[]): number {
   return Math.min(...heights)
 }
 
+/**
+ * A heading strong enough to start a new note (#386): a labelled heading
+ * ("Chapter 2 …"), a dotted section number ("8.1 …") or a clearly larger font.
+ * A bare leading number is not enough: printed pages often open with a page
+ * number and running title ("12 Introduction"), and those must keep merging.
+ */
+function startsNewSection(line: PdfLine, bodyHeight: number): boolean {
+  const text = line.text.trim()
+  if (!isSectionHeading(line, bodyHeight)) return false
+  return LABELLED_HEADING_RE.test(text) || /^\d{1,3}\.\d+/.test(text) || (bodyHeight > 0 && line.height > bodyHeight * 1.25)
+}
+
 /** A line is a section heading when it is a numbered section or clearly larger than body text. */
 function isSectionHeading(line: PdfLine, bodyHeight: number): boolean {
   const text = line.text.trim()
-  if (!text || text.length > 80) return false
-  if (SECTION_HEADING_RE.test(text)) return true
+  if (!text || text.length > 80 || isContentsLine(text)) return false
+  if (SECTION_HEADING_RE.test(text) || LABELLED_HEADING_RE.test(text)) return true
   return bodyHeight > 0 && line.height > bodyHeight * 1.25
 }
 
@@ -333,11 +381,14 @@ export function cleanPdfPages(pageLines: PdfLine[][]): CleanedPdfPages {
   for (const [l, c] of counts) if (c >= threshold) repeated.add(l)
 
   let removedLines = 0
+  let contentsPages = 0
   const cleaned: string[] = []
   const sectionTitles: Array<string | null> = []
+  const startsSection: boolean[] = []
   for (const lines of list) {
     const kept: string[] = []
     let section: string | null = null
+    let first = false
     const bodyHeight = minLineHeight(lines ?? [])
     for (const line of lines ?? []) {
       const text = line.text.trim()
@@ -347,13 +398,24 @@ export function cleanPdfPages(pageLines: PdfLine[][]): CleanedPdfPages {
         removedLines++
         continue
       }
+      if (kept.length === 0) first = startsNewSection(line, bodyHeight)
       if (!section && isSectionHeading(line, bodyHeight)) section = text.slice(0, 80)
       kept.push(text)
     }
+    // A contents page is a list of other pages, not material: keep it out of
+    // notes, titles and cards, so it can't be merged into a chapter (#386).
+    if (isContentsPage(kept)) {
+      contentsPages++
+      cleaned.push('')
+      sectionTitles.push(null)
+      startsSection.push(false)
+      continue
+    }
     cleaned.push(kept.join(' '))
     sectionTitles.push(section)
+    startsSection.push(first)
   }
-  return { pages: cleaned, sectionTitles, removedLines }
+  return { pages: cleaned, sectionTitles, startsSection, contentsPages, removedLines }
 }
 
 /** Note title for a PDF page group, with a section heading when one is found. */
@@ -601,14 +663,16 @@ async function importPdf(
     }
 
     // Drop repeated headers/footers/cookie banners and detect section headings (#272).
-    const { pages: cleanedPages, sectionTitles, removedLines } = cleanPdfPages(pageLines)
-    const emptyPages = cleanedPages.filter((p) => !p).length
+    const { pages: cleanedPages, sectionTitles, startsSection, contentsPages, removedLines } =
+      cleanPdfPages(pageLines)
+    const emptyPages = cleanedPages.filter((p) => !p).length - contentsPages
 
     const itemIds: string[] = []
     let imported = 0
-    let skipped = 0
+    // A skipped contents page is reported with the other skipped pages (#386).
+    let skipped = contentsPages
     runInTransaction(() => {
-      for (const group of groupPages(cleanedPages)) {
+      for (const group of groupPages(cleanedPages, { breakBefore: startsSection })) {
         // A page that is only boilerplate (cover, instructions, copyright) has
         // almost no real words after cleaning — skip it (#272).
         const words = group.text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w))
