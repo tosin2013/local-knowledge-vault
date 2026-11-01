@@ -15,6 +15,7 @@ import {
   cardUnitsForNote,
   createNoteCards,
   listCardsForItem,
+  looksLikeContentsSection,
   planSectionSync,
   sectionSimilarity,
   syncNoteCards,
@@ -177,6 +178,28 @@ async function main(): Promise<void> {
   assert(
     grown.every((g) => active(short.id).some((c) => c.id === g.id)),
     'putting the same text back revives the matching cards',
+  )
+
+  console.log('\ncontents pages of imported books get no cards')
+  const leader = (t: string, n: number) => `${t} ${'. '.repeat(60)}${n}`
+  const toc = ['Introduction', 'Purpose of this guide', 'Target audience', 'Assessment', 'Next steps', 'Resources']
+    .map((t, i) => leader(t, i + 1))
+    .join(' ')
+  const tocBody = `Table of Contents ${toc}\n\n${para('photosynthesis')}\n\n${para('respiration')}`
+  const book = createItem({ title: 'Guide · p.3 · Table of Contents', body: tocBody, kind: 'book', para: 'resources', project: 'Bio' })
+  const own = createItem({ title: 'My copy', body: tocBody, kind: 'note', para: 'resources', project: 'Bio' })
+  const bookCards = createNoteCards(book.id).created
+  const ownCards = createNoteCards(own.id).created
+  const chunkText = (itemId: string, i: number | null) =>
+    i == null
+      ? ''
+      : (getDb().prepare('SELECT body FROM note_chunks WHERE item_id = ? AND chunk_index = ?').get(itemId, i) as { body: string }).body
+  assert(bookCards.length > 0 && bookCards.length < ownCards.length, `the book page skips its contents sections (${bookCards.length} of ${ownCards.length})`)
+  assert(bookCards.every((c) => !looksLikeContentsSection(chunkText(book.id, c.chunkIndex))), 'no book card covers a contents section')
+  updateItem(book.id, { body: tocBody + ' The stroma hosts the Calvin cycle.' })
+  assert(
+    active(book.id).every((c) => !looksLikeContentsSection(chunkText(book.id, c.chunkIndex))),
+    'an edit does not add contents sections back',
   )
 
   console.log('\nnotes that are not in Study, and title-only edits')

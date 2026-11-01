@@ -328,6 +328,27 @@ function saveQuestion(
     .run(q.question, q.answer, q.quote, q.kind, q.sourceHash, q.model ?? null, nowIso(), q.note ?? null, nowIso(), cardId)
 }
 
+/** The model's verdict on a section with no study-worthy facts (its `[]` reply). */
+const NOT_STUDY_WORTHY = 'nothing study-worthy found'
+
+/**
+ * Take a card the model judged not study-worthy out of the queue: suspended,
+ * not retired, so editing that section asks the model again (`syncNoteCards`).
+ */
+function skipCard(row: CardRow, base: ReturnType<typeof baseQuestion>, extra: Partial<StudyCardQuestion> = {}): StudyCardQuestion {
+  getDb().prepare(`UPDATE study_cards SET status = 'suspended', updated_at = ? WHERE id = ?`).run(nowIso(), row.id)
+  return {
+    ...base,
+    kind: 'explain',
+    question: '',
+    answer: null,
+    quote: null,
+    ...extra,
+    skipped: true,
+    notice: 'Nothing to study in this part of the note, so Vault skipped it.',
+  }
+}
+
 function baseQuestion(row: CardRow): Omit<StudyCardQuestion, 'kind' | 'question' | 'answer' | 'quote'> {
   if (row.origin === 'practice-test') {
     // The test is the answer key; the learner's note is cited only once it is
@@ -464,6 +485,11 @@ export async function getCardQuestion(cardId: string): Promise<StudyCardQuestion
   const sourceHash = hashText(section)
 
   // Cards that carry their own question (practice test, pairs) or a cached one.
+  // The model already judged this section (unchanged since) not study-worthy,
+  // including cards cached with a fallback prompt before v0.6.0-rc.2.
+  if (row.origin === 'note' && row.q_note === NOT_STUDY_WORTHY && row.q_source_hash === sourceHash) {
+    return skipCard(row, base, { model: row.q_model })
+  }
   if (row.question && (row.origin !== 'note' || row.q_source_hash === sourceHash)) {
     const kind = (row.q_kind as StudyQuestionKind | null) ?? (row.origin === 'practice-test' ? 'test' : row.origin === 'reverse' ? 'pair' : 'generated')
     return {
@@ -511,9 +537,12 @@ export async function getCardQuestion(cardId: string): Promise<StudyCardQuestion
   }
   const text = (gen.text ?? '').trim()
   const parsed = parseCardJson(text)
-  const reason = parsed.empty
-    ? 'nothing study-worthy found'
-    : !parsed.card
+  if (parsed.empty) {
+    // A cloze or "explain the main idea" of a contents page is junk too.
+    saveQuestion(row.id, { question: '', answer: null, quote: null, kind: 'explain', sourceHash, model: gen.model, note: NOT_STUDY_WORTHY })
+    return skipCard(row, base, { model: gen.model })
+  }
+  const reason = !parsed.card
       ? 'the reply was not a question card'
       : dropReason(parsed.card, section)
   if (reason || !parsed.card) {

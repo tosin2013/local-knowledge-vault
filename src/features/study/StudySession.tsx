@@ -109,6 +109,8 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
   const [report, setReport] = useState<StudySessionReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [empty, setEmpty] = useState(false)
+  /** The last card dropped because the model found nothing to study in it. */
+  const [skippedNote, setSkippedNote] = useState<string | null>(null)
 
   const api = window.lkv?.study
   const hasSessionApi = !!api?.startSession && !!api?.cardQuestion && !!api?.answer
@@ -181,6 +183,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
     setError(null)
     setEmpty(false)
     setReport(null)
+    setSkippedNote(null)
     try {
       const res = await api.startSession({ ...(project ? { project } : {}), limit })
       if (res.cards.length === 0) {
@@ -212,6 +215,17 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
       setError(e instanceof Error ? e.message : String(e))
     }
   }
+
+  // A section with nothing to study (a contents page, say) comes back
+  // `skipped`: Vault has suspended the card, so drop it and move on.
+  useEffect(() => {
+    if (!current || !question?.skipped) return
+    const part = current.chunk_index != null && current.chunk_count > 1 ? ` (part ${current.chunk_index + 1})` : ''
+    setSkippedNote(`Skipped “${question.title}”${part}: nothing to study there.`)
+    const rest = queue.filter((_, i) => i !== index)
+    setQueue(rest)
+    if (index >= rest.length) void finish(sessionId)
+  }, [current, question])
 
   const isMc = question?.mode === 'mc' && (question.options?.length ?? 0) > 1
   const canReveal = !!question && (dontKnow || (isMc ? picked != null : attempt.trim().length > 0))
@@ -301,6 +315,12 @@ export function StudySession({ project, onOpenNote, onGraded, limit = 20 }: Stud
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {skippedNote && (phase === 'card' || phase === 'summary') && (
+        <Alert severity="info" onClose={() => setSkippedNote(null)} data-testid="session-skipped">
+          {skippedNote}
+        </Alert>
       )}
 
       {phase === 'card' && current && (

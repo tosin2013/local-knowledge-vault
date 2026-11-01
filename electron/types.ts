@@ -1585,6 +1585,8 @@ export interface StudyCardQuestion {
   citations: Citation[]
   /** Why Vault fell back from a generated question, in plain words (never provider content). */
   notice?: string
+  /** The model found nothing study-worthy (a contents page, say): the card is suspended; skip it. */
+  skipped?: boolean
   /** True when no model could be reached. */
   offline?: boolean
   rateLimited?: boolean

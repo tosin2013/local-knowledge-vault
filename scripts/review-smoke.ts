@@ -30,6 +30,7 @@ import {
 import {
   boilerplateReason,
   cardUnitsForNote,
+  looksLikeContentsSection,
   contentWords,
   createNoteCards,
   enrollProject,
@@ -495,6 +496,10 @@ violate the CompTIA Candidate Agreement. ${words(200)}`
     boilerplateReason(`We use cookies to improve your experience. Accept all cookies. ${words(40)}`)?.startsWith('boilerplate') === true,
     'a short cookie-banner page is boilerplate',
   )
+  const flatToc = `Table of Contents Introduction ${'. '.repeat(40)}1 Purpose of this guide ${'. '.repeat(30)}1 Target audience ${'. '.repeat(30)}2 Next steps ${'. '.repeat(30)}iv`
+  assert(looksLikeContentsSection(flatToc), 'a flattened PDF contents page is a contents section')
+  assert(!looksLikeContentsSection(`See Section 3.2 ${'. '.repeat(10)}14 for the details. ${words(80)}`), 'one dot-leader reference is not')
+  assert(!looksLikeContentsSection(`Wait... then... it... works... ${words(40)}`), 'ellipses in prose are not')
   const realNote = `Photosynthesis converts light energy into chemical energy. ${words(30)}`
   assert(boilerplateReason(realNote) === null, 'a real note is kept')
   assert(

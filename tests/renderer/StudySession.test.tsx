@@ -149,6 +149,29 @@ describe('StudySession (#263)', () => {
     expect(lkv.study.answer).toHaveBeenCalledTimes(3)
   })
 
+  it('drops a card the model found nothing to study in and moves on', async () => {
+    const lkv = startWith([CARD_B, CARD_A])
+    lkv.study.cardQuestion.mockImplementation(async (id: string) =>
+      id === 'crd_part2'
+        ? makeCardQuestion(id, { title: 'Cell transport', question: '', skipped: true, notice: 'Nothing to study' })
+        : makeCardQuestion(id),
+    )
+    render(<StudySession project="" />)
+    expect(await begin()).toHaveTextContent('What does the Calvin cycle use to fix carbon dioxide?')
+    expect(screen.getByText('Card 1 of 1')).toBeInTheDocument()
+    expect(screen.getByTestId('session-skipped')).toHaveTextContent('Skipped “Cell transport” (part 2): nothing to study there.')
+    expect(lkv.study.answer).not.toHaveBeenCalled()
+  })
+
+  it('shows the summary when the last card is skipped', async () => {
+    const lkv = startWith([CARD_B])
+    lkv.study.cardQuestion.mockResolvedValue(makeCardQuestion('crd_part2', { question: '', skipped: true }))
+    render(<StudySession project="" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Start session' }))
+    expect(await screen.findByTestId('session-summary')).toBeInTheDocument()
+    expect(lkv.study.sessionSummary).toHaveBeenCalledWith('ses_1', undefined)
+  })
+
   it('shows a fallback notice and the section to compare for an explain card', async () => {
     const lkv = startWith()
     lkv.study.cardQuestion.mockResolvedValue(

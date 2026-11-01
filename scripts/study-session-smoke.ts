@@ -215,7 +215,20 @@ async function main(): Promise<void> {
   assert(mockCalls - callsBefore === 2 && e2.kind === 'generated', `the retry is used when the first reply is empty (${e2.kind}: ${e2.notice ?? ''})`)
   mockResult = reply('[]')
   const z1 = await s.getCardQuestion(c4.id)
-  assert(/nothing study-worthy/.test(z1.notice ?? ''), '[] → fallback, cached with the reason')
+  const status = (id: string) => (db.getDb().prepare('SELECT status FROM study_cards WHERE id = ?').get(id) as { status: string }).status
+  assert(z1.skipped === true && z1.question === '' && /Nothing to study/.test(z1.notice ?? ''), '[] → the card is skipped, no fallback prompt')
+  assert(status(c4.id) === 'suspended', 'and suspended')
+  assert(!review.listDueReviews(undefined, 100).some((q) => q.card_id === c4.id), 'so it leaves the queue')
+  callsBefore = mockCalls
+  assert((await s.getCardQuestion(c4.id)).skipped === true && mockCalls === callsBefore, 'the verdict is cached: no second model call')
+  // A fallback cached with the verdict before rc.2 is skipped too.
+  const nOld = db.createItem({ title: 'Old verdict', body: SECTION, kind: 'note', para: 'resources', project: 'Bio' })
+  const [cOld] = cardsMod.createNoteCards(nOld.id).created
+  const oldRow = db.getDb().prepare('SELECT q_source_hash FROM study_cards WHERE id = ?').get(c4.id) as { q_source_hash: string }
+  db.getDb()
+    .prepare(`UPDATE study_cards SET question = 'From memory, explain the main idea.', q_kind = 'explain', q_note = 'nothing study-worthy found', q_source_hash = ? WHERE id = ?`)
+    .run(oldRow.q_source_hash, cOld.id)
+  assert((await s.getCardQuestion(cOld.id)).skipped === true && status(cOld.id) === 'suspended', 'an rc.1 cached verdict is skipped and suspended')
   mockResult = reply('I cannot help with that.')
   const n5 = db.createItem({ title: 'Prose', body: SECTION, kind: 'note', para: 'resources', project: 'Bio' })
   const [c5] = cardsMod.createNoteCards(n5.id).created
