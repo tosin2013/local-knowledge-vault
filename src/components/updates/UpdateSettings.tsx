@@ -10,16 +10,35 @@ export function UpdateSettings() {
   const [checkOnLaunch, setCheckOnLaunch] = useState(true)
   const [result, setResult] = useState<UpdateCheckResult | null>(null)
   const [checking, setChecking] = useState(false)
+  const [snap, setSnap] = useState(false)
 
   useEffect(() => {
     if (!window.lkv?.updates) return
     void window.lkv.updates
       .getSettings()
-      .then((s) => setCheckOnLaunch(s.checkOnLaunch))
+      .then((s) => {
+        setCheckOnLaunch(s.checkOnLaunch)
+        setSnap(s.snap === true)
+      })
       .catch(() => undefined)
   }, [])
 
   if (!window.lkv?.updates) return null
+
+  if (snap) {
+    return (
+      <Box sx={{ mt: 2 }} data-testid="update-settings">
+        <Divider sx={{ my: 1.5 }} />
+        <Typography variant="subtitle2">Updates</Typography>
+        <Typography variant="body2" sx={{ mt: 0.5 }} role="status">
+          Updates come from the Snap Store.
+        </Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+          Vault was installed as a snap, so the Snap Store keeps it up to date. Vault does not check GitHub.
+        </Typography>
+      </Box>
+    )
+  }
 
   const toggle = async (next: boolean) => {
     setCheckOnLaunch(next)

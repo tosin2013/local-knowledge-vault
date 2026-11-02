@@ -1138,6 +1138,8 @@ export interface BridgeAskResult {
 export interface UpdateSettings {
   /** Ask GitHub for the latest release once per launch. */
   checkOnLaunch: boolean
+  /** Running as a snap: the Snap Store updates Vault, so there is nothing to check. */
+  snap?: boolean
 }
 
 export type UpdateCheckResult =
@@ -1149,7 +1151,7 @@ export type UpdateCheckResult =
       latest?: string
       /** Release page for `latest`. */
       url?: string
-      /** Why no request was made (launch check only). */
+      /** Why no request was made. */
       skipped?: 'disabled' | 'development' | 'snap'
     }
   | { ok: false; current: string; error: string }

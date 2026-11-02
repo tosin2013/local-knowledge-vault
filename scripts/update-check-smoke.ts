@@ -17,6 +17,7 @@ import {
   checkForUpdateOnLaunch,
   compareVersions,
   getUpdateSettings,
+  isSnapEnv,
   parseVersion,
   setUpdateSettings,
 } from '../electron/update-check'
@@ -49,9 +50,24 @@ async function main(): Promise<void> {
   console.log('\n=== Local Knowledge Vault — update check smoke ===\n')
 
   console.log('parseVersion / compareVersions')
-  assert(JSON.stringify(parseVersion('v1.2.3')) === '[1,2,3]', 'parses a v-prefixed tag')
-  assert(JSON.stringify(parseVersion(' 0.10.0 ')) === '[0,10,0]', 'parses a bare version with whitespace')
-  assert(parseVersion('1.2') === null && parseVersion('v1.2.3-beta.1') === null && parseVersion('') === null, 'rejects anything that is not x.y.z')
+  assert(JSON.stringify(parseVersion('v1.2.3')) === '{"core":[1,2,3],"pre":[]}', 'parses a v-prefixed tag')
+  assert(JSON.stringify(parseVersion(' 0.10.0 ')) === '{"core":[0,10,0],"pre":[]}', 'parses a bare version with whitespace')
+  assert(JSON.stringify(parseVersion('v0.6.0-rc.4')) === '{"core":[0,6,0],"pre":["rc","4"]}', 'parses a pre-release')
+  assert(JSON.stringify(parseVersion('1.0.0-beta+exp.sha.5114f85')) === '{"core":[1,0,0],"pre":["beta"]}', 'ignores build metadata')
+  assert(
+    parseVersion('1.2') === null && parseVersion('1.2.3-') === null && parseVersion('1.2.3-rc..1') === null && parseVersion('1.2.3-rc/1') === null && parseVersion('') === null,
+    'rejects anything that is not semver'
+  )
+  assert(compareVersions('0.6.0', '0.6.0-rc.4') > 0, '0.6.0 is newer than 0.6.0-rc.4')
+  assert(compareVersions('0.6.0-rc.4', '0.6.0') < 0, '0.6.0-rc.4 is older than 0.6.0')
+  assert(compareVersions('0.6.0-rc.5', '0.6.0-rc.4') > 0, 'rc.5 is newer than rc.4')
+  assert(compareVersions('0.6.0-rc.10', '0.6.0-rc.9') > 0, 'numeric identifiers compare numerically (rc.10 > rc.9)')
+  assert(compareVersions('0.7.0', '0.6.0-rc.4') > 0, '0.7.0 is newer than 0.6.0-rc.4')
+  assert(compareVersions('0.5.0', '0.6.0-rc.4') < 0, 'an older release is not newer than 0.6.0-rc.4')
+  assert(compareVersions('0.6.0-rc.4', 'v0.6.0-rc.4+build.7') === 0, 'equal pre-releases (build metadata ignored)')
+  assert(compareVersions('1.0.0-rc', '1.0.0-beta') > 0 && compareVersions('1.0.0-alpha', '1.0.0-beta') < 0, 'alphanumeric identifiers compare in ASCII order')
+  assert(compareVersions('1.0.0-alpha.1', '1.0.0-alpha.beta') < 0 && compareVersions('1.0.0-alpha.beta', '1.0.0-alpha.1') > 0, 'numeric identifiers rank below alphanumeric ones')
+  assert(compareVersions('1.0.0-alpha', '1.0.0-alpha.1') < 0, 'a shorter pre-release ranks lower when the prefix matches')
   assert(compareVersions('0.10.0', '0.9.9') > 0, '0.10.0 is newer than 0.9.9 (numeric, not string, compare)')
   assert(compareVersions('v0.3.0', '0.3.0') === 0, 'v prefix does not matter')
   assert(compareVersions('0.2.9', '0.3.0') < 0, '0.2.9 is older than 0.3.0')
@@ -107,9 +123,27 @@ async function main(): Promise<void> {
   const emptyBody = await checkForUpdate({ currentVersion: '0.3.0', fetchImpl: stubFetch(() => new Response('null', { status: 200 })).fetchImpl })
   assert(!emptyBody.ok, 'a null JSON body is rejected')
 
+  const rcUser = await checkForUpdate({ currentVersion: '0.6.0-rc.4', fetchImpl: stubFetch(() => release('v0.6.0')).fetchImpl })
+  assert(rcUser.ok && rcUser.updateAvailable && rcUser.latest === '0.6.0', 'an rc.4 build sees the 0.6.0 release')
+  const rcOlder = await checkForUpdate({ currentVersion: '0.6.0-rc.4', fetchImpl: stubFetch(() => release('v0.5.0')).fetchImpl })
+  assert(rcOlder.ok && !rcOlder.updateAvailable, 'an rc.4 build is not offered the older 0.5.0 release')
+  const rcTag = await checkForUpdate({ currentVersion: '0.6.0-rc.4', fetchImpl: stubFetch(() => release('v0.6.0-rc.5')).fetchImpl })
+  assert(rcTag.ok && rcTag.updateAvailable && rcTag.url === `${RELEASES_PAGE}/tag/v0.6.0-rc.5`, 'a pre-release tag keeps its suffix in the version and URL')
+  const snapManual = stubFetch(() => release('v0.4.0'))
+  const rSnapManual = await checkForUpdate({ currentVersion: '0.3.0', isSnap: true, fetchImpl: snapManual.fetchImpl })
+  assert(rSnapManual.ok && rSnapManual.skipped === 'snap' && snapManual.calls.length === 0, 'manual check in a snap makes no request')
+  process.env.SNAP = '/snap/local-knowledge-vault/x1'
+  const snapEnv = stubFetch(() => release('v0.4.0'))
+  const rSnapEnv = await checkForUpdate({ currentVersion: '0.3.0', fetchImpl: snapEnv.fetchImpl })
+  assert(rSnapEnv.ok && rSnapEnv.skipped === 'snap' && snapEnv.calls.length === 0, 'SNAP in the environment is detected by default')
+  assert(isSnapEnv() && getUpdateSettings().snap === true, 'settings report a snap install')
+  delete process.env.SNAP
+  assert(!isSnapEnv() && isSnapEnv({ SNAP: '/snap/x' }) && getUpdateSettings().snap === false, 'isSnapEnv reads SNAP')
+
   console.log('\nsettings')
   assert(getUpdateSettings().checkOnLaunch === true, 'launch check is on by default')
   assert(setUpdateSettings({ checkOnLaunch: false }).checkOnLaunch === false, 'setting can be turned off')
+  assert(setUpdateSettings({}).snap === false, 'setUpdateSettings reports the snap flag')
   assert(getUpdateSettings().checkOnLaunch === false, 'setting persists')
   assert(setUpdateSettings({}).checkOnLaunch === false, 'an empty patch keeps the saved value')
   fs.writeFileSync(path.join(process.env.LKV_USER_DATA_DIR!, 'lkv-update-settings.json'), 'not json')
