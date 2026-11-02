@@ -33,6 +33,7 @@ before you're told, and write your own study guide while Vault checks it against
 
 ### Platform
 - Electron 45. (#358)
+- The update check understands release candidates: a `0.6.0-rc.N` install is offered `0.6.0`. In the snap, Settings → Updates says the Snap Store handles updates and makes no request. (#396)
 
 ### Docs
 - README "Study a video" section and video guide screenshots for bookmarks, Exam tutor and the study guide. (#268)

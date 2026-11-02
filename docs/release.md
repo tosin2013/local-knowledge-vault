@@ -62,8 +62,9 @@ release goes out as a release candidate first:
 4. When all three OSes pass, set `npm version X.Y.Z` in a PR, merge, tag `vX.Y.Z` and push it.
 
 Notes:
-- The in-app update check can't parse `X.Y.Z-rc.N`, so an RC install shows no update notice, not
-  even for the final release. Testers update by hand.
+- An RC install's update check offers the final `X.Y.Z` once it is published (#396). It never
+  offers a newer RC, because GitHub's "latest release" skips pre-releases; testers get those by hand.
+  0.6.0-rc.1 to rc.4 predate this and get no notice at all.
 - The `.deb` is versioned `X.Y.Z~rc.1`, which dpkg sorts before `X.Y.Z`, so the final installs
   over the RC as an upgrade (checked on 0.6.0-rc.1). The `.rpm` ordering is unchecked; if dnf calls
   the final a downgrade, remove the RC first.
@@ -121,7 +122,7 @@ to the release page. Users download and install the new version themselves.
 
 - The check is one unauthenticated GET to `api.github.com`. It sends no identifier and no note data.
 - Users can turn it off in Settings → Updates, where "Check now" runs it on demand.
-- It is skipped in development builds and in the snap, which the Snap Store updates.
+- It is skipped in development builds. In the snap it is off entirely (no launch check, no "Check now"), because the Snap Store updates it.
 - Only releases tagged `vX.Y.Z` count. GitHub's "latest release" ignores drafts and pre-releases.
 
 ## Native module note (`better-sqlite3`)

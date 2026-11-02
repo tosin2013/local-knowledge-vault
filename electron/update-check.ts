@@ -17,24 +17,65 @@ export const RELEASES_PAGE = `https://github.com/${RELEASES_REPO}/releases`
 const LATEST_RELEASE_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`
 const SETTINGS_FILE = 'lkv-update-settings.json'
 const DEFAULT_SETTINGS: UpdateSettings = { checkOnLaunch: true }
-/** Only plain x.y.z tags are accepted, so a tag can't smuggle anything into the release URL. */
-const VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)$/
+/**
+ * Semver x.y.z with an optional pre-release ("-rc.4"); build metadata ("+abc") is ignored.
+ * Identifiers are limited to [0-9A-Za-z-], so a tag can't smuggle anything into the release URL.
+ */
+const VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
-/** Parse "v1.2.3" / "1.2.3" into numbers, or null when it isn't a plain release version. */
-export function parseVersion(v: string): [number, number, number] | null {
-  const m = VERSION_RE.exec((v ?? '').trim())
-  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
+export interface ParsedVersion {
+  core: [number, number, number]
+  /** Pre-release identifiers, e.g. ['rc', '4']; empty for a release. */
+  pre: string[]
 }
 
-/** <0 when a is older than b, 0 when equal, >0 when newer. Unparseable versions compare as equal. */
+/** Parse "v1.2.3" / "1.2.3-rc.4", or null when it isn't a semver version. */
+export function parseVersion(v: string): ParsedVersion | null {
+  const m = VERSION_RE.exec((v ?? '').trim())
+  if (!m) return null
+  return { core: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] ? m[4].split('.') : [] }
+}
+
+/** Canonical text for a parsed version ("1.2.3" or "1.2.3-rc.4"). */
+export function formatVersion(p: ParsedVersion): string {
+  return p.core.join('.') + (p.pre.length ? `-${p.pre.join('.')}` : '')
+}
+
+const NUMERIC = /^\d+$/
+
+/** Semver precedence of one pre-release identifier pair. */
+function compareIdentifier(a: string, b: string): number {
+  const an = NUMERIC.test(a)
+  const bn = NUMERIC.test(b)
+  if (an && bn) return Number(a) - Number(b)
+  if (an) return -1
+  if (bn) return 1
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+/**
+ * Semver precedence: <0 when a is older than b, 0 when equal, >0 when newer.
+ * A release outranks its own pre-releases (0.6.0 > 0.6.0-rc.4). Unparseable versions compare as equal.
+ */
 export function compareVersions(a: string, b: string): number {
   const pa = parseVersion(a)
   const pb = parseVersion(b)
   if (!pa || !pb) return 0
   for (let i = 0; i < 3; i++) {
-    if (pa[i] !== pb[i]) return pa[i] - pb[i]
+    if (pa.core[i] !== pb.core[i]) return pa.core[i] - pb.core[i]
   }
-  return 0
+  if (!pa.pre.length || !pb.pre.length) return pb.pre.length - pa.pre.length
+  const n = Math.min(pa.pre.length, pb.pre.length)
+  for (let i = 0; i < n; i++) {
+    const c = compareIdentifier(pa.pre[i], pb.pre[i])
+    if (c !== 0) return c
+  }
+  return pa.pre.length - pb.pre.length
+}
+
+/** True inside a snap, where the Snap Store handles updates. */
+export function isSnapEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !!env.SNAP
 }
 
 function settingsPath(): string {
@@ -44,27 +85,30 @@ function settingsPath(): string {
 export function getUpdateSettings(): UpdateSettings {
   try {
     const raw = JSON.parse(fs.readFileSync(settingsPath(), 'utf8')) as Partial<UpdateSettings>
-    return { checkOnLaunch: raw?.checkOnLaunch !== false }
+    return { checkOnLaunch: raw?.checkOnLaunch !== false, snap: isSnapEnv() }
   } catch {
-    return { ...DEFAULT_SETTINGS }
+    return { ...DEFAULT_SETTINGS, snap: isSnapEnv() }
   }
 }
 
 export function setUpdateSettings(patch: Partial<UpdateSettings>): UpdateSettings {
   const next: UpdateSettings = { checkOnLaunch: (patch?.checkOnLaunch ?? getUpdateSettings().checkOnLaunch) !== false }
   fs.writeFileSync(settingsPath(), JSON.stringify(next, null, 2), 'utf8')
-  return next
+  return { ...next, snap: isSnapEnv() }
 }
 
 export interface CheckForUpdateOptions {
   currentVersion: string
   fetchImpl?: typeof fetch
   timeoutMs?: number
+  /** Defaults to the SNAP environment variable. In a snap no request is made. */
+  isSnap?: boolean
 }
 
 /** Ask GitHub for the latest release and compare it with the running version. Never throws. */
 export async function checkForUpdate(opts: CheckForUpdateOptions): Promise<UpdateCheckResult> {
   const current = opts.currentVersion
+  if (opts.isSnap ?? isSnapEnv()) return { ok: true, current, skipped: 'snap', updateAvailable: false }
   const doFetch = opts.fetchImpl ?? fetch
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000)
@@ -78,7 +122,7 @@ export async function checkForUpdate(opts: CheckForUpdateOptions): Promise<Updat
     const tag = typeof body?.tag_name === 'string' ? body.tag_name.trim() : ''
     const parsed = parseVersion(tag)
     if (!parsed) return { ok: false, current, error: 'Could not read the latest version from GitHub' }
-    const latest = parsed.join('.')
+    const latest = formatVersion(parsed)
     return {
       ok: true,
       current,
@@ -109,5 +153,5 @@ export async function checkForUpdateOnLaunch(env: {
   if (!getUpdateSettings().checkOnLaunch) return { ok: true, current, skipped: 'disabled', updateAvailable: false }
   if (!env.isPackaged) return { ok: true, current, skipped: 'development', updateAvailable: false }
   if (env.isSnap) return { ok: true, current, skipped: 'snap', updateAvailable: false }
-  return checkForUpdate({ currentVersion: current, fetchImpl: env.fetchImpl })
+  return checkForUpdate({ currentVersion: current, fetchImpl: env.fetchImpl, isSnap: env.isSnap })
 }

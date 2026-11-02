@@ -88,3 +88,41 @@ describe('UpdateSettings (#42)', () => {
     await waitFor(() => expect(screen.getByText('Couldn’t check for updates: GitHub answered 403')).toBeInTheDocument())
   })
 })
+
+describe('UpdateSettings (#42, #396)', () => {
+  it('in a snap, says the Snap Store handles updates and offers no check', async () => {
+    const lkv = lkvMock()
+    lkv.updates.getSettings.mockResolvedValue({ checkOnLaunch: true, snap: true })
+    render(<UpdateSettings />)
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Updates come from the Snap Store.'))
+    expect(screen.queryByRole('button', { name: 'Check now' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+    expect(lkv.updates.check).not.toHaveBeenCalled()
+  })
+
+  it('outside a snap, an rc build is offered the stable release', async () => {
+    const lkv = lkvMock()
+    lkv.updates.getSettings.mockResolvedValue({ checkOnLaunch: true, snap: false })
+    lkv.updates.check.mockResolvedValue({
+      ok: true,
+      current: '0.6.0-rc.4',
+      latest: '0.6.0',
+      updateAvailable: true,
+      url: 'https://github.com/tosin2013/local-knowledge-vault/releases/tag/v0.6.0',
+    })
+    render(<UpdateSettings />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Check now' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Vault 0.6.0 is available. You have 0.6.0-rc.4.'))
+    expect(screen.queryByText(/Snap Store/)).not.toBeInTheDocument()
+  })
+})
+
+describe('UpdateNotice in a snap (#396)', () => {
+  it('stays hidden when the launch check was skipped for a snap', async () => {
+    const lkv = lkvMock()
+    lkv.updates.checkOnLaunch.mockResolvedValue({ ok: true, current: '0.6.0-rc.4', updateAvailable: false, skipped: 'snap' })
+    render(<UpdateNotice />)
+    await waitFor(() => expect(lkv.updates.checkOnLaunch).toHaveBeenCalled())
+    expect(screen.queryByTestId('update-notice')).not.toBeInTheDocument()
+  })
+})
