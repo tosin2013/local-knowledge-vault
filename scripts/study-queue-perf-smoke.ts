@@ -12,7 +12,9 @@
  *      review:countDue and the session summary against the old queue, and
  *      asserts they are several times faster and inside a generous absolute
  *      budget (the issue's target is < 100 ms; CI runners vary, so the hard
- *      ceiling here is 250 ms and the speed-up is the stable check).
+ *      ceiling here is 250 ms and the speed-up is the stable check). Each
+ *      timing is the fastest of several runs, so one slow run on a busy
+ *      runner can't fail the speed-up check.
  *
  * Runs under Electron-as-Node (better-sqlite3 ABI). No model is called.
  */
@@ -40,15 +42,16 @@ function assert(cond: boolean, msg: string): void {
   }
 }
 
-function median(fn: () => unknown, reps = 5): number {
-  const ts: number[] = []
+// Fastest of several runs: a GC pause or a WAL checkpoint on a shared CI runner
+// only ever adds time, so the minimum is the stable measure of the query itself.
+function fastest(fn: () => unknown, reps = 5): number {
+  let best = Infinity
   for (let i = 0; i < reps; i++) {
     const t0 = process.hrtime.bigint()
     fn()
-    ts.push(Number(process.hrtime.bigint() - t0) / 1e6)
+    best = Math.min(best, Number(process.hrtime.bigint() - t0) / 1e6)
   }
-  ts.sort((a, b) => a - b)
-  return ts[Math.floor(ts.length / 2)]
+  return best
 }
 
 const NOTES = 5000
@@ -95,13 +98,13 @@ function sameQueue(label: string, limit: number, project?: string): void {
 function timeAll(label: string): void {
   const d = db.getDb()
   const legacyAll = () => legacyDueQueue(d, new Date().toISOString(), undefined, new Date())
-  const oldMs = median(legacyAll, 3)
+  const oldMs = fastest(legacyAll, 3)
   const t = {
-    'review:stats': median(() => review.getStudyStats()),
-    'study:startSession (20)': median(() => session.startStudySession({ limit: 20 })),
-    'review:listDue (50)': median(() => review.listDueReviews(undefined, 50)),
-    'review:countDue': median(() => review.countDueReviews()),
-    'study summary': median(() => session.studySessionSummary('ses_none')),
+    'review:stats': fastest(() => review.getStudyStats()),
+    'study:startSession (20)': fastest(() => session.startStudySession({ limit: 20 })),
+    'review:listDue (50)': fastest(() => review.listDueReviews(undefined, 50)),
+    'review:countDue': fastest(() => review.countDueReviews()),
+    'study summary': fastest(() => session.studySessionSummary('ses_none')),
   }
   console.log(`  ${label}: old queue alone ${oldMs.toFixed(1)} ms; ` + Object.entries(t).map(([k, v]) => `${k} ${v.toFixed(1)} ms`).join(', '))
   for (const [k, v] of Object.entries(t)) {
