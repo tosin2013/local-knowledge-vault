@@ -64,7 +64,7 @@ release goes out as a release candidate first:
 Notes:
 - An RC install's update check offers the final `X.Y.Z` once it is published (#396). It never
   offers a newer RC, because GitHub's "latest release" skips pre-releases; testers get those by hand.
-  RCs before 0.6.0-rc.5 can't read their own version, so they get no notice at all.
+  0.6.0-rc.1 to rc.4 predate this and get no notice at all.
 - The `.deb` is versioned `X.Y.Z~rc.1`, which dpkg sorts before `X.Y.Z`, so the final installs
   over the RC as an upgrade (checked on 0.6.0-rc.1). The `.rpm` ordering is unchecked; if dnf calls
   the final a downgrade, remove the RC first.
