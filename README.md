@@ -1,10 +1,10 @@
-# Vault
+# Local Knowledge Vault
 
 [![codecov](https://codecov.io/gh/tosin2013/local-knowledge-vault/graph/badge.svg)](https://app.codecov.io/gh/tosin2013/local-knowledge-vault)
 
 **Chat with your notes on your own computer. Every answer cites the note it came from, or says it doesn't know.**
 
-Vault (Local Knowledge Vault) is a desktop app for macOS, Windows and Linux. Your notes stay in a
+Local Knowledge Vault (Vault for short; not related to HashiCorp Vault) is a desktop app for macOS, Windows and Linux. Your notes stay in a
 local SQLite database. Answers come from a local model by default (Ollama or LM Studio, detected
 automatically), and you can add a cloud provider or a shareable plugin in a few clicks.
 
@@ -26,8 +26,14 @@ for macOS (Intel and Apple silicon), an NSIS `.exe` for Windows, and `.AppImage`
 for Linux. You can also [build from source](#build-from-source).
 
 **Linux:** on Ubuntu/Debian run `sudo apt install ./local-knowledge-vault_*_amd64.deb`; on Fedora run
-`sudo dnf install ./local-knowledge-vault-*.x86_64.rpm`. The snap is confined, so **Media chat** can't reach a
-`yt-dlp` installed outside it; use the `.deb`, `.rpm` or AppImage if you need YouTube import.
+`sudo dnf install ./local-knowledge-vault-*.x86_64.rpm`.
+
+**Snap Store:** Local Knowledge Vault is on the
+**[Snap Store](https://snapcraft.io/local-knowledge-vault)**. For now it's on the edge channel
+only: install with `sudo snap install local-knowledge-vault --edge`. A stable channel
+(`sudo snap install local-knowledge-vault`) comes with the 0.6.0 release. The snap is confined, so **Media chat** can't reach a
+`yt-dlp` installed outside it: YouTube import isn't available in the snap, but local video/audio files
+with captions work. Use the `.deb`, `.rpm` or AppImage if you need YouTube import.
 
 **macOS: the app is not notarized yet.** The first time you open it, macOS says it can't verify
 the app. Click **Done**, then go to **System Settings → Privacy & Security**, click **Open Anyway**
