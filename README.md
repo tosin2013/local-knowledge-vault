@@ -29,9 +29,9 @@ for Linux. You can also [build from source](#build-from-source).
 `sudo dnf install ./local-knowledge-vault-*.x86_64.rpm`.
 
 **Snap Store:** Local Knowledge Vault is on the
-**[Snap Store](https://snapcraft.io/local-knowledge-vault)**. Install the stable release with
-`sudo snap install local-knowledge-vault`, or try pre-releases with
-`sudo snap install local-knowledge-vault --edge`. The snap is confined, so **Media chat** can't reach a
+**[Snap Store](https://snapcraft.io/local-knowledge-vault)**. For now it's on the edge channel
+only: install with `sudo snap install local-knowledge-vault --edge`. A stable channel
+(`sudo snap install local-knowledge-vault`) comes with the 0.6.0 release. The snap is confined, so **Media chat** can't reach a
 `yt-dlp` installed outside it: YouTube import isn't available in the snap, but local video/audio files
 with captions work. Use the `.deb`, `.rpm` or AppImage if you need YouTube import.
 
