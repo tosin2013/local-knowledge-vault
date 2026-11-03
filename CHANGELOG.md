@@ -14,6 +14,9 @@ before you're told, and write your own study guide while Vault checks it against
 - **Exam tutor voice**: a built-in Media voice that asks first, gives hints in steps, and shows the cited answer only after you've tried. (#364)
 - **Notes while watching**: start a study guide or research notes beside the player (fullscreen too). You write at checkpoints (chapter boundaries or every N minutes) and Vault checks your entry against the transcript and cites it. (#365)
 
+### Install
+- **Snap Store**: Vault is on the Snap Store (`sudo snap install local-knowledge-vault`); the snap updates itself through the store. YouTube import is coming soon to the snap; for now use the AppImage, .deb or .rpm to import YouTube videos. (#400)
+
 ### Study
 - Study home, session start and the session summary load only the cards a session shows, and count the queue without loading every card body. (#296)
 - Imported books no longer get cards for their table of contents, and a section the model finds nothing to study in is skipped and taken out of the queue, instead of becoming an "explain the main idea" prompt. A short book merged into one note is still studied. (found testing 0.6.0-rc.1, #386)
@@ -21,10 +24,10 @@ before you're told, and write your own study guide while Vault checks it against
 - Fill-the-gap cards no longer blank a chapter heading that PDF text runs into the first sentence. (#387)
 
 ### Import
-- PDF books: contents pages are left out, each chapter or numbered section starts its own note, and a contents line is never used as a note title. (#386)
+- PDF books: contents pages are left out, each chapter or numbered section starts its own note, and a contents line is never used as a note title. A chapter printed under a "Contents" heading is kept. (#386, #393, #394)
 
 ### Ask
-- A question's last word now counts in search: "What is PARA?" searched for "para?" and never matched. (#383)
+- A question's last word now counts in search: "What is PARA?" searched for "para?" and never matched. (#383, #388)
 - **New chat** keeps the selected Profile instead of switching to "Custom". (#384)
 
 ### UI
@@ -33,10 +36,14 @@ before you're told, and write your own study guide while Vault checks it against
 
 ### Platform
 - Electron 45. (#358)
-- The update check understands release candidates: a `0.6.0-rc.N` install is offered `0.6.0`. In the snap, Settings → Updates says the Snap Store handles updates and makes no request. (#396)
+- The update check understands release candidates: a `0.6.0-rc.N` install is offered `0.6.0`. In the snap, Settings → Updates says the Snap Store handles updates and makes no request. (#396, #397)
 
 ### Docs
 - README "Study a video" section and video guide screenshots for bookmarks, Exam tutor and the study guide. (#268)
+- README leads with Local Knowledge Vault and adds Snap Store install. (#400)
+
+### Tests
+- The Study queue performance check times the fastest of several runs, so it no longer flakes on busy CI runners. (#395)
 
 ## [0.5.0] — Media chat you can study with
 
