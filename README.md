@@ -1,5 +1,8 @@
 # Local Knowledge Vault
 
+[![Latest release](https://img.shields.io/github/v/release/tosin2013/local-knowledge-vault)](https://github.com/tosin2013/local-knowledge-vault/releases/latest)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Snap Store](https://snapcraft.io/local-knowledge-vault/badge.svg)](https://snapcraft.io/local-knowledge-vault)
 [![codecov](https://codecov.io/gh/tosin2013/local-knowledge-vault/graph/badge.svg)](https://app.codecov.io/gh/tosin2013/local-knowledge-vault)
 
 **Chat with your notes on your own computer. Every answer cites the note it came from, or says it doesn't know.**
@@ -8,15 +11,43 @@ Local Knowledge Vault (Vault for short; not related to HashiCorp Vault) is a des
 local SQLite database. Answers come from a local model by default (Ollama or LM Studio, detected
 automatically), and you can add a cloud provider or a shareable plugin in a few clicks.
 
-<!-- DEMO: replace docs/media/vault-demo.gif after recording -->
-<!-- After recording, replace the <p> below with:
-<p align="center"><a href="docs/media/vault-demo.mp4"><img src="docs/media/vault-demo.gif" alt="Vault demo: ask a question, click a citation, get an honest I don't know" width="860"></a></p>
--->
 <p align="center">
   <img src="docs/media/vault-ask-citation.png" alt="Asked how photosynthesis and cellular respiration are connected, Vault answers in two bullets ending in numbered citations [1] and [2], with matching chips for the notes photosynthesis - quick notes and Cellular respiration" width="860">
   <br>
   <sub>Each point cites the note it came from, and the numbered chips open those notes. (Demo biology notes; shot with a cloud provider, Groq <code>openai/gpt-oss-20b</code>. New installs use a local model first.)</sub>
 </p>
+
+## What's new in v0.6.0
+
+**Study a video.** Media chat becomes a place to study a lecture, not just ask about it:
+
+- **Video bookmarks:** press **B** to save a moment, tag it, and turn bookmarks into Study cards.
+- **Exam tutor voice:** asks first, gives hints in steps, and shows the cited answer only after you've tried.
+- **Notes while watching:** write a study guide or research notes beside the player; Vault checks each entry against the transcript and cites it.
+- **Snap Store:** `sudo snap install local-knowledge-vault`, updated through the store.
+
+Plus Study, PDF import and search fixes, MUI 9 and Electron 45. Full list: [CHANGELOG.md](CHANGELOG.md).
+
+## Who it's for
+
+- **Students** studying for an exam from their own notes: [students guide](docs/getting-started/students.md)
+- **Readers** who import books and want cited answers: [readers guide](docs/getting-started/readers.md)
+- **Obsidian users** who want to ask across a vault: [Obsidian guide](docs/getting-started/obsidian.md)
+- **Local-AI and privacy folks** who want everything on their machine: [local and private guide](docs/getting-started/local-and-private.md)
+- **Video learners** studying lectures and talks: [video guide](docs/getting-started/video.md)
+
+## Screenshots
+
+<p>
+  <img src="docs/media/vault-nasa-media-chat.png" alt="Media chat with a NASA Moon video: the player with bookmark ticks on the timeline, a Bookmarks panel, and a grounded answer about why Apollo 11 landed in the Sea of Tranquility with timestamped citations" width="420">
+  <img src="docs/media/vault-nasa-media-fullscreen-bookmarks.png" alt="Media chat fullscreen: video, bookmarks tagged Exam, Review and Confused, and a cited answer beside the player" width="420">
+</p>
+<p>
+  <img src="docs/media/vault-nasa-study-card-answer.png" alt="Study session card: why we only see one face of the Moon, the learner's answer at 50% confidence, the revealed answer quoting the transcript, Open video at 0:01:47, and Missed / Partly / Got it grading" width="420">
+  <img src="docs/media/vault-nasa-ask-cited-answer.png" alt="Ask: what did the Apollo reflectors reveal about the Moon, answered with two numbered citations to bookmarks in the video's transcript" width="420">
+</p>
+
+<sub>Video: NASA JPL, "What's Up: July 2019" (public domain, <a href="https://images.nasa.gov/details/JPL-20190701-WHATSUf-0001-Whats_Up_July_2019">images.nasa.gov</a>). Shown as user content; no NASA endorsement implied. Answers in these shots come from a scripted local test model built only from the video's NASA captions.</sub>
 
 ## Download
 
@@ -28,12 +59,10 @@ for Linux. You can also [build from source](#build-from-source).
 **Linux:** on Ubuntu/Debian run `sudo apt install ./local-knowledge-vault_*_amd64.deb`; on Fedora run
 `sudo dnf install ./local-knowledge-vault-*.x86_64.rpm`.
 
-**Snap Store:** Local Knowledge Vault is on the
-**[Snap Store](https://snapcraft.io/local-knowledge-vault)**. For now it's on the edge channel
-only: install with `sudo snap install local-knowledge-vault --edge`. A stable channel
-(`sudo snap install local-knowledge-vault`) comes with the 0.6.0 release. The snap is confined, so **Media chat** can't reach a
-`yt-dlp` installed outside it: YouTube import isn't available in the snap, but local video/audio files
-with captions work. Use the `.deb`, `.rpm` or AppImage if you need YouTube import.
+**Snap Store:** install from the **[Snap Store](https://snapcraft.io/local-knowledge-vault)** with
+`sudo snap install local-knowledge-vault`; the snap updates itself through the store. In the snap,
+**Media chat** works today with local video/audio files and their captions. YouTube import is coming
+soon to the snap; for now use the AppImage, `.deb` or `.rpm` to import YouTube videos.
 
 **macOS: the app is not notarized yet.** The first time you open it, macOS says it can't verify
 the app. Click **Done**, then go to **System Settings → Privacy & Security**, click **Open Anyway**
@@ -115,27 +144,17 @@ exam-aware practice.
 
 <img src="docs/media/vault-study-home.png" alt="Study home for the CompTIA A+ project: exam Nov 23, 39 days to go, 4 cards due, 146 cards from 8 of 8 notes, and Study this project / Start session buttons" width="720">
 
-- **Study home.** Pick the project for your course or exam, set its exam date, and see what's due,
-  how many cards there are and how many of the project's notes they cover. **Study this project**
-  enrolls every note.
-- **Study session.** Each card asks one question from a section of your notes: answer from
-  memory (or say you don't know), rate your confidence, reveal the answer with a quote and a
-  link to the note, then grade Missed / Partly / Got it. Cards come back on a spaced schedule
-  anchored to your exam date; the summary flags confident misses.
-- **Quiz me on…** Type a question, write what you remember first, then reveal the grounded,
-  cited answer as feedback, rate your confidence and grade yourself. A calibration strip shows
-  how well your confidence matches your results.
-- **Two-way list cards.** Acronym lists, port tables, command lists and term definitions become
-  cards asked both ways ("What does AES stand for?" and "What is the acronym for Advanced
-  Encryption Standard?"), with no model. Turn it off with **Two-way cards for lists** on Study home.
-- **Import practice test.** Paste or open practice-test results; each missed question becomes a
-  Study card at once (the test's own question and answer), linked to the note that covers it or to a
-  corrective AI draft you confirm in your own words. The test is kept as one **Practice test** note,
-  and **Study this project** skips practice tests and exam papers.
+- **Study home and sessions.** Set an exam date per project; each card asks one question from your
+  notes. Answer from memory, rate your confidence, reveal the answer with a quote and a link to the
+  note, then grade yourself. Cards come back on a spaced schedule anchored to your exam date.
+- **Quiz me on…** Write what you remember first, then see the grounded, cited answer as feedback.
+- **Two-way list cards** for acronym lists, port tables and definitions, made with no model.
+- **Import practice test.** Each missed question becomes a Study card, linked to the note that
+  covers it or to an AI draft you confirm in your own words.
+
+The [students guide](docs/getting-started/students.md) walks through each screen.
 
 <img src="docs/media/vault-study-session.png" alt="Study session card: What does AES stand for? The learner answered Advanced Encryption Standard at 80% confidence; the revealed answer quotes the A+ acronym list note, with Missed / Partly / Got it grading" width="720">
-
-<img src="docs/media/vault-practice-test-import.png" alt="Import practice test: a pasted Core 2 results page parsed as 10 items, 6 correct and 4 wrong, with Add to Study" width="720">
 
 ### Study a video
 
@@ -181,8 +200,8 @@ Vault suggests a bigger one, because small models follow citation rules less rel
 
 <img src="docs/media/providers-add-dialog.png" alt="Add provider dialog with presets, masked API key, Fetch models and Test connection" width="720">
 
-Pick a preset or a custom OpenAI-compatible URL, fetch the live model list, and test the
-connection before saving. Keys are write-only in the UI. They are stored encrypted with the
+Pick a preset or any OpenAI-compatible URL and test it before saving
+([docs/providers.md](docs/providers.md)). Keys are write-only in the UI. They are stored encrypted with the
 operating system's keychain where one is available; otherwise (for example Linux without a keyring)
 they are saved as owner-only files, and AI providers tells you so.
 
@@ -190,33 +209,21 @@ they are saved as owner-only files, and AI providers tells you so.
 
 <img src="docs/media/providers-manage-plugins.png" alt="Add-ons screen with two installed plugin.json packs" width="720">
 
-**Plugins → Add-ons…** installs a folder or `.zip`, shows what each pack contributes before you
-accept it, and explains why a broken pack was rejected.
+**Plugins → Add-ons…** installs a folder or `.zip` and shows what each pack contributes before you
+accept it. See [Plugins](#plugins).
 
 ### More
 
-- **Media chat.** Paste a YouTube URL (captions fetched with [`yt-dlp`](https://github.com/yt-dlp/yt-dlp),
-  which must be installed; `pipx install "yt-dlp[default,curl-cffi]"` includes the browser
-  impersonation that avoids YouTube 429 errors) or open a local video/audio file with its `.srt`/`.vtt` captions. Captions
-  become timed transcript notes you can ask about. Clicking a citation seeks the player to that
-  moment, for local media and YouTube embeds alike. Player and chat can go fullscreen together.
-- **Media voices.** Reusable voices (Desk cohost, Curious student, Skeptical investor, or your
-  own) that change the speaking style but keep the same grounding rules. One install works for
-  every video.
+- **Media chat.** Paste a YouTube URL (needs [`yt-dlp`](https://github.com/yt-dlp/yt-dlp)) or open a
+  local video/audio file with `.srt`/`.vtt` captions. Clicking a citation seeks the player to that
+  moment. Media voices change the speaking style but keep the same grounding rules. Setup:
+  [video guide](docs/getting-started/video.md).
 - **Personalities and profiles** for Ask, plus note groups (Projects / Areas / Resources /
-  Archives), kinds, status and project filters. Start a personality from a template, preview it
-  against your own notes, and export or import it as a file. A personality changes tone and format
-  only; the grounding and citation rules always apply. See [docs/personalities.md](docs/personalities.md).
-- **Add from URL.** Fetches a public web page, extracts the text and auto-tags it as a note.
-  Every import (URL, Markdown, book/PDF, media ingest, practice test) first asks which project to
-  file it into — pick one, keep **Use file/folder name** to decide per source, and move any import
-  into another project afterwards from the toast or the rail's bulk **Move** (#276).
-- **Import Markdown / Obsidian notes.** Point Vault at a folder and import its `.md` files as
-  notes — title from frontmatter or the first heading, and PARA/project inferred from
-  frontmatter, tags, or the folder structure. Obsidian `[[wiki links]]` are normalized to text.
-- **Import books.** **Import book / PDF** turns an EPUB into one note per chapter and a PDF into
-  notes by page range, all under a project named after the book. Covers, image-only pages and
-  Project Gutenberg licence text are skipped.
+  Archives) and filters. A personality changes tone and format only; the grounding and citation
+  rules always apply. See [docs/personalities.md](docs/personalities.md).
+- **Import** from a URL, a Markdown/Obsidian folder, or an EPUB/PDF book (one note per chapter or
+  section). Each import asks which project to file it into. See the
+  [readers](docs/getting-started/readers.md) and [Obsidian](docs/getting-started/obsidian.md) guides.
 - **AI drafts stay drafts.** Notes written by the model (for example from Import practice test) are saved as
   **AI draft** and rank below your own notes in search. To confirm one, edit it or write a one-line
   summary in your own words.
@@ -224,11 +231,9 @@ accept it, and explains why a broken pack was rejected.
 - **MCP client.** **Plugins → MCP connections → Connect Notion** signs in to Notion's hosted MCP
   server (`https://mcp.notion.com/mcp`) with OAuth and lists its tools. You can also add other
   Streamable HTTP MCP servers. Using MCP tools inside Ask is not wired up yet.
-- **Obsidian bridge.** While Vault runs, it serves a small HTTP API on `127.0.0.1:8765`
-  (`/health`, `/v1/projects`, `/v1/ask`; set `LKV_BRIDGE_PORT` to use another port). Every call
-  except `/health` needs the bearer token shown in **AI providers → Vault Bridge**. A scaffold Obsidian plugin in
-  [`bridges/obsidian-vault/`](bridges/obsidian-vault/) adds an **Ask Vault…** command that inserts
-  the cited answer into your current note. See [docs/bridges.md](docs/bridges.md).
+- **Obsidian bridge.** A local HTTP API on `127.0.0.1:8765`, protected by a bearer token, plus a
+  scaffold Obsidian plugin ([`bridges/obsidian-vault/`](bridges/obsidian-vault/)) that inserts a cited
+  answer into your note. See [docs/bridges.md](docs/bridges.md).
 - **Simple and Advanced modes**, light and dark themes.
 
 Retrieval is local keyword search (SQLite FTS5 with BM25 ranking). Long notes are split into
