@@ -15,7 +15,7 @@ import {
 } from '@mui/material'
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import type { ProjectSummary, StudyEnrollResult, StudyStats } from '../../../electron/types'
+import type { ProjectReadiness, ProjectSummary, StudyEnrollResult, StudyStats } from '../../../electron/types'
 import { ProjectSelect } from '../ProjectSelect'
 import { ExamDateControl } from './ExamDateControl'
 import { MultipleChoiceSetting } from './MultipleChoiceSetting'
@@ -23,12 +23,15 @@ import { RepeatedPicks } from './RepeatedPicks'
 import { NEW_CARDS_PER_DAY_MAX, daysToExam, daysToGoLabel, formatExamDate } from './examDate'
 import { readPairsPref, writePairsPref } from './pairsPref'
 import { startSessionLabel } from './sessionSize'
+import { ReadinessPanel } from './ReadinessPanel'
 
 export interface StudyHomeProps {
   project: string
   onProjectChange: (project: string) => void
   /** Switch to the Study session section. */
   onStartReview: () => void
+  /** Start a session on shaky and not-studied notes (#420). */
+  onWorkWeakSpots?: () => void
   /** Open a note (the practice test behind an answer you keep picking). */
   onOpenNote?: (id: string) => void
 }
@@ -81,9 +84,10 @@ function Stat({ label, value, detail }: { label: string; value: string; detail?:
  * exam date, days to go, cards due, total cards, last session — and enroll
  * the whole project with one click.
  */
-export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote }: StudyHomeProps) {
+export function StudyHome({ project, onProjectChange, onStartReview, onWorkWeakSpots, onOpenNote }: StudyHomeProps) {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
   const [stats, setStats] = useState<StudyStats | null>(null)
+  const [readiness, setReadiness] = useState<ProjectReadiness | null>(null)
   const [enrolling, setEnrolling] = useState(false)
   const [result, setResult] = useState<StudyEnrollResult | null>(null)
   const [showSkipped, setShowSkipped] = useState(false)
@@ -95,6 +99,9 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
     if (!get) return
     try {
       setStats(await get(project || undefined))
+      const ready = window.lkv?.review?.readiness
+      if (ready && project) setReadiness(await ready(project))
+      else setReadiness(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -207,6 +214,14 @@ export function StudyHome({ project, onProjectChange, onStartReview, onOpenNote 
       )}
 
       <RepeatedPicks picks={stats?.repeatedPicks} onOpenNote={onOpenNote} />
+
+      {project && readiness && (
+        <ReadinessPanel
+          readiness={readiness}
+          onOpenNote={onOpenNote}
+          onWorkWeakSpots={onWorkWeakSpots}
+        />
+      )}
 
       {stats && stats.unreachable > 0 && (
         <Alert severity="warning" data-testid="coverage-warning">

@@ -627,6 +627,54 @@ export function listDueReviews(before?: string, limit = 50, project?: string): R
   return hydrateQueue(order.map((r) => r.card_id))
 }
 
+/**
+ * Active cards on the given notes, including ones that are not due yet
+ * (Work on weak spots, #420). Notes keep the order they were passed in;
+ * within a note, missed cards come first, then Partly, then new cards.
+ */
+export function listItemReviewCards(itemIds: string[], limit = 50): ReviewQueueItem[] {
+  const ids = [...new Set((itemIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))]
+  const cap = Math.max(0, Math.floor(Number(limit) || 0))
+  if (ids.length === 0 || cap === 0) return []
+  const database = getDb()
+  const rows = database
+    .prepare(
+      `SELECT c.id AS card_id, c.item_id AS item_id, cs.last_grade AS last_grade,
+              cs.lapses AS lapses, cs.reps AS reps, cs.last_reviewed_at AS last_reviewed_at, cs.due_at AS due_at
+       FROM study_cards c
+       JOIN card_schedule cs ON cs.card_id = c.id
+       JOIN items ON items.id = c.item_id
+       WHERE items.status NOT IN ('trashed','archived') AND c.status = 'active'
+         AND c.item_id IN (${ids.map(() => '?').join(',')})`,
+    )
+    .all(...ids) as Array<{
+    card_id: string
+    item_id: string
+    last_grade: string | null
+    lapses: number
+    reps: number
+    last_reviewed_at: string | null
+    due_at: string
+  }>
+  const orderOf = new Map(ids.map((id, i) => [id, i]))
+  const gradeRank = (g: string | null) => (g === 'again' ? 0 : g === 'hard' ? 1 : 2)
+  const isNew = (r: (typeof rows)[number]) => Number(r.reps ?? 0) === 0 && !r.last_reviewed_at
+  rows.sort((a, b) => {
+    const ia = orderOf.get(a.item_id) ?? 9999
+    const ib = orderOf.get(b.item_id) ?? 9999
+    if (ia !== ib) return ia - ib
+    const ga = gradeRank(a.last_grade)
+    const gb = gradeRank(b.last_grade)
+    if (ga !== gb) return ga - gb
+    const na = isNew(a) ? 0 : 1
+    const nb = isNew(b) ? 0 : 1
+    if (na !== nb) return na - nb
+    if (Number(b.lapses ?? 0) !== Number(a.lapses ?? 0)) return Number(b.lapses ?? 0) - Number(a.lapses ?? 0)
+    return String(a.due_at).localeCompare(String(b.due_at)) || String(a.card_id).localeCompare(String(b.card_id))
+  })
+  return hydrateQueue(rows.slice(0, cap).map((r) => r.card_id))
+}
+
 /** How many cards the session queue holds now (the same cards `listDueReviews` returns, unlimited). */
 export function countDueReviews(before?: string, project?: string): number {
   const now = new Date()

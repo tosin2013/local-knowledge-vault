@@ -12,7 +12,12 @@ import { NEW_CARDS_PER_DAY_MAX } from './examDate'
 import { StudySession } from './StudySession'
 import { addedMessage, readPairsPref } from './pairsPref'
 
-export type ReviewViewProps = VaultPluginRenderProps & StudyProjectProps
+export type ReviewViewProps = VaultPluginRenderProps &
+  StudyProjectProps & {
+    /** Start a session on shaky and not-studied notes (#420). */
+    weakSpots?: boolean
+  }
+
 
 /**
  * The Study session section (#263): project and exam date, the new-card
@@ -20,7 +25,7 @@ export type ReviewViewProps = VaultPluginRenderProps & StudyProjectProps
  * add single notes. A note that already has cards says "Already in Study"
  * instead of offering to add it again.
  */
-export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjectChange }: ReviewViewProps) {
+export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjectChange, weakSpots }: ReviewViewProps) {
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
@@ -160,7 +165,7 @@ export function ReviewView({ onClose, onOpenNote, project: projectProp, onProjec
         </Alert>
       )}
 
-      <StudySession key={`${project}-${sessionKey}`} project={project} onOpenNote={onOpenNote} onGraded={() => void refreshStats()} />
+      <StudySession key={`${project}-${sessionKey}-${weakSpots ? 'weak' : 'due'}`} project={project} weakSpots={weakSpots} onOpenNote={onOpenNote} onGraded={() => void refreshStats()} />
 
       <Divider textAlign="left">
         <Typography variant="caption" sx={{

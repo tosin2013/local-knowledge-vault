@@ -31,6 +31,7 @@ import type {
 import { STUDY_GRADES, gradeLabel } from './grades'
 import { RepeatedPicks } from './RepeatedPicks'
 import { SESSION_CARDS, sessionReadyLabel } from './sessionSize'
+import { readPairsPref } from './pairsPref'
 import { MicButton } from '../voice/MicButton'
 import { useVoice } from '../voice/useVoice'
 import { speakText, type Utterance } from '../voice/audio'
@@ -45,6 +46,8 @@ export interface StudySessionProps {
   onGraded?: () => void
   /** Most cards in one session. */
   limit?: number
+  /** Start on shaky and not-studied notes, including cards that are not due yet (#420). */
+  weakSpots?: boolean
 }
 
 type Phase = 'idle' | 'starting' | 'card' | 'summary'
@@ -96,7 +99,7 @@ export function formatDue(iso: string | null): string {
  * Roediger 2008), calibration (Bjork, Dunlosky & Kornell 2013). Every
  * Vault-specific effect is a hypothesis (#218).
  */
-export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CARDS }: StudySessionProps) {
+export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CARDS, weakSpots }: StudySessionProps) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [dueCount, setDueCount] = useState<number | null>(null)
   const [sessionId, setSessionId] = useState('')
@@ -145,7 +148,7 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
     }
   }, [project])
 
-  // A new project means a new session.
+  // A new project means a new session. Weak-spots starts itself (#420).
   useEffect(() => {
     setPhase('idle')
     setQueue([])
@@ -207,7 +210,11 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
     setReport(null)
     setSkippedNote(null)
     try {
-      const res = await api.startSession({ ...(project ? { project } : {}), limit })
+      const res = await api.startSession({
+        ...(project ? { project } : {}),
+        limit,
+        ...(weakSpots ? { weakSpots: true, pairs: readPairsPref() } : {}),
+      })
       if (res.cards.length === 0) {
         setEmpty(true)
         setPhase('idle')
@@ -226,7 +233,15 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
     }
   }
 
+  useEffect(() => {
+    if (!weakSpots) return
+    void start()
+    // start reads the latest weakSpots/project/limit from this render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weakSpots, project, limit])
+
   const finish = async (sid: string) => {
+
     setPhase('summary')
     void refreshCount()
     const summary = window.lkv?.study?.sessionSummary

@@ -80,4 +80,96 @@ describe('StudyTab (#260)', () => {
     expect(screen.getByRole('tab', { name: 'Import practice test' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('heading', { name: 'Import practice test' })).toBeInTheDocument()
   })
+
+  it('Work on weak spots opens a Study session that starts itself (#420)', async () => {
+    window.localStorage.setItem('lkv.study.project', 'Biology')
+    window.lkv.projects.list = vi.fn().mockResolvedValue([{ name: 'Biology', count: 3 }])
+    window.lkv.review.stats = vi.fn().mockResolvedValue({
+      project: 'Biology',
+      examDate: null,
+      due: 0,
+      totalCards: 2,
+      newCards: 1,
+      liveNotes: 2,
+      enrolledNotes: 1,
+      lastSession: null,
+      newPerDay: 0,
+      newLeftToday: 0,
+      unreachable: 0,
+    })
+    window.lkv.review.readiness = vi.fn().mockResolvedValue({
+      project: 'Biology',
+      examDate: null,
+      daysToExam: null,
+      dueBeforeExam: 0,
+      strong: [],
+      shaky: [
+        {
+          itemId: 'itm_w',
+          title: 'Krebs cycle',
+          group: 'shaky',
+          reasons: ['Last review: Missed'],
+          cards: 1,
+          lastGrade: 'again',
+          lapses: 1,
+          openConfidentMisses: 0,
+          dueBeforeExam: 0,
+          lastReviewedAt: null,
+        },
+      ],
+      unstudied: [],
+      trend: null,
+      weakItemIds: ['itm_w'],
+    })
+    window.lkv.study.startSession = vi.fn().mockResolvedValue({
+      sessionId: 'ses_weak',
+      cards: [
+        {
+          id: 'itm_w',
+          title: 'Krebs cycle',
+          body: 'The Krebs cycle.',
+          card_id: 'crd_w',
+          chunk_index: null,
+          chunk_count: 0,
+          card_text: 'The Krebs cycle.',
+          origin: 'note',
+          question: null,
+          answer: null,
+          quote: null,
+          due_at: '2026-11-19T00:00:00.000Z',
+          interval_days: 0,
+          ease: 2.5,
+          reps: 1,
+          lapses: 1,
+          last_grade: 'again',
+          last_reviewed_at: '2026-11-18T00:00:00.000Z',
+        },
+      ],
+      itemIds: ['itm_w'],
+      enrolled: 0,
+    })
+    window.lkv.study.cardQuestion = vi.fn().mockResolvedValue({
+      cardId: 'crd_w',
+      itemId: 'itm_w',
+      title: 'Krebs cycle',
+      project: 'Biology',
+      origin: 'note',
+      kind: 'explain',
+      question: 'What happens in the Krebs cycle?',
+      answer: 'ATP',
+      quote: null,
+      sectionText: 'The Krebs cycle.',
+      chunkIndex: null,
+      chunkCount: 0,
+      citations: [],
+    })
+    render(<Harness initial="home" />)
+    expect(await screen.findByTestId('readiness-panel')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Work on weak spots/ }))
+    expect(screen.getByRole('tab', { name: 'Study session' })).toHaveAttribute('aria-selected', 'true')
+    await waitFor(() => expect(window.lkv.study.startSession).toHaveBeenCalledWith(expect.objectContaining({ project: 'Biology', weakSpots: true })))
+    expect(await screen.findByText('What happens in the Krebs cycle?')).toBeInTheDocument()
+    window.localStorage.removeItem('lkv.study.project')
+  })
+
 })

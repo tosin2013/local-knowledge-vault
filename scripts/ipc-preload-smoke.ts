@@ -288,7 +288,7 @@ async function main(): Promise<void> {
     'practiceTest:import', 'practiceTest:link', 'practiceTest:openFile',
     // review (#216)
     'review:listDue', 'review:count', 'review:rate', 'review:enqueue', 'review:remove',
-    'review:enqueueProject', 'review:stats', 'review:enrolled',
+    'review:enqueueProject', 'review:stats', 'review:readiness', 'review:enrolled',
     // projects + per-project settings (#261)
     'projects:list', 'projects:rename', 'projects:merge', 'projects:delete',
     'projects:getSettings', 'projects:setExamDate', 'projects:setMultipleChoice',
@@ -463,6 +463,10 @@ async function main(): Promise<void> {
   void listOff
   const ipcStats = await ipcRendererMock.invoke('review:stats', 'IPC Exam') as { totalCards: number; examDate: string | null; lastSession: { reviewed: number } | null }
   assert(ipcStats.totalCards === 1 && ipcStats.examDate === examDay && ipcStats.lastSession?.reviewed === 1, 'review:stats returns the project numbers')
+  const ipcReady = await ipcRendererMock.invoke('review:readiness', 'IPC Exam') as { project: string; strong: unknown[]; unstudied: unknown[] }
+  assert(ipcReady.project === 'IPC Exam' && Array.isArray(ipcReady.strong) && Array.isArray(ipcReady.unstudied), 'review:readiness groups the project notes')
+  const weakStart = await ipcRendererMock.invoke('study:startSession', { project: 'IPC Exam', weakSpots: true }) as { sessionId: string; itemIds?: string[]; enrolled?: number }
+  assert(typeof weakStart.sessionId === 'string' && Array.isArray(weakStart.itemIds), 'study:startSession({ weakSpots: true }) returns the weak-spot note ids')
   const enrolledIds = await ipcRendererMock.invoke('review:enrolled', [examNote.id, 'itm_missing']) as string[]
   assert(enrolledIds.length === 1 && enrolledIds[0] === examNote.id, 'review:enrolled lists notes that already have cards')
   const session = await ipcRendererMock.invoke('study:startSession', { project: 'IPC Exam' }) as { sessionId: string; cards: unknown[] }
@@ -651,9 +655,11 @@ async function main(): Promise<void> {
   await studySessionApi.startSession()
   await studySessionApi.sessionSummary(session.sessionId)
 
-  const reviewEnrolledApi = api.review as { enrolled: (ids: unknown) => Promise<string[]> }
+  const reviewEnrolledApi = api.review as { enrolled: (ids: unknown) => Promise<string[]>; readiness: (p: string) => Promise<{ project: string }> }
   assert(typeof reviewEnrolledApi.enrolled === 'function', 'review.enrolled is function')
   assert(Array.isArray(await reviewEnrolledApi.enrolled([])), 'preload review.enrolled reaches main')
+  assert(typeof reviewEnrolledApi.readiness === 'function', 'review.readiness is function')
+  assert((await reviewEnrolledApi.readiness('IPC Exam')).project === 'IPC Exam', 'preload review.readiness reaches main')
   assert(typeof (api.providers as Record<string, unknown>).list === 'function', 'providers.list is function')
 
   // Update notice through the preload API (#42)

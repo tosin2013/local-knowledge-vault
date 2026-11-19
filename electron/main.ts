@@ -63,6 +63,7 @@ import {
   getStudyStats,
   toReviewGrade,
 } from './review'
+import { getProjectReadiness } from './readiness'
 import { enrolledItemIds } from './study-cards'
 import { onJobProgress, runJob, setJobWorkerDbPath } from './job-worker-client'
 import { answerStudyCard, getCardQuestion, startStudySession, studySessionSummary } from './study-session'
@@ -599,6 +600,7 @@ function registerIpc(): void {
     return runJob('enroll-project', { project: String(project ?? ''), pairs: options?.pairs !== false })
   })
   ipcMain.handle('review:stats', (_e, project?: string) => getStudyStats(project ?? undefined))
+  ipcMain.handle('review:readiness', (_e, project?: string) => getProjectReadiness(String(project ?? '')))
 
   // Study mode (#215): recall-before-reveal attempts + calibration.
   ipcMain.handle('study:record', (_e, input: StudyAttemptInput) => recordStudyAttempt(input))

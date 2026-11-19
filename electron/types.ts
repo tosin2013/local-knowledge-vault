@@ -1472,6 +1472,59 @@ export interface StudyStats {
   repeatedPicks?: RepeatedPick[]
 }
 
+/* ---- Exam readiness (#420) ---- */
+
+/** Strong / Shaky / Not studied, from existing review and confidence data. */
+export type ReadinessGroup = 'strong' | 'shaky' | 'unstudied'
+
+export interface ReadinessNote {
+  itemId: string
+  title: string
+  group: ReadinessGroup
+  /** Why the note is in this group: facts only, never a verdict. */
+  reasons: string[]
+  cards: number
+  lastGrade: ReviewGrade | null
+  lapses: number
+  openConfidentMisses: number
+  dueBeforeExam: number
+  lastReviewedAt: string | null
+}
+
+export interface ReadinessWeekCounts {
+  got: number
+  partial: number
+  missed: number
+}
+
+/** Review grades in the last 7 days vs the 7 days before that. */
+export interface ReadinessTrend {
+  thisWeek: ReadinessWeekCounts
+  lastWeek: ReadinessWeekCounts
+}
+
+export interface ProjectReadiness {
+  project: string
+  examDate: string | null
+  /** Whole local calendar days until the exam; negative once it has passed. */
+  daysToExam: number | null
+  /** Cards in the project due at or before the exam (or now, when there is no date). */
+  dueBeforeExam: number
+  strong: ReadinessNote[]
+  shaky: ReadinessNote[]
+  unstudied: ReadinessNote[]
+  /** null when both weeks are empty. */
+  trend: ReadinessTrend | null
+  /** Shaky notes first, then not-studied: the Work on weak spots queue. */
+  weakItemIds: string[]
+}
+
+export interface PrepareWeakSpotsResult {
+  itemIds: string[]
+  /** Notes that had no cards and were enrolled now. */
+  enrolled: number
+}
+
 /** What enrolling a note produced. */
 export interface ReviewEnqueueResult {
   /** Cards created now (0 when the note was already enrolled). */
@@ -1649,12 +1702,28 @@ export interface StudySessionStartInput {
   project?: string
   /** Most cards in one session (default 20). */
   limit?: number
+  /**
+   * Focus the session on these notes (Work on weak spots, #420). Includes
+   * cards that are not due yet, in the given note order.
+   */
+  itemIds?: string[]
+  /**
+   * Enroll unstudied notes and start a session on the shaky and not-studied
+   * notes of `project` (Work on weak spots).
+   */
+  weakSpots?: boolean
+  /** When `weakSpots` is set, make two-way list cards for newly enrolled notes. */
+  pairs?: boolean
 }
 
 export interface StudySessionStart {
   sessionId: string
   /** The session queue: missed first, then Partly, then due, then today's new cards (#264). */
   cards: ReviewQueueItem[]
+  /** Notes included when this was a weak-spots session. */
+  itemIds?: string[]
+  /** Notes enrolled to start a weak-spots session. */
+  enrolled?: number
 }
 
 export interface StudyAnswerInput {

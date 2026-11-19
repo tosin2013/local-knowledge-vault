@@ -30,7 +30,8 @@ import { VISUAL_RE } from './practice-test'
 import { projectMultipleChoice } from './db'
 import { lastWrongPick, listRepeatedPicks, mcMode, nextStreak, parseOptions, shuffleOptions, whyWrongLine } from './multiple-choice'
 import { mediaMomentForCard } from './media-bookmarks'
-import { getNewCardBudget, listDueReviews, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
+import { getNewCardBudget, listDueReviews, listItemReviewCards, rateReview, reviewGradeToSelfGrade, toReviewGrade } from './review'
+import { prepareWeakSpots } from './readiness'
 import { calibrationSummary, clampConfidence, recordStudyAttempt } from './study'
 import type {
   SearchHit,
@@ -609,7 +610,22 @@ export async function getCardQuestion(cardId: string): Promise<StudyCardQuestion
 export function startStudySession(input: StudySessionStartInput = {}): StudySessionStart {
   const limit = Math.min(Math.max(Math.floor(Number(input?.limit ?? SESSION_DEFAULT_CARDS)) || SESSION_DEFAULT_CARDS, 1), SESSION_MAX_CARDS)
   const project = input?.project?.trim() || undefined
-  return { sessionId: newId('ses'), cards: listDueReviews(undefined, limit, project) }
+  const sessionId = newId('ses')
+  if (input?.weakSpots) {
+    if (!project) return { sessionId, cards: [], itemIds: [], enrolled: 0 }
+    const prep = prepareWeakSpots(project, { pairs: input.pairs })
+    return {
+      sessionId,
+      cards: listItemReviewCards(prep.itemIds, limit),
+      itemIds: prep.itemIds,
+      enrolled: prep.enrolled,
+    }
+  }
+  const itemIds = (input?.itemIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)
+  if (itemIds.length) {
+    return { sessionId, cards: listItemReviewCards(itemIds, limit), itemIds }
+  }
+  return { sessionId, cards: listDueReviews(undefined, limit, project) }
 }
 
 /**
