@@ -16,7 +16,7 @@ describe('StudyTab (#260)', () => {
     const list = screen.getByRole('tablist', { name: 'Study sections' })
     expect(list).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Study session', 'Quiz me on…', 'Import practice test'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Study session', 'Talk it through', 'Quiz me on…', 'Import practice test'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'study-tab-home')
     expect(await screen.findByTestId('study-home')).toBeInTheDocument()

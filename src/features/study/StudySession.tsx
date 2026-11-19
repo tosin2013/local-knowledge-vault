@@ -31,6 +31,11 @@ import type {
 import { STUDY_GRADES, gradeLabel } from './grades'
 import { RepeatedPicks } from './RepeatedPicks'
 import { SESSION_CARDS, sessionReadyLabel } from './sessionSize'
+import { MicButton } from '../voice/MicButton'
+import { useVoice } from '../voice/useVoice'
+import { speakText, type Utterance } from '../voice/audio'
+import { speakableText, studyHint } from '../voice/speech'
+import { revealSpeech } from '../voice/talkQuiz'
 
 export interface StudySessionProps {
   /** The Study project ('' = every project). */
@@ -113,6 +118,20 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
   /** The last card dropped because the model found nothing to study in it. */
   const [skippedNote, setSkippedNote] = useState<string | null>(null)
 
+  /** Voice study (#413): hints shown so far on this card (Exam-tutor style steps). */
+  const [hints, setHints] = useState<string[]>([])
+  const voice = useVoice()
+  const utter = useRef<Utterance | null>(null)
+  const talk = useCallback(
+    (text: string) => {
+      if (!voice.enabled || !voice.settings.spokenReplies) return
+      utter.current?.stop()
+      utter.current = speakText(speakableText(text), voice.settings, voice.status)
+    },
+    [voice.enabled, voice.settings, voice.status]
+  )
+  useEffect(() => () => utter.current?.stop(), [])
+
   const api = window.lkv?.study
   const hasSessionApi = !!api?.startSession && !!api?.cardQuestion && !!api?.answer
 
@@ -167,6 +186,8 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
   }, [current, queue, index, loadQuestion])
 
   const resetCard = () => {
+    utter.current?.stop()
+    setHints([])
     setAttempt('')
     setDontKnow(false)
     setPicked(null)
@@ -227,6 +248,16 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
     setQueue(rest)
     if (index >= rest.length) void finish(sessionId)
   }, [current, question])
+
+  // Read each new question aloud once, when spoken replies are on.
+  const spokenFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!question || question.skipped || revealed) return
+    const key = `${question.cardId}-${index}`
+    if (spokenFor.current === key) return
+    spokenFor.current = key
+    talk(question.question)
+  }, [question, index, revealed, talk])
 
   const isMc = question?.mode === 'mc' && (question.options?.length ?? 0) > 1
   const canReveal = !!question && (dontKnow || (isMc ? picked != null : attempt.trim().length > 0))
@@ -440,6 +471,24 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
                       }}
                     />
                     )}
+                    {voice.enabled && !isMc && (
+                      <Box sx={{ mt: 1 }}>
+                        <MicButton
+                          label="Hold to answer out loud"
+                          disabled={dontKnow}
+                          onTranscript={(t) => setAttempt((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))}
+                        />
+                      </Box>
+                    )}
+                    {hints.length > 0 && (
+                      <Alert severity="info" icon={false} data-testid="session-hints" sx={{ mt: 1 }}>
+                        {hints.map((h, i) => (
+                          <Typography key={i} variant="body2">
+                            Hint {i + 1}: {h}
+                          </Typography>
+                        ))}
+                      </Alert>
+                    )}
                     <Box sx={{ mt: 1.5, maxWidth: 420 }}>
                       <Typography variant="caption" id="session-confidence-label" sx={{
                         color: 'text.secondary',
@@ -476,7 +525,29 @@ export function StudySession({ project, onOpenNote, onGraded, limit = SESSION_CA
                       >
                         I don&apos;t know
                       </Button>
-                      <Button variant="contained" size="small" disabled={!canReveal} onClick={() => setRevealed(true)}>
+                      {voice.enabled && !isMc && (
+                        <Button
+                          size="small"
+                          disabled={dontKnow || !studyHint(question, hints.length + 1)}
+                          onClick={() => {
+                            const h = studyHint(question, hints.length + 1)
+                            if (!h) return
+                            setHints((prev) => [...prev, h])
+                            talk(`Hint: ${h}`)
+                          }}
+                        >
+                          {hints.length ? 'Another hint' : 'Hint'}
+                        </Button>
+                      )}
+                      <Button
+                        variant="contained"
+                        size="small"
+                        disabled={!canReveal}
+                        onClick={() => {
+                          setRevealed(true)
+                          talk(revealSpeech(question))
+                        }}
+                      >
                         {isMc ? 'Check answer' : 'Reveal answer'}
                       </Button>
                       {!canReveal && (

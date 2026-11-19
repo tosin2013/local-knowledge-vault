@@ -21,6 +21,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { MicButton } from './voice/MicButton'
 import SendIcon from '@mui/icons-material/Send'
 import AddIcon from '@mui/icons-material/Add'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -684,6 +685,11 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
                     onSend()
                   }
                 }}
+              />
+              <MicButton
+                label="Hold to ask out loud"
+                disabled={busy || sending}
+                onTranscript={(t) => onChatInput(chatInput.trim() ? `${chatInput.trim()} ${t}` : t)}
               />
               <IconButton
                 color="primary"

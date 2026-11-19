@@ -102,6 +102,15 @@ const mockDialog = {
 }
 
 const ipcRendererSent: Array<{ channel: string; listener: (...args: unknown[]) => void }> = []
+/** macOS microphone prompt (#413): answers per test. */
+let micAnswer: boolean | 'throw' = true
+const mockSystemPreferences = {
+  askForMediaAccess: async (_kind: string) => {
+    if (micAnswer === 'throw') throw new Error('no prompt')
+    return micAnswer
+  },
+}
+
 const ipcRendererMock = {
   invoke: async (channel: string, ...args: unknown[]) => {
     const handler = ipcHandlers.get(channel)
@@ -209,6 +218,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
       shell: mockShell,
       clipboard: mockClipboard,
       Menu: mockMenu,
+      systemPreferences: mockSystemPreferences,
     }
   }
   return origLoad.call(this, request, parent, isMain)
@@ -326,6 +336,9 @@ async function main(): Promise<void> {
     'bridge:status', 'bridge:getToken', 'bridge:rotateToken',
     // updates (#42)
     'updates:checkOnLaunch', 'updates:check', 'updates:getSettings', 'updates:setSettings',
+    // voice (#413)
+    'voice:getSettings', 'voice:setSettings', 'voice:status', 'voice:transcribe', 'voice:speak', 'voice:pull', 'voice:micAccess',
+    'teach:plan', 'teach:check', 'teach:missed',
     // mcp
     'mcp:listServers', 'mcp:addServer', 'mcp:ensureNotion', 'mcp:removeServer',
     'mcp:connect', 'mcp:disconnect', 'mcp:cancelAuth', 'mcp:listTools', 'mcp:callTool',
@@ -655,6 +668,54 @@ async function main(): Promise<void> {
   assert((await updatesApi.checkOnLaunch()).skipped === 'disabled', 'preload updates.checkOnLaunch honors the turned-off setting')
   assert((await updatesApi.check()).ok === false, 'preload updates.check reaches main')
   await updatesApi.setSettings({ checkOnLaunch: true })
+  // Voice study (#413) through the preload API. Ollama isn't running here, so the
+  // audio calls report errors instead of throwing.
+  {
+    const voiceApi = api.voice as unknown as import('../electron/preload').LkvApi['voice']
+    assert((await voiceApi.setSettings({ enabled: true, voice: 'Zoey' })).enabled === true, 'preload voice.setSettings reaches main')
+    assert((await voiceApi.getSettings()).voice === 'Zoey', 'preload voice.getSettings reaches main')
+    assert((await ipcRendererMock.invoke('voice:setSettings')) !== null, 'voice:setSettings tolerates a missing patch')
+    process.env.LKV_OLLAMA_URL = 'http://127.0.0.1:9'
+    const vs = await voiceApi.status()
+    assert(vs.reachable === false && typeof vs.sttHint === 'string', 'preload voice.status reports Ollama down')
+    assert((await voiceApi.transcribe(new Uint8Array([1, 2]))).ok === false, 'preload voice.transcribe reports an error')
+    assert((await voiceApi.speak('Hi')).ok === false, 'preload voice.speak reports an error')
+    assert((await ipcRendererMock.invoke('voice:speak')) !== null, 'voice:speak tolerates missing text')
+    const sent: unknown[] = []
+    const pullHandler = ipcHandlers.get('voice:pull')!
+    const pulled = (await pullHandler({ sender: { isDestroyed: () => false, send: (_c: string, p: unknown) => sent.push(p) } }, 'lfm3-audio')) as { status: string }
+    assert(pulled.status === 'error' && sent.length === 1, 'voice:pull forwards progress to the window')
+    await pullHandler({ sender: { isDestroyed: () => true, send: () => sent.push(1) } })
+    assert(sent.length === 1, 'voice:pull skips a closed window')
+    assert(typeof voiceApi.pull === 'function', 'preload voice.pull is a function')
+    const offPull = voiceApi.onPullProgress(() => undefined)
+    assert(ipcRendererSent.some((x) => x.channel === 'voice:pullProgress'), 'voice.onPullProgress subscribes')
+    offPull()
+    assert((await voiceApi.micAccess()).granted === true, 'micAccess: granted off macOS')
+    const realPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    micAnswer = false
+    assert((await voiceApi.micAccess()).granted === false, 'micAccess: macOS denial is reported')
+    micAnswer = 'throw'
+    assert((await voiceApi.micAccess()).granted === false, 'micAccess: a failed macOS prompt counts as denied')
+    Object.defineProperty(process, 'platform', { value: realPlatform })
+    // Teach mode (#418) through the preload API.
+    const teachApi = api.teach as unknown as import('../electron/preload').LkvApi['teach']
+    const tp = await teachApi.plan({ itemIds: ['itm_does_not_exist'] })
+    assert(tp.notFound === true && tp.concepts.length === 0, 'preload teach.plan: unknown note → not in your notes')
+    assert(((await ipcRendererMock.invoke('teach:plan')) as { concepts: unknown[] }).concepts.length >= 0, 'teach:plan tolerates a missing input')
+    const fb = await teachApi.check({
+      concept: { id: 'c1', title: 'T', explain: 'E', example: null, check: 'Q?', answer: 'ATP and NADPH', quote: null, sourceId: 'itm_x', sourceTitle: 'X' },
+      question: 'Q?',
+      attempt: 'ATP and NADPH',
+      hintsGiven: 0,
+    })
+    assert(typeof fb.say === 'string' && fb.say.length > 0, 'preload teach.check answers')
+    assert((await teachApi.missed([])).cards === 0, 'preload teach.missed with nothing missed')
+    assert(((await ipcRendererMock.invoke('teach:missed', 'nope')) as { cards: number }).cards === 0, 'teach:missed ignores a non-list')
+    delete process.env.LKV_OLLAMA_URL
+    await voiceApi.setSettings({ enabled: false })
+  }
   assert(typeof (api.chat as Record<string, unknown>).send === 'function', 'chat.send is function')
   assert(typeof (api.media as Record<string, unknown>).listProjects === 'function', 'media.listProjects is function')
   assert(typeof (api.media as Record<string, unknown>).findExistingProject === 'function', 'media.findExistingProject is function')

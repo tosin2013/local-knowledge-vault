@@ -51,7 +51,9 @@
     "test:chunking": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/chunking-smoke.ts",
     "test:secret-store": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/secret-store-smoke.ts",
     "test:update-check": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/update-check-smoke.ts",
-    "test:ci": "npm run test:mvp && npm run test:providers && npm run test:media && npm run test:citation-pack && npm run test:mcp && npm run test:bridge && npm run test:media-personas && npm run test:media-bookmarks && npm run test:media-tutor && npm run test:media-guide && npm run test:ipc-preload && npm run test:grounding-routing && npm run test:url-import && npm run test:markdown-import && npm run test:media-ingest && npm run test:store-loader && npm run test:provider-errors && npm run test:notes-vs-transcripts && npm run test:personalities && npm run test:books && npm run test:test-to-notes && npm run test:review && npm run test:study && npm run test:study-cards && npm run test:study-session && npm run test:study-queue-perf && npm run test:practice-test && npm run test:multiple-choice && npm run test:study-pairs && npm run test:reasoning-output && npm run test:sqlite-perf && npm run test:job-worker && npm run test:chunking && npm run test:secret-store && npm run test:update-check",
+    "test:voice": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/voice-smoke.ts",
+    "test:teach": "ELECTRON_RUN_AS_NODE=1 electron -r tsx/cjs scripts/teach-smoke.ts",
+    "test:ci": "npm run test:mvp && npm run test:providers && npm run test:media && npm run test:citation-pack && npm run test:mcp && npm run test:bridge && npm run test:media-personas && npm run test:media-bookmarks && npm run test:media-tutor && npm run test:media-guide && npm run test:ipc-preload && npm run test:grounding-routing && npm run test:url-import && npm run test:markdown-import && npm run test:media-ingest && npm run test:store-loader && npm run test:provider-errors && npm run test:notes-vs-transcripts && npm run test:personalities && npm run test:books && npm run test:test-to-notes && npm run test:review && npm run test:study && npm run test:study-cards && npm run test:study-session && npm run test:study-queue-perf && npm run test:practice-test && npm run test:multiple-choice && npm run test:study-pairs && npm run test:reasoning-output && npm run test:sqlite-perf && npm run test:job-worker && npm run test:chunking && npm run test:secret-store && npm run test:update-check && npm run test:voice && npm run test:teach",
     "test:renderer": "vitest run",
     "coverage:renderer": "vitest run --coverage",
     "coverage": "c8 npm run test:ci && npm run coverage:renderer && node scripts/merge-coverage.mjs",
@@ -133,7 +135,11 @@
     "snap": {
       "summary": "Chat with your notes locally, with cited answers",
       "grade": "stable",
-      "confinement": "strict"
+      "confinement": "strict",
+      "plugs": [
+        "default",
+        "audio-record"
+      ]
     },
     "mac": {
       "target": [
@@ -143,6 +149,9 @@
       "category": "public.app-category.productivity",
       "icon": "build/icon.png",
       "identity": "-",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Vault listens only while you talk to it in Study or Ask, to turn what you say into text."
+      },
       "hardenedRuntime": false,
       "gatekeeperAssess": false
     },

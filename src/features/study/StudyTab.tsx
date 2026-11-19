@@ -6,6 +6,7 @@ import { ReviewView } from './ReviewView'
 import { StudyView } from './StudyView'
 import { TestToNotesView } from './TestToNotesView'
 import { StudyHome } from './StudyHome'
+import { TalkView } from '../voice/TalkView'
 import { STUDY_SECTIONS, loadStudyProject, saveStudyProject, type StudySection } from './sections'
 
 export interface StudyTabProps {
@@ -13,6 +14,9 @@ export interface StudyTabProps {
   onSection: (section: StudySection) => void
   onOpenNote: (id: string) => void
   onNewDraft: (fields: Partial<Item>) => void
+  /** A note to teach in Talk it through ("Teach me this", #418). */
+  teachNoteId?: string | null
+  onTeachStarted?: () => void
 }
 
 /**
@@ -21,7 +25,7 @@ export interface StudyTabProps {
  * One project picker is shared by every section and remembered across
  * section and tab switches (#262).
  */
-export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote, onNewDraft }: StudyTabProps) {
+export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote, onNewDraft, teachNoteId, onTeachStarted }: StudyTabProps) {
   const [project, setProjectState] = useState(loadStudyProject)
   const setProject = useCallback((next: string) => {
     setProjectState(next)
@@ -82,6 +86,15 @@ export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote,
           <StudyHome project={project} onProjectChange={setProject} onStartReview={() => onSection('review')} onOpenNote={onOpenNote} />
         )}
         {section === 'review' && <ReviewView {...viewProps} />}
+        {section === 'talk' && (
+          <TalkView
+            project={project}
+            onProjectChange={setProject}
+            onOpenNote={onOpenNote}
+            teachNoteId={teachNoteId}
+            onTeachStarted={onTeachStarted}
+          />
+        )}
         {section === 'quiz' && <StudyView {...viewProps} />}
         {section === 'import' && <TestToNotesView {...viewProps} />}
       </Box>

@@ -36,7 +36,36 @@ import type {
   StudyCalibration,
   StudyCardQuestion,
   StudySessionReport,
+  VoiceStatus,
 } from '../../electron/types'
+
+export const VOICE_SETTINGS = {
+  enabled: false,
+  spokenReplies: true,
+  providerId: 'ollama',
+  sttModel: 'lfm3-audio',
+  ttsModel: 'phonon',
+  output: 'provider' as const,
+  voice: '',
+}
+
+export function makeVoiceStatus(overrides: Partial<VoiceStatus> = {}): VoiceStatus {
+  return {
+    providerId: 'ollama',
+    providerLabel: 'Ollama',
+    local: true,
+    ollama: true,
+    reachable: true,
+    canTranscribe: true,
+    canSpeak: false,
+    sttModel: 'lfm3-audio',
+    ttsModel: 'phonon',
+    voices: [],
+    snap: false,
+    providers: [{ id: 'ollama', label: 'Ollama', local: true }],
+    ...overrides,
+  }
+}
 
 export function makeItem(id: string, overrides: Partial<Item> = {}): Item {
   return {
@@ -476,6 +505,7 @@ export type LkvMock = {
 
 /** A full window.lkv stub. Every method resolves to a benign default; override per-test. */
 export function createLkvMock(): LkvMock {
+  let voiceSaved: Record<string, unknown> = { ...VOICE_SETTINGS }
   return {
     items: {
       list: vi.fn().mockResolvedValue([]),
@@ -678,6 +708,24 @@ export function createLkvMock(): LkvMock {
       check: vi.fn().mockResolvedValue({ ok: true, current: '0.3.0', latest: '0.3.0', updateAvailable: false }),
       getSettings: vi.fn().mockResolvedValue({ checkOnLaunch: true }),
       setSettings: vi.fn().mockImplementation(async (p: { checkOnLaunch?: boolean }) => ({ checkOnLaunch: p.checkOnLaunch !== false })),
+    },
+    teach: {
+      plan: vi.fn().mockResolvedValue({ concepts: [], citations: [], notFound: true, notice: 'I couldn’t find that in your notes.' }),
+      check: vi.fn().mockResolvedValue({ verdict: 'right', say: 'Yes, that’s right.', retry: false, missed: false, citations: [] }),
+      missed: vi.fn().mockResolvedValue({ enrolled: 1, madeDue: 0, cards: 2 }),
+    },
+    voice: {
+      getSettings: vi.fn().mockImplementation(async () => voiceSaved),
+      setSettings: vi.fn().mockImplementation(async (p: Record<string, unknown>) => {
+        voiceSaved = { ...voiceSaved, ...p }
+        return voiceSaved
+      }),
+      status: vi.fn().mockResolvedValue(makeVoiceStatus()),
+      transcribe: vi.fn().mockResolvedValue({ ok: true, text: 'spoken answer' }),
+      speak: vi.fn().mockResolvedValue({ ok: false, error: 'no speech model' }),
+      pull: vi.fn().mockResolvedValue({ model: 'lfm3-audio', status: 'success', done: true }),
+      onPullProgress: vi.fn().mockReturnValue(() => undefined),
+      micAccess: vi.fn().mockResolvedValue({ granted: true, snap: false }),
     },
     bridge: {
       status: vi.fn().mockResolvedValue({ running: true, host: '127.0.0.1', port: 8765, version: '1.0.0' }),

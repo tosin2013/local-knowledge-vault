@@ -141,6 +141,24 @@ function greetingReply(text: string, opts: { project?: string; promptName?: stri
   )
 }
 
+/**
+ * Talk it through (#413): the style for a spoken conversation. It sits inside the
+ * same grounding rules as every other style (composeGroundedSystem), so it only
+ * changes length and format: short spoken sentences, no markdown, a check question.
+ */
+export const VOICE_CONVERSATION_STYLE = [
+  'This is a spoken conversation: your reply is read aloud, and the full text with citations stays on screen.',
+  'Answer in two to four short, plain spoken sentences. No markdown, headings, bullet points, tables or code.',
+  'Talk like a patient tutor: explain simply, then often end with one short question that checks the learner understood.',
+  'When the learner asks to be quizzed, ask the question first and wait for their answer; if they are stuck, give a small hint before the answer.',
+].join('\n')
+
+/** The chat style for one turn: the chosen personality, plus the spoken style when the turn is spoken. Pure. */
+export function composeChatStyle(systemExtra: string | undefined, spoken: boolean): string | undefined {
+  if (!spoken) return systemExtra
+  return systemExtra ? `${systemExtra}\n\n${VOICE_CONVERSATION_STYLE}` : VOICE_CONVERSATION_STYLE
+}
+
 /** Exported for tests that want to inspect citation parsing */
 export { parseCitations }
 
@@ -186,6 +204,7 @@ export async function sendChatTurn(input: ChatSendInput): Promise<ChatSendResult
       systemExtra = prompt.body.trim()
     }
   }
+  systemExtra = composeChatStyle(systemExtra, input.spoken === true)
 
   const finish = (
     content: string,
