@@ -71,6 +71,11 @@ import type {
   UpdateCheckResult,
   UpdateSettings,
   VoiceMicAccess,
+  TeachCheckInput,
+  TeachFeedback,
+  TeachMissedResult,
+  TeachPlan,
+  TeachPlanInput,
   VoicePullProgress,
   VoiceSettings,
   VoiceSpeakResult,
@@ -433,6 +438,12 @@ const api = {
     getSettings: (): Promise<UpdateSettings> => ipcRenderer.invoke('updates:getSettings'),
     setSettings: (patch: Partial<UpdateSettings>): Promise<UpdateSettings> =>
       ipcRenderer.invoke('updates:setSettings', patch),
+  },
+  teach: {
+    plan: (input: TeachPlanInput): Promise<TeachPlan> => ipcRenderer.invoke('teach:plan', input),
+    check: (input: TeachCheckInput): Promise<TeachFeedback> => ipcRenderer.invoke('teach:check', input),
+    /** Notes behind missed concepts → Study cards due now (after the learner confirms). */
+    missed: (itemIds: string[]): Promise<TeachMissedResult> => ipcRenderer.invoke('teach:missed', itemIds),
   },
   voice: {
     getSettings: (): Promise<VoiceSettings> => ipcRenderer.invoke('voice:getSettings'),

@@ -84,12 +84,13 @@ export interface Utterance {
 const noop: Utterance = { done: Promise.resolve(), stop: () => undefined }
 
 /** OS voices through the Web Speech API, matched by name when one is chosen. */
-export function speakWithSystem(text: string, voiceName = ''): Utterance {
+export function speakWithSystem(text: string, voiceName = '', rate = 1): Utterance {
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined' || !text.trim()) return noop
   const u = new SpeechSynthesisUtterance(text)
   const voice = voiceName ? synth.getVoices().find((v) => v.name === voiceName) : undefined
   if (voice) u.voice = voice
+  if (rate !== 1) u.rate = rate
   const done = new Promise<void>((resolve) => {
     u.onend = () => resolve()
     u.onerror = () => resolve()
@@ -169,7 +170,9 @@ export function speakSentences(
   sentences: string[],
   settings: VoiceSettings,
   status: VoiceStatus | null,
-  onFallback?: (reason: string) => void
+  onFallback?: (reason: string) => void,
+  /** System voices only: below 1 is slower ("slower" in Teach mode). Provider voices have no speed setting. */
+  rate = 1
 ): Utterance {
   let stopped = false
   let current: Utterance | null = null
@@ -178,7 +181,7 @@ export function speakSentences(
     if (!provider) {
       for (const s of sentences) {
         if (stopped) return
-        current = speakWithSystem(s, settings.output === 'system' ? settings.voice : '')
+        current = speakWithSystem(s, settings.output === 'system' ? settings.voice : '', rate)
         await current.done
       }
       return

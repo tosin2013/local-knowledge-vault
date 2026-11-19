@@ -108,6 +108,12 @@ one under **Voice** and click **Test voice**.
   Vault says so. Say **quiz me** to get Study cards: answer from memory, say **hint** if you're
   stuck, say how sure you are, then hear the answer from your note and say **got it**, **partly**
   or **missed**. Those grades go into spaced review like typed ones.
+- **Teach mode:** in **Talk it through**, click **Teach me** with a project picked, click **Teach me
+  this** on an open note, or click **Paste notes to learn** and save the text as a note. You can
+  also say or type **teach me**. Vault goes through the notes a concept at a time: an explanation,
+  the example from your note when it has one, then a quick check. Say **slower**, **give me an example**, **hint**,
+  **skip** or **go back** whenever you like, or use the buttons. Lessons use only your notes. At
+  the end, click **Add to Study** to make the cards for concepts you missed due for review.
 - **Study session:** hold the mic button to speak your answer into the box, and use **Hint** for
   step-by-step hints.
 - **Snap:** the microphone needs one command: `sudo snap connect local-knowledge-vault:audio-record`.

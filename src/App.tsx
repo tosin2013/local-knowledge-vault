@@ -30,6 +30,8 @@ export default function App() {
   const [mode, setMode] = useState<Mode>('chat')
   const [activePluginId, setActivePluginId] = useState<string | null>(null)
   const [studySection, setStudySection] = useState<StudySection>('home')
+  const [teachNoteId, setTeachNoteId] = useState<string | null>(null)
+  const clearTeachNote = useCallback(() => setTeachNoteId(null), [])
   const [pluginsMenuAnchor, setPluginsMenuAnchor] = useState<null | HTMLElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -507,6 +509,8 @@ export default function App() {
                 onSection={setStudySection}
                 onOpenNote={handleOpenNote}
                 onNewDraft={notes.openPrefilledDraft}
+                teachNoteId={teachNoteId}
+                onTeachStarted={clearTeachNote}
               />
             )}
 
@@ -614,6 +618,13 @@ export default function App() {
               onDelete={() => void notes.onDelete()}
               onConfirmDraft={(ownWords) => void notes.confirmDraft(ownWords)}
               onCopyId={(id) => void notes.copyItemId(id)}
+              onTeach={(id) => {
+                notes.closeNotePeek()
+                setActivePluginId(null)
+                setStudySection('talk')
+                setMode('study')
+                setTeachNoteId(id)
+              }}
             />
           </Box>
         </Box>

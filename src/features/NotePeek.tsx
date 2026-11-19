@@ -16,6 +16,7 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined'
 import type { Item, Para } from '../../electron/types'
 import { AI_DRAFT_STATUS, NEW_DRAFT_ID, PARA_OPTIONS, paraLabel } from '../domain'
 
@@ -37,6 +38,8 @@ export interface NotePeekProps {
   /** Promote an ai-draft to a normal note; `ownWords` is the user's one-line summary. */
   onConfirmDraft: (ownWords: string) => void
   onCopyId: (id: string) => void
+  /** "Teach me this" (#418): start a lesson on this note in Study → Talk it through. */
+  onTeach?: (id: string) => void
 }
 
 export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
@@ -57,6 +60,7 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
     onDelete,
     onConfirmDraft,
     onCopyId,
+    onTeach,
   } = props
 
   const [ownWords, setOwnWords] = useState('')
@@ -131,6 +135,11 @@ export const NotePeek = memo(function NotePeek(props: NotePeekProps) {
             >
               Edit
             </Button>
+            {onTeach && !isNewDraft && draft.id !== NEW_DRAFT_ID && !dirty && (
+              <Button size="small" startIcon={<SchoolOutlinedIcon />} onClick={() => onTeach(draft.id)}>
+                Teach me this
+              </Button>
+            )}
             {!isNewDraft && draft.id !== NEW_DRAFT_ID && (
               <Button size="small" color="error" onClick={onDelete}>
                 Delete

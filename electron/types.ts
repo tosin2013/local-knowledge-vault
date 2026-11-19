@@ -1791,3 +1791,75 @@ export interface VoiceMicAccess {
   granted: boolean
   snap: boolean
 }
+
+/* ---- Teach mode (#418) ---- */
+
+export interface TeachConcept {
+  id: string
+  title: string
+  /** Plain-language explanation from the note (citation markers allowed). */
+  explain: string
+  /** An example taken from the note, or null when the note has none. */
+  example: string | null
+  /** A quick check question. */
+  check: string
+  /** The short answer the check expects (from the note). */
+  answer: string
+  /** Exact words from the note that support the concept. */
+  quote: string | null
+  /** The note the concept comes from. */
+  sourceId: string
+  sourceTitle: string
+}
+
+export interface TeachPlanInput {
+  itemIds?: string[]
+  project?: string
+}
+
+export interface TeachPlan {
+  concepts: TeachConcept[]
+  /** The notes the plan was built from. */
+  citations: Citation[]
+  /** Plain-language note, e.g. that no model answered and the steps come straight from the note. */
+  notice?: string
+  offline?: boolean
+  /** No notes to teach from ("I couldn't find that in your notes"). */
+  notFound?: boolean
+}
+
+export interface TeachCheckInput {
+  concept: TeachConcept
+  /** The check question being answered (the concept's, or a follow-up). */
+  question: string
+  attempt: string
+  /** Hints already given for this question. */
+  hintsGiven: number
+  /** Ask a "why" question after a right answer. */
+  askWhy?: boolean
+}
+
+export type TeachVerdict = 'right' | 'partial' | 'wrong'
+
+export interface TeachFeedback {
+  verdict: TeachVerdict
+  /** What Vault says next. */
+  say: string
+  /** A hint was given instead of the answer: the learner should try the same question again. */
+  retry: boolean
+  /** The learner needed the re-explanation: the concept counts as missed. */
+  missed: boolean
+  /** The next check question, when Vault asks a follow-up (or a "why"). */
+  followUp?: string
+  citations: Citation[]
+  offline?: boolean
+}
+
+export interface TeachMissedResult {
+  /** Notes that got Study cards for the first time. */
+  enrolled: number
+  /** Notes whose existing cards were made due now. */
+  madeDue: number
+  /** Cards now due. */
+  cards: number
+}

@@ -338,6 +338,7 @@ async function main(): Promise<void> {
     'updates:checkOnLaunch', 'updates:check', 'updates:getSettings', 'updates:setSettings',
     // voice (#413)
     'voice:getSettings', 'voice:setSettings', 'voice:status', 'voice:transcribe', 'voice:speak', 'voice:pull', 'voice:micAccess',
+    'teach:plan', 'teach:check', 'teach:missed',
     // mcp
     'mcp:listServers', 'mcp:addServer', 'mcp:ensureNotion', 'mcp:removeServer',
     'mcp:connect', 'mcp:disconnect', 'mcp:cancelAuth', 'mcp:listTools', 'mcp:callTool',
@@ -698,6 +699,20 @@ async function main(): Promise<void> {
     micAnswer = 'throw'
     assert((await voiceApi.micAccess()).granted === false, 'micAccess: a failed macOS prompt counts as denied')
     Object.defineProperty(process, 'platform', { value: realPlatform })
+    // Teach mode (#418) through the preload API.
+    const teachApi = api.teach as unknown as import('../electron/preload').LkvApi['teach']
+    const tp = await teachApi.plan({ itemIds: ['itm_does_not_exist'] })
+    assert(tp.notFound === true && tp.concepts.length === 0, 'preload teach.plan: unknown note → not in your notes')
+    assert(((await ipcRendererMock.invoke('teach:plan')) as { concepts: unknown[] }).concepts.length >= 0, 'teach:plan tolerates a missing input')
+    const fb = await teachApi.check({
+      concept: { id: 'c1', title: 'T', explain: 'E', example: null, check: 'Q?', answer: 'ATP and NADPH', quote: null, sourceId: 'itm_x', sourceTitle: 'X' },
+      question: 'Q?',
+      attempt: 'ATP and NADPH',
+      hintsGiven: 0,
+    })
+    assert(typeof fb.say === 'string' && fb.say.length > 0, 'preload teach.check answers')
+    assert((await teachApi.missed([])).cards === 0, 'preload teach.missed with nothing missed')
+    assert(((await ipcRendererMock.invoke('teach:missed', 'nope')) as { cards: number }).cards === 0, 'teach:missed ignores a non-list')
     delete process.env.LKV_OLLAMA_URL
     await voiceApi.setSettings({ enabled: false })
   }

@@ -16,6 +16,8 @@ import {
 import MicIcon from '@mui/icons-material/Mic'
 import StopIcon from '@mui/icons-material/Stop'
 import QuizIcon from '@mui/icons-material/Quiz'
+import SchoolIcon from '@mui/icons-material/School'
+import ContentPasteIcon from '@mui/icons-material/ContentPaste'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import type { Citation, ReviewGrade, ReviewQueueItem } from '../../../electron/types'
 import { ProjectSelect } from '../ProjectSelect'
@@ -24,12 +26,31 @@ import { speakSentences, type Utterance } from './audio'
 import { speakableText, splitSentences, parseSpokenCommand } from './speech'
 import { isMultipleChoice, questionSpeech, quizInput, startCard, type QuizCardState } from './talkQuiz'
 import { useMic } from './useMic'
+import { studyHint } from './speech'
+import {
+  conceptSpeech,
+  current as teachConcept,
+  exampleSpeech,
+  goTo,
+  isDone,
+  mark,
+  parseTeachCommand,
+  startTeach,
+  summarize,
+  type TeachState,
+  type TeachSummary,
+} from './teachFlow'
+import { PasteToLearnDialog } from './PasteToLearnDialog'
 import { useVoice } from './useVoice'
 
 export interface TalkViewProps {
   project: string
   onProjectChange: (project: string) => void
   onOpenNote?: (id: string) => void
+  /** "Teach me this" on a note (#418): start a lesson on it. */
+  teachNoteId?: string | null
+  /** Called once the lesson for `teachNoteId` has started. */
+  onTeachStarted?: () => void
 }
 
 interface Line {
@@ -42,6 +63,7 @@ interface Line {
 type Busy = 'idle' | 'thinking' | 'speaking'
 
 const QUIZ_CARDS = 5
+const TEACH_WORDS = /^(teach me( this| these notes)?|teach)$/i
 const QUIZ_WORDS = /\b(quiz me|test me|ask me (a|some) questions?)\b/i
 
 function parseCitations(json: string | null): Citation[] {
@@ -63,7 +85,7 @@ function parseCitations(json: string | null): Citation[] {
  * interrupts Vault. "Quiz me" runs Study cards inside the conversation, and
  * the grades feed spaced review.
  */
-export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps) {
+export function TalkView({ project, onProjectChange, onOpenNote, teachNoteId, onTeachStarted }: TalkViewProps) {
   const voice = useVoice()
   const mic = useMic()
   const [lines, setLines] = useState<Line[]>([])
@@ -73,6 +95,10 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
   const [typed, setTyped] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [quiz, setQuiz] = useState<QuizCardState | null>(null)
+  const teachRef = useRef<TeachState | null>(null)
+  const [teach, setTeach] = useState<TeachState | null>(null)
+  const [lesson, setLesson] = useState<TeachSummary | null>(null)
+  const [pasteOpen, setPasteOpen] = useState(false)
   const tallyRef = useRef<Record<ReviewGrade, number>>({ again: 0, hard: 0, good: 0, easy: 0 })
   const sessionRef = useRef<string | null>(null)
   const quizRef = useRef<{ sessionId: string; cards: ReviewQueueItem[]; index: number } | null>(null)
@@ -90,6 +116,9 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
     quizRef.current = null
     quizState.current = null
     setQuiz(null)
+    teachRef.current = null
+    setTeach(null)
+    setLesson(null)
     setLines([])
   }, [project])
 
@@ -112,13 +141,14 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
     setLines((prev) => [...prev, { id: nextId.current++, role, text, citations }])
 
   /** Show and (when spoken replies are on) say a line; resolves when the speech ends. */
-  const say = useCallback((text: string, citations?: Citation[]): Promise<void> => {
+  const say = useCallback((text: string, citations?: Citation[], rate = 1): Promise<void> => {
     add('vault', text, citations)
     const v = settingsRef.current
     if (!v.enabled || !v.settings.spokenReplies) return Promise.resolve()
     utter.current?.stop()
     const u = speakSentences(splitSentences(speakableText(text)), v.settings, v.status, (why) =>
-      setNotice(`The speech provider didn’t answer (${why}); using this computer’s voice.`)
+      setNotice(`The speech provider didn’t answer (${why}); using this computer’s voice.`),
+      rate
     )
     utter.current = u
     speakingRef.current = true
@@ -222,6 +252,147 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
     [say, askCard]
   )
 
+  const setTeachState = (st: TeachState | null) => {
+    teachRef.current = st
+    setTeach(st)
+  }
+
+  const finishTeach = useCallback(
+    (st: TeachState, before = '') => {
+      setTeachState(null)
+      const sum = summarize(st)
+      setLesson(sum.missed.length ? sum : null)
+      void say(`${before}${sum.say}`)
+    },
+    [say]
+  )
+
+  /** Teach mode (#418): plan the lesson from notes, then walk through it. */
+  const startLesson = useCallback(
+    async (input: { itemIds?: string[]; project?: string }) => {
+      const plan = window.lkv?.teach?.plan
+      if (!plan) return
+      quizRef.current = null
+      quizState.current = null
+      setQuiz(null)
+      setLesson(null)
+      setBusy('thinking')
+      try {
+        const p = await plan(input)
+        setBusy('idle')
+        if (p.notice) setNotice(p.notFound ? null : p.notice)
+        if (p.notFound || !p.concepts.length) {
+          void say(p.notice ?? 'I couldn’t find that in your notes.')
+          return
+        }
+        const st = startTeach(p)
+        setTeachState(st)
+        const titles = p.concepts.map((c) => c.title).join(', ')
+        void say(
+          `Let’s learn this in ${p.concepts.length} steps: ${titles}. Say slower, give me an example, skip or go back any time. ${conceptSpeech(st)}`,
+          [{ id: p.concepts[0].sourceId, title: p.concepts[0].sourceTitle }]
+        )
+      } catch (e) {
+        setBusy('idle')
+        setNotice(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [say]
+  )
+
+  /** Move on, saying `before` (feedback on the last answer) first in the same reply. */
+  const nextConcept = useCallback(
+    (st: TeachState, before = '', citations: Citation[] = []) => {
+      const next = goTo(st, st.index + 1)
+      if (isDone(next)) {
+        finishTeach(next, before)
+        return
+      }
+      setTeachState(next)
+      const c = teachConcept(next)!
+      const cites = [...citations.filter((x) => x.id !== c.sourceId), { id: c.sourceId, title: c.sourceTitle }]
+      void say(`${before}${conceptSpeech(next)}`, cites)
+    },
+    [say, finishTeach]
+  )
+
+  const teachTurn = useCallback(
+    async (text: string) => {
+      const st = teachRef.current!
+      const c = teachConcept(st)!
+      const cite = [{ id: c.sourceId, title: c.sourceTitle }]
+      const cmd = parseTeachCommand(text)
+      if (cmd === 'stop') return finishTeach(st)
+      if (cmd === 'skip') return nextConcept(mark(st, 'skipped'))
+      if (cmd === 'back') {
+        const prev = goTo(st, st.index - 1)
+        setTeachState(prev)
+        const pc = teachConcept(prev)!
+        return void say(conceptSpeech(prev), [{ id: pc.sourceId, title: pc.sourceTitle }])
+      }
+      if (cmd === 'repeat') return void say(st.phase === 'check' ? conceptSpeech(st) : st.question, cite)
+      if (cmd === 'slower') return void say(`Let’s take it slowly. ${c.explain} Quick check: ${st.question}`, cite, 0.8)
+      if (cmd === 'example') return void say(exampleSpeech(c), cite)
+      if (cmd === 'hint') {
+        const h = studyHint({ title: c.sourceTitle, answer: c.answer, quote: c.quote, sectionText: '' }, st.hintsGiven + 1)
+        setTeachState({ ...st, hintsGiven: st.hintsGiven + 1 })
+        return void say(h ? `Hint: ${h}` : `That’s all the hints I have. Give it a try: ${st.question}`, cite)
+      }
+      if (st.phase === 'why') {
+        return nextConcept(st, 'Good. Putting it in your own words helps it stick. ')
+      }
+      const check = window.lkv?.teach?.check
+      if (!check) return
+      setBusy('thinking')
+      try {
+        const fb = await check({ concept: c, question: st.question, attempt: text, hintsGiven: st.hintsGiven, askWhy: st.rightCount % 2 === 1 })
+        setBusy('idle')
+        if (fb.retry) {
+          setTeachState({ ...st, hintsGiven: st.hintsGiven + 1 })
+          return void say(fb.say, fb.citations)
+        }
+        if (fb.verdict === 'right') {
+          const marked = { ...mark(st, 'covered'), rightCount: st.rightCount + 1 }
+          if (fb.followUp && st.phase === 'check') {
+            setTeachState({ ...marked, phase: 'why', question: fb.followUp })
+            return void say(fb.say, fb.citations)
+          }
+          return nextConcept(marked, `${fb.say} `, fb.citations)
+        }
+        // Still off after a hint: re-explained, now a follow-up check. A wrong
+        // follow-up gets the explanation and then the lesson moves on.
+        const missed = mark(st, 'missed')
+        if (st.phase === 'check' && fb.followUp) {
+          setTeachState({ ...missed, phase: 'followup', question: fb.followUp, hintsGiven: 1 })
+          return void say(fb.say, fb.citations)
+        }
+        return nextConcept(missed, `${fb.say.replace(/\s*Now try this:.*$/, '')} `, fb.citations)
+      } catch (e) {
+        setBusy('idle')
+        setNotice(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [say, nextConcept, finishTeach]
+  )
+
+  const addMissedToStudy = async () => {
+    if (!lesson || !window.lkv?.teach?.missed) return
+    try {
+      const r = await window.lkv.teach.missed(lesson.missedNoteIds)
+      setLesson(null)
+      void say(`Done: ${r.cards} Study ${r.cards === 1 ? 'card is' : 'cards are'} due now from ${lesson.missedNoteIds.length === 1 ? 'that note' : 'those notes'}.`)
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // "Teach me this" on a note.
+  useEffect(() => {
+    if (!teachNoteId) return
+    onTeachStarted?.()
+    void startLesson({ itemIds: [teachNoteId] })
+  }, [teachNoteId, onTeachStarted, startLesson])
+
   /** One learner turn, spoken or typed. */
   const respond = useCallback(
     async (text: string) => {
@@ -229,6 +400,10 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
       if (!t) return
       stopSpeaking()
       add('you', t)
+      if (teachRef.current) {
+        await teachTurn(t)
+        return
+      }
       if (quizState.current) {
         await quizTurn(t)
         return
@@ -238,6 +413,10 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
         setRunning(false)
         mic.cancel()
         void say('Okay. Press Start talking whenever you want to pick this up again.')
+        return
+      }
+      if (TEACH_WORDS.test(t)) {
+        await startLesson(project ? { project } : {})
         return
       }
       if (QUIZ_WORDS.test(t)) {
@@ -266,7 +445,7 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
         setNotice(e instanceof Error ? e.message : String(e))
       }
     },
-    [project, quizTurn, startQuiz, say, stopSpeaking, mic]
+    [project, quizTurn, teachTurn, startQuiz, startLesson, say, stopSpeaking, mic]
   )
 
   /** The hands-free loop: listen → pause ends the turn → answer → listen again. */
@@ -343,10 +522,34 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
       <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
         <ProjectSelect value={project} onChange={onProjectChange} />
         <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1, minWidth: 200 }}>
-          Talk about your notes: ask Vault to explain something, or say “quiz me”. Answers come from your notes, with sources
-          below each reply.
+          Talk about your notes: ask Vault to explain something, say “teach me” for a lesson, or “quiz me”. Answers come
+          from your notes, with sources below each reply.
         </Typography>
       </Stack>
+
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<SchoolIcon />}
+          disabled={!project || busy === 'thinking' || !!teach}
+          onClick={() => void startLesson({ project })}
+        >
+          {project ? `Teach me ${project}` : 'Teach me this (pick a project)'}
+        </Button>
+        <Button size="small" variant="outlined" startIcon={<ContentPasteIcon />} disabled={!!teach} onClick={() => setPasteOpen(true)}>
+          Paste notes to learn
+        </Button>
+      </Stack>
+      <PasteToLearnDialog
+        open={pasteOpen}
+        project={project}
+        onClose={() => setPasteOpen(false)}
+        onSaved={(item) => {
+          setPasteOpen(false)
+          void startLesson({ itemIds: [item.id] })
+        }}
+      />
 
       {!voice.enabled && (
         <Alert severity="info" data-testid="talk-voice-off">
@@ -411,7 +614,7 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
                   Interrupt
                 </Button>
               )}
-              {!quiz && (
+              {!quiz && !teach && (
                 <Button size="small" startIcon={<QuizIcon />} onClick={() => void respond('Quiz me')} disabled={busy === 'thinking'}>
                   Quiz me
                 </Button>
@@ -437,6 +640,71 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
             )}
           </CardContent>
         </Card>
+      )}
+
+      {teach && teachConcept(teach) && (
+        <Card variant="outlined" data-testid="talk-teach">
+          <CardContent>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Lesson · concept {teach.index + 1} of {teach.concepts.length}
+              {teach.phase === 'followup' ? ' · follow-up' : teach.phase === 'why' ? ' · why?' : ''}
+            </Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              {teachConcept(teach)!.title}
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              {teach.question}
+            </Typography>
+            <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mb: 1 }} aria-label="Lesson progress">
+              {teach.concepts.map((c, i) => (
+                <Chip
+                  key={c.id}
+                  size="small"
+                  label={c.title}
+                  variant={i === teach.index ? 'filled' : 'outlined'}
+                  color={teach.status[c.id] === 'covered' ? 'success' : teach.status[c.id] === 'missed' ? 'warning' : 'default'}
+                />
+              ))}
+            </Stack>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              {(
+                [
+                  ['slower', 'Slower'],
+                  ['give me an example', 'Example'],
+                  ['hint', 'Hint'],
+                  ['go back', 'Go back'],
+                  ['skip', 'Skip'],
+                  ['stop', 'End lesson'],
+                ] as const
+              ).map(([word, label]) => (
+                <Button key={word} size="small" onClick={() => void respond(word)} disabled={busy === 'thinking'}>
+                  {label}
+                </Button>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
+      {lesson && (
+        <Alert
+          severity="info"
+          data-testid="teach-missed"
+          action={
+            <Stack direction="row" spacing={1}>
+              <Button size="small" onClick={() => void addMissedToStudy()}>
+                Add to Study
+              </Button>
+              <Button size="small" onClick={() => setLesson(null)}>
+                Not now
+              </Button>
+            </Stack>
+          }
+        >
+          Add {lesson.missed.length === 1 ? 'the concept' : `the ${lesson.missed.length} concepts`} you missed to Study? The cards for{' '}
+          {lesson.missedNoteIds.length === 1 ? 'its note' : 'their notes'} (
+          {[...new Set(lesson.missed.map((c) => c.sourceTitle))].join(', ')}) will be due now.
+        </Alert>
       )}
 
       {quiz && (
@@ -541,7 +809,7 @@ export function TalkView({ project, onProjectChange, onOpenNote }: TalkViewProps
           fullWidth
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
-          placeholder={quiz ? 'Type your answer (or “hint”)' : 'Type instead: ask about your notes, or “quiz me”'}
+          placeholder={teach || quiz ? 'Type your answer (or “hint”)' : 'Type instead: ask about your notes, “teach me” or “quiz me”'}
           slotProps={{ htmlInput: { 'aria-label': 'Type a message' } }}
         />
         <Button type="submit" variant="outlined" disabled={!typed.trim() || busy === 'thinking'}>

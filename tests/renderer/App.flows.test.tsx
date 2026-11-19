@@ -152,6 +152,15 @@ describe('App flows — Notes rail + note peek', () => {
     await waitFor(() => expect(screen.getAllByText('My new note').length).toBeGreaterThan(0))
   })
 
+  it('“Teach me this” on a note opens Study → Talk it through with a lesson on it (#418)', async () => {
+    const lkv = seed()
+    await renderApp()
+    fireEvent.click(screen.getByText('First note'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Teach me this' }))
+    await waitFor(() => expect(lkv.teach.plan).toHaveBeenCalledWith({ itemIds: ['itm_1'] }))
+    expect(await screen.findByTestId('talk-view')).toBeInTheDocument()
+  })
+
   it('opens an existing note, edits and saves it', async () => {
     const lkv = seed()
     lkv.items.update.mockImplementation((id: string, patch: { title?: string }) =>
