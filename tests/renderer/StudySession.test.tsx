@@ -372,4 +372,15 @@ describe('StudySession (#263)', () => {
     })
     sessionStorage.clear()
   })
+  it('starts a weak-spots session without a click and includes cards that are not due (#420)', async () => {
+    const lkv = lkvMock()
+    lkv.review.count.mockResolvedValue(0)
+    lkv.study.startSession.mockResolvedValue({ sessionId: 'ses_weak', cards: [CARD_A], itemIds: ['itm_1'], enrolled: 1 })
+    lkv.study.cardQuestion.mockResolvedValue(makeCardQuestion(CARD_A.card_id, { question: 'What is ATP?' }))
+    render(<StudySession project="Biology" weakSpots />)
+    await screen.findByTestId('session-question')
+    expect(lkv.study.startSession).toHaveBeenCalledWith({ project: 'Biology', limit: 20, weakSpots: true, pairs: true })
+    expect(screen.getByText('What is ATP?')).toBeInTheDocument()
+  })
+
 })

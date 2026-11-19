@@ -104,6 +104,7 @@ import type {
   StudyEnrollResult,
   StudyEnrollOptions,
   StudyStats,
+  ProjectReadiness,
   ProjectSummary,
   RemovedPlugin,
   OllamaHealth,
@@ -200,6 +201,8 @@ const api = {
       ipcRenderer.invoke('review:enqueueProject', project, options),
     /** Study home numbers for a project ('' = all projects). */
     stats: (project?: string): Promise<StudyStats> => ipcRenderer.invoke('review:stats', project),
+    /** Exam readiness for a project: Strong / Shaky / Not studied (#420). */
+    readiness: (project: string): Promise<ProjectReadiness> => ipcRenderer.invoke('review:readiness', project),
     /** Which of these notes already have cards in Study ("Already in Study"). */
     enrolled: (itemIds: string[]): Promise<string[]> => ipcRenderer.invoke('review:enrolled', itemIds),
   },
@@ -212,7 +215,7 @@ const api = {
       ipcRenderer.invoke('study:calibration'),
     questions: (input: StudyQuestionsInput): Promise<StudyQuestionsResult> =>
       ipcRenderer.invoke('study:questions', input),
-    /** Session loop (#263): start a session for a project ('' = all). */
+    /** Session loop (#263): start a session for a project ('' = all). Pass weakSpots or itemIds for #420. */
     startSession: (input?: StudySessionStartInput): Promise<StudySessionStart> =>
       ipcRenderer.invoke('study:startSession', input),
     /** One card's prompt and answer key (written once per section, then cached). */

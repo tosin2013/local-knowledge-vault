@@ -195,4 +195,91 @@ describe('StudyHome (#262)', () => {
     await waitFor(() => expect(lkv.review.enqueueProject).toHaveBeenCalledWith('Biology', { pairs: false }))
     window.localStorage.removeItem('lkv.study.pairs')
   })
+  it('shows the readiness panel and starts weak spots from the button (#420)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 20, examDate: '2099-06-01' }])
+    lkv.projects.getSettings.mockResolvedValue({ name: 'Biology', examDate: '2099-06-01', multipleChoice: true })
+    lkv.review.stats.mockResolvedValue(BIO_STATS)
+    lkv.review.readiness.mockResolvedValue({
+      project: 'Biology',
+      examDate: '2099-06-01',
+      daysToExam: 10,
+      dueBeforeExam: 4,
+      strong: [
+        {
+          itemId: 'itm_s',
+          title: 'ATP',
+          group: 'strong',
+          reasons: ['Last review: Got it'],
+          cards: 1,
+          lastGrade: 'good',
+          lapses: 0,
+          openConfidentMisses: 0,
+          dueBeforeExam: 0,
+          lastReviewedAt: null,
+        },
+      ],
+      shaky: [
+        {
+          itemId: 'itm_w',
+          title: 'Krebs cycle',
+          group: 'shaky',
+          reasons: ['Last review: Missed'],
+          cards: 1,
+          lastGrade: 'again',
+          lapses: 1,
+          openConfidentMisses: 0,
+          dueBeforeExam: 1,
+          lastReviewedAt: null,
+        },
+      ],
+      unstudied: [
+        {
+          itemId: 'itm_n',
+          title: 'Chloroplasts',
+          group: 'unstudied',
+          reasons: ['Not studied yet'],
+          cards: 0,
+          lastGrade: null,
+          lapses: 0,
+          openConfidentMisses: 0,
+          dueBeforeExam: 0,
+          lastReviewedAt: null,
+        },
+      ],
+      trend: { thisWeek: { got: 2, partial: 0, missed: 1 }, lastWeek: { got: 1, partial: 0, missed: 0 } },
+      weakItemIds: ['itm_w', 'itm_n'],
+    })
+    const onWorkWeakSpots = vi.fn()
+    const onOpenNote = vi.fn()
+    render(
+      <StudyHome
+        project="Biology"
+        onProjectChange={vi.fn()}
+        onStartReview={vi.fn()}
+        onWorkWeakSpots={onWorkWeakSpots}
+        onOpenNote={onOpenNote}
+      />,
+    )
+
+    const panel = await screen.findByTestId('readiness-panel')
+    expect(lkv.review.readiness).toHaveBeenCalledWith('Biology')
+    expect(panel).toHaveTextContent('Strong: 1 note, Shaky: 1 note, Not studied: 1 note')
+    expect(panel.textContent?.toLowerCase()).not.toMatch(/you're ready|you are ready/)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Krebs cycle' }))
+    expect(onOpenNote).toHaveBeenCalledWith('itm_w')
+    fireEvent.click(screen.getByRole('button', { name: /Work on weak spots/ }))
+    expect(onWorkWeakSpots).toHaveBeenCalled()
+  })
+
+  it('does not load readiness until a project is picked (#420)', async () => {
+    const lkv = lkvMock()
+    lkv.projects.list.mockResolvedValue([{ name: 'Biology', count: 20 }])
+    lkv.review.stats.mockResolvedValue({ ...BIO_STATS, project: null, examDate: null })
+    render(<StudyHome project="" onProjectChange={vi.fn()} onStartReview={vi.fn()} />)
+    await screen.findByTestId('study-stats')
+    expect(lkv.review.readiness).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('readiness-panel')).not.toBeInTheDocument()
+  })
+
 })

@@ -27,6 +27,7 @@ export interface StudyTabProps {
  */
 export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote, onNewDraft, teachNoteId, onTeachStarted }: StudyTabProps) {
   const [project, setProjectState] = useState(loadStudyProject)
+  const [weakSpots, setWeakSpots] = useState(false)
   const setProject = useCallback((next: string) => {
     setProjectState(next)
     saveStudyProject(next)
@@ -83,9 +84,21 @@ export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote,
         sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
       >
         {section === 'home' && (
-          <StudyHome project={project} onProjectChange={setProject} onStartReview={() => onSection('review')} onOpenNote={onOpenNote} />
+          <StudyHome
+            project={project}
+            onProjectChange={setProject}
+            onStartReview={() => {
+              setWeakSpots(false)
+              onSection('review')
+            }}
+            onWorkWeakSpots={() => {
+              setWeakSpots(true)
+              onSection('review')
+            }}
+            onOpenNote={onOpenNote}
+          />
         )}
-        {section === 'review' && <ReviewView {...viewProps} />}
+        {section === 'review' && <ReviewView {...viewProps} weakSpots={weakSpots} />}
         {section === 'talk' && (
           <TalkView
             project={project}
