@@ -133,6 +133,7 @@ import {
 import { encryptLegacySecretFiles } from './secret-files'
 import { secretEncryptionAvailable } from './secret-store'
 import { checkForUpdate, checkForUpdateOnLaunch, getUpdateSettings, setUpdateSettings } from './update-check'
+import { teachCheck, teachMissed, teachPlan } from './teach'
 import { getVoiceSettings, pullSpeechModel, setVoiceSettings, speak, transcribe, voiceStatus } from './voice'
 import { handleMediaRequest } from './media-protocol'
 import { YOUTUBE_EMBED_FILTER, rewriteYoutubeEmbedHeaders } from './youtube-embed-headers'
@@ -221,6 +222,8 @@ import type {
   ProviderSelection,
   UpdateSettings,
   VoiceSettings,
+  TeachCheckInput,
+  TeachPlanInput,
   StudyEnrollOptions,
 } from './types'
 
@@ -1095,6 +1098,10 @@ function registerIpc(): void {
     const { currentVersion, fetchImpl } = updateEnv()
     return checkForUpdate({ currentVersion, fetchImpl })
   })
+  // Teach mode (#418): concepts from notes, grounded checks, missed concepts → Study.
+  ipcMain.handle('teach:plan', (_e, input: TeachPlanInput) => teachPlan(input ?? {}))
+  ipcMain.handle('teach:check', (_e, input: TeachCheckInput) => teachCheck(input))
+  ipcMain.handle('teach:missed', (_e, itemIds: string[]) => teachMissed(Array.isArray(itemIds) ? itemIds : []))
   // Voice study (#413): OpenAI-compatible audio routes (Ollama lfm3-audio / phonon by default).
   ipcMain.handle('voice:getSettings', () => getVoiceSettings())
   ipcMain.handle('voice:setSettings', (_e, patch: Partial<VoiceSettings>) => setVoiceSettings(patch ?? {}))

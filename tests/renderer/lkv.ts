@@ -709,6 +709,11 @@ export function createLkvMock(): LkvMock {
       getSettings: vi.fn().mockResolvedValue({ checkOnLaunch: true }),
       setSettings: vi.fn().mockImplementation(async (p: { checkOnLaunch?: boolean }) => ({ checkOnLaunch: p.checkOnLaunch !== false })),
     },
+    teach: {
+      plan: vi.fn().mockResolvedValue({ concepts: [], citations: [], notFound: true, notice: 'I couldn’t find that in your notes.' }),
+      check: vi.fn().mockResolvedValue({ verdict: 'right', say: 'Yes, that’s right.', retry: false, missed: false, citations: [] }),
+      missed: vi.fn().mockResolvedValue({ enrolled: 1, madeDue: 0, cards: 2 }),
+    },
     voice: {
       getSettings: vi.fn().mockImplementation(async () => voiceSaved),
       setSettings: vi.fn().mockImplementation(async (p: Record<string, unknown>) => {
