@@ -93,6 +93,26 @@ Vault shows a hint if it detects one.
    fixes** (optional) asks the model for a better corrective note grounded in your notes; **Save as draft
    note** links it to the question's card.
 
+### Study out loud (optional)
+
+Voice is off by default. Turn on **Voice study** in **Settings → AI providers → Voice**. To answer
+out loud, Vault needs Ollama's speech-to-text model: click **Download lfm3-audio** there, or run
+`ollama pull lfm3-audio`. Spoken replies use Ollama's `phonon` voices when it's installed (Ollama
+currently runs `phonon` on Apple Silicon Macs) and your computer's built-in voices otherwise. Pick
+one under **Voice** and click **Test voice**.
+
+- **Study → Talk it through:** click **Start talking** and talk about your notes. Ask Vault to
+  explain something, then answer its check questions. A pause ends your turn, and you can talk over
+  Vault or click **Interrupt** to cut it off. Turn off **Hands-free** to hold a button while you
+  talk instead. Each reply cites your notes on screen, and when your notes don't cover something,
+  Vault says so. Say **quiz me** to get Study cards: answer from memory, say **hint** if you're
+  stuck, say how sure you are, then hear the answer from your note and say **got it**, **partly**
+  or **missed**. Those grades go into spaced review like typed ones.
+- **Study session:** hold the mic button to speak your answer into the box, and use **Hint** for
+  step-by-step hints.
+- **Snap:** the microphone needs one command: `sudo snap connect local-knowledge-vault:audio-record`.
+  On macOS, allow Vault to use the microphone when asked.
+
 ## 4. What to expect
 
 - **Cited answers** you can check against the chapter they came from.

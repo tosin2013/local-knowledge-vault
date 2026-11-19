@@ -70,6 +70,12 @@ import type {
   MenuAction,
   UpdateCheckResult,
   UpdateSettings,
+  VoiceMicAccess,
+  VoicePullProgress,
+  VoiceSettings,
+  VoiceSpeakResult,
+  VoiceStatus,
+  VoiceTranscribeResult,
   CreatePromptInput,
   CreateSessionInput,
   ImportFromUrlResult,
@@ -427,6 +433,22 @@ const api = {
     getSettings: (): Promise<UpdateSettings> => ipcRenderer.invoke('updates:getSettings'),
     setSettings: (patch: Partial<UpdateSettings>): Promise<UpdateSettings> =>
       ipcRenderer.invoke('updates:setSettings', patch),
+  },
+  voice: {
+    getSettings: (): Promise<VoiceSettings> => ipcRenderer.invoke('voice:getSettings'),
+    setSettings: (patch: Partial<VoiceSettings>): Promise<VoiceSettings> => ipcRenderer.invoke('voice:setSettings', patch),
+    status: (): Promise<VoiceStatus> => ipcRenderer.invoke('voice:status'),
+    /** A 16 kHz mono WAV recording → text. */
+    transcribe: (wav: Uint8Array): Promise<VoiceTranscribeResult> => ipcRenderer.invoke('voice:transcribe', wav),
+    /** Text → WAV from the speech provider. */
+    speak: (text: string): Promise<VoiceSpeakResult> => ipcRenderer.invoke('voice:speak', text),
+    pull: (model: string): Promise<VoicePullProgress> => ipcRenderer.invoke('voice:pull', model),
+    onPullProgress: (cb: (p: VoicePullProgress) => void): (() => void) => {
+      const listener = (_e: unknown, p: VoicePullProgress) => cb(p)
+      ipcRenderer.on('voice:pullProgress', listener)
+      return () => ipcRenderer.removeListener('voice:pullProgress', listener)
+    },
+    micAccess: (): Promise<VoiceMicAccess> => ipcRenderer.invoke('voice:micAccess'),
   },
   bridge: {
     status: (): Promise<{ running: boolean; host: string; port: number; version: string; error?: string }> =>

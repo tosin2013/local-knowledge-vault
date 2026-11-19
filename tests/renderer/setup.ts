@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { createLkvMock } from './lkv'
+import { resetVoiceStore } from '../../src/features/voice/useVoice'
 
 // --- React Testing Library cleanup ---
 afterEach(() => {
@@ -42,6 +43,7 @@ window.confirm = vi.fn(() => true)
 // --- window.lkv: a fresh default mock per test ---
 beforeEach(() => {
   localStorage.clear()
+  resetVoiceStore()
   const lkv = createLkvMock()
   Object.defineProperty(window, 'lkv', {
     value: lkv,

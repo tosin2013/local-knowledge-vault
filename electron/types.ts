@@ -197,6 +197,8 @@ export interface ChatSendInput {
    * transcript chunks around each centre are retrieved first, in time order.
    */
   mediaWindows?: Array<{ centerSec: number; windowSec: number }>
+  /** Talk it through (#413): the reply is read aloud, so ask for short spoken sentences. */
+  spoken?: boolean
 }
 
 export interface ChatSendResult {
@@ -1720,4 +1722,72 @@ export interface StudySessionReport {
   dueByTomorrow: number
   /** "Answers you keep picking" among this session's cards (#324). */
   repeatedPicks?: RepeatedPick[]
+}
+
+/* ---- Voice study (#413) ---- */
+
+/** Where spoken replies come from: the speech provider (Ollama `phonon`, …) or the OS voices (Web Speech API). */
+export type VoiceOutputEngine = 'provider' | 'system'
+
+export interface VoiceSettings {
+  /** Show the Talk controls in Study and Ask. Off by default. */
+  enabled: boolean
+  /** Read questions, hints and answers aloud (the text always stays on screen). */
+  spokenReplies: boolean
+  /** Provider whose OpenAI-compatible audio routes are used (default `ollama`). */
+  providerId: string
+  /** Speech-to-text model for `/v1/audio/transcriptions`. */
+  sttModel: string
+  /** Text-to-speech model for `/v1/audio/speech`. */
+  ttsModel: string
+  output: VoiceOutputEngine
+  /** Provider voice name, or the system voice's name when `output` is `system`. Empty = default voice. */
+  voice: string
+}
+
+export interface VoiceProviderOption {
+  id: string
+  label: string
+  local: boolean
+}
+
+export interface VoiceStatus {
+  providerId: string
+  providerLabel: string
+  /** False for a cloud provider: audio would leave this computer. */
+  local: boolean
+  /** The provider is Ollama, so missing models can be downloaded from Settings. */
+  ollama: boolean
+  /** The provider answered. */
+  reachable: boolean
+  canTranscribe: boolean
+  canSpeak: boolean
+  sttModel: string
+  ttsModel: string
+  /** Voices the speech model offers (Ollama `/api/show`); empty when unknown. */
+  voices: string[]
+  /** Plain-language notes, e.g. how to get the speech-to-text model. */
+  sttHint?: string
+  ttsHint?: string
+  /** Running as a snap (the microphone needs the audio-record plug). */
+  snap: boolean
+  providers: VoiceProviderOption[]
+}
+
+export type VoiceTranscribeResult = { ok: true; text: string } | { ok: false; error: string }
+
+export type VoiceSpeakResult = { ok: true; audio: Uint8Array; mime: 'audio/wav' } | { ok: false; error: string }
+
+export interface VoicePullProgress {
+  model: string
+  status: string
+  completed?: number
+  total?: number
+  done?: boolean
+  error?: string
+}
+
+export interface VoiceMicAccess {
+  granted: boolean
+  snap: boolean
 }

@@ -6,6 +6,7 @@ import { ReviewView } from './ReviewView'
 import { StudyView } from './StudyView'
 import { TestToNotesView } from './TestToNotesView'
 import { StudyHome } from './StudyHome'
+import { TalkView } from '../voice/TalkView'
 import { STUDY_SECTIONS, loadStudyProject, saveStudyProject, type StudySection } from './sections'
 
 export interface StudyTabProps {
@@ -82,6 +83,7 @@ export const StudyTab = memo(function StudyTab({ section, onSection, onOpenNote,
           <StudyHome project={project} onProjectChange={setProject} onStartReview={() => onSection('review')} onOpenNote={onOpenNote} />
         )}
         {section === 'review' && <ReviewView {...viewProps} />}
+        {section === 'talk' && <TalkView project={project} onProjectChange={setProject} onOpenNote={onOpenNote} />}
         {section === 'quiz' && <StudyView {...viewProps} />}
         {section === 'import' && <TestToNotesView {...viewProps} />}
       </Box>

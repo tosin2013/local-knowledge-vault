@@ -89,7 +89,7 @@ describe('App', () => {
     await waitFor(() => expect(lkv.plugins.list).toHaveBeenCalled())
     fireEvent.click(await screen.findByRole('button', { name: 'Study' }))
     expect(await screen.findByTestId('study-tab')).toBeInTheDocument()
-    expect(screen.getAllByRole('tab')).toHaveLength(4)
+    expect(screen.getAllByRole('tab')).toHaveLength(5)
   })
 
   it('runs startup refreshes once and stays idle (#292)', async () => {

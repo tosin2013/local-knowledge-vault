@@ -5,11 +5,12 @@
  * matching Study section so stale ids (old menu entries, saved disabled-plugin
  * lists) open the Study tab instead of an "Unknown plugin" warning.
  */
-export type StudySection = 'home' | 'review' | 'quiz' | 'import'
+export type StudySection = 'home' | 'review' | 'talk' | 'quiz' | 'import'
 
 export const STUDY_SECTIONS: { id: StudySection; label: string }[] = [
   { id: 'home', label: 'Home' },
   { id: 'review', label: 'Study session' },
+  { id: 'talk', label: 'Talk it through' },
   { id: 'quiz', label: 'Quiz me on…' },
   { id: 'import', label: 'Import practice test' },
 ]

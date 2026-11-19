@@ -4,6 +4,11 @@ All notable changes to Vault. Versions match the `vX.Y.Z` tags on the
 [Releases page](https://github.com/tosin2013/local-knowledge-vault/releases); the release workflow
 uses the matching section below as the release notes.
 
+## [Unreleased]
+
+### Study
+- **Voice study** (off by default; Settings → AI providers → Voice): **Talk it through**, a new Study section, is a spoken conversation about your notes. Replies come from the same grounded chat as Ask, with sources on screen, and are read aloud in short sentences. One press starts hands-free mode, where a pause ends your turn and talking interrupts Vault; push-to-talk is an option, and typing always works. Say "quiz me" for Study cards inside the conversation: Vault asks first, gives hints in steps, reads the cited answer after you try, and your spoken grade feeds spaced review. Study sessions get a hold-to-answer mic, stepped hints and read-aloud, and Ask gets a mic button. Speech uses Ollama's OpenAI-compatible audio routes (`lfm3-audio` to listen, `phonon` voices to speak), or your computer's voices when `phonon` isn't installed. Any OpenAI-compatible provider with those routes works the same way. The snap asks for the `audio-record` plug. (#413)
+
 ## [0.6.0] — Study a video
 
 Media chat becomes a place to study a lecture, not just ask about it: mark moments, get quizzed

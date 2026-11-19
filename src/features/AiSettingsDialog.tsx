@@ -5,6 +5,7 @@ import { ProvidersPanel } from '../components/ai/ProvidersPanel'
 import { BridgeSettings } from '../components/ai/BridgeSettings'
 import { KeyStorageNotice } from '../components/ai/KeyStorageNotice'
 import { UpdateSettings } from '../components/updates/UpdateSettings'
+import { VoiceSettings } from './voice/VoiceSettings'
 
 export interface AiSettingsDialogProps {
   open: boolean
@@ -75,6 +76,7 @@ export function AiSettingsDialog(props: AiSettingsDialogProps) {
           </Stack>
         )}
         <KeyStorageNotice keyStorage={llmStatus?.keyStorage} />
+        <VoiceSettings />
         <BridgeSettings />
         <UpdateSettings />
       </DialogContent>

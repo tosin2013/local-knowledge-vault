@@ -1,7 +1,7 @@
 /**
  * Electron main process — app lifecycle + IPC handlers.
  */
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, session, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, session, shell, systemPreferences, type OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import {
@@ -133,6 +133,7 @@ import {
 import { encryptLegacySecretFiles } from './secret-files'
 import { secretEncryptionAvailable } from './secret-store'
 import { checkForUpdate, checkForUpdateOnLaunch, getUpdateSettings, setUpdateSettings } from './update-check'
+import { getVoiceSettings, pullSpeechModel, setVoiceSettings, speak, transcribe, voiceStatus } from './voice'
 import { handleMediaRequest } from './media-protocol'
 import { YOUTUBE_EMBED_FILTER, rewriteYoutubeEmbedHeaders } from './youtube-embed-headers'
 import {
@@ -219,6 +220,7 @@ import type {
   ProviderDraft,
   ProviderSelection,
   UpdateSettings,
+  VoiceSettings,
   StudyEnrollOptions,
 } from './types'
 
@@ -1092,6 +1094,31 @@ function registerIpc(): void {
   ipcMain.handle('updates:check', () => {
     const { currentVersion, fetchImpl } = updateEnv()
     return checkForUpdate({ currentVersion, fetchImpl })
+  })
+  // Voice study (#413): OpenAI-compatible audio routes (Ollama lfm3-audio / phonon by default).
+  ipcMain.handle('voice:getSettings', () => getVoiceSettings())
+  ipcMain.handle('voice:setSettings', (_e, patch: Partial<VoiceSettings>) => setVoiceSettings(patch ?? {}))
+  ipcMain.handle('voice:status', () => voiceStatus())
+  ipcMain.handle('voice:transcribe', (_e, audio: Uint8Array) => transcribe(audio))
+  ipcMain.handle('voice:speak', (_e, text: string) => speak(String(text ?? '')))
+  ipcMain.handle('voice:pull', (e, model: string) =>
+    pullSpeechModel(String(model ?? ''), (p) => {
+      if (!e.sender.isDestroyed()) e.sender.send('voice:pullProgress', p)
+    })
+  )
+  // macOS asks once for the microphone (NSMicrophoneUsageDescription); Linux and
+  // Windows answer in the renderer's getUserMedia call. A snap also needs the
+  // audio-record plug connected.
+  ipcMain.handle('voice:micAccess', async () => {
+    let granted = true
+    if (process.platform === 'darwin') {
+      try {
+        granted = await systemPreferences.askForMediaAccess('microphone')
+      } catch {
+        granted = false
+      }
+    }
+    return { granted, snap: !!process.env.SNAP }
   })
   ipcMain.handle('updates:getSettings', () => getUpdateSettings())
   ipcMain.handle('updates:setSettings', (_e, patch: Partial<UpdateSettings>) =>
