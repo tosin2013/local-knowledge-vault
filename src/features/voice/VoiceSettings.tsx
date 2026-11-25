@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -30,7 +30,11 @@ function voiceKey(output: string, name: string): string {
  * provider serves speech, the voice, a test button, and downloads for Ollama's
  * speech models with a progress bar.
  */
-export function VoiceSettings() {
+export function VoiceSettings({ autoFocus }: { autoFocus?: boolean } = {}) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (autoFocus) rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [autoFocus])
   const voice = useVoice()
   const [systemVoices, setSystemVoices] = useState<string[]>(() => systemVoiceNames())
   const [pulls, setPulls] = useState<Record<string, VoicePullProgress>>({})
@@ -118,7 +122,7 @@ export function VoiceSettings() {
   }
 
   return (
-    <Box sx={{ mt: 2 }} data-testid="voice-settings">
+    <Box ref={rootRef} id="voice-settings" sx={{ mt: 2 }} data-testid="voice-settings">
       <Divider sx={{ my: 1.5 }} />
       <Typography variant="subtitle2">Voice</Typography>
       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>

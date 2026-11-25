@@ -49,4 +49,16 @@ describe('useProviders', () => {
     const { result } = renderHook(() => useProviders())
     await waitFor(() => expect(result.current.disabledPlugins).toEqual(['media-chat']))
   })
+
+  it('opens and closes AI settings, optionally focused on Voice (#426)', () => {
+    const { result } = renderHook(() => useProviders())
+    act(() => result.current.openAiSettings('voice'))
+    expect(result.current.aiSettingsOpen).toBe(true)
+    expect(result.current.aiSettingsFocus).toBe('voice')
+    act(() => result.current.openAiSettings())
+    expect(result.current.aiSettingsFocus).toBeNull()
+    act(() => result.current.closeAiSettings())
+    expect(result.current.aiSettingsOpen).toBe(false)
+    expect(result.current.aiSettingsFocus).toBeNull()
+  })
 })

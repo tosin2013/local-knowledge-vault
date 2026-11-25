@@ -231,7 +231,9 @@ export default function App() {
   // Stable handlers for the memoized children: a keystroke in the top search,
   // the Ask composer or the note editor must not re-render the others (#293).
   const handleRunSearch = useCallback(() => void notes.runSearch(), [notes.runSearch])
-  const handleAiSettings = useCallback(() => providers.setAiSettingsOpen(true), [providers.setAiSettingsOpen])
+  const handleAiSettings = useCallback(() => providers.openAiSettings(), [providers.openAiSettings])
+  const handleOpenVoiceSettings = useCallback(() => providers.openAiSettings('voice'), [providers.openAiSettings])
+  const handleSpokenTurn = useCallback((text: string) => chat.sendTurn(text, { spoken: true }), [chat.sendTurn])
   const handleRecheck = useCallback(() => void providers.recheckLlm(), [providers.recheckLlm])
   const handlePersonalities = useCallback(() => {
     setActivePluginId(null)
@@ -570,6 +572,8 @@ export default function App() {
                 onSaveAsProfile={handleSaveAsProfile}
                 onProfileSaveCancel={handleProfileSaveCancel}
                 onSend={handleSend}
+                onSpokenTurn={handleSpokenTurn}
+                onOpenVoiceSettings={handleOpenVoiceSettings}
                 onNewChat={handleNewChat}
                 onExportCitationPack={handleExportCitationPack}
                 onSaveAsNote={handleSaveAsNote}
@@ -667,7 +671,8 @@ export default function App() {
           advanced={ui.advanced}
           llmStatus={providers.llmStatus}
           llmChecking={providers.llmChecking}
-          onClose={() => providers.setAiSettingsOpen(false)}
+          onClose={providers.closeAiSettings}
+          focus={providers.aiSettingsFocus}
           onRefresh={handleRecheck}
           onAddProvider={handleAddProvider}
           onEditProvider={handleEditProvider}

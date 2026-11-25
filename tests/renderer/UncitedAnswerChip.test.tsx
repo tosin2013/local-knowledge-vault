@@ -22,7 +22,7 @@ function chatProps(overrides: Partial<ChatViewProps> = {}): ChatViewProps {
     onChatInput: noop, onSelectNote: noop, onProfileChange: noop, onOpenRename: noop, onRenameName: noop,
     onRename: noop, onRenameCancel: noop, onDeleteProfile: noop, onAskCustomize: noop, onChatPrompt: noop,
     onNotesFrom: noop, onOpenProfileSave: noop, onProfileSaveName: noop, onSaveAsProfile: noop,
-    onProfileSaveCancel: noop, onSend: noop, onNewChat: noop, onExportCitationPack: noop,
+    onProfileSaveCancel: noop, onSend: noop, onSpokenTurn: noop, onOpenVoiceSettings: noop, onNewChat: noop, onExportCitationPack: noop,
     onSaveAsNote: vi.fn(), onSelectSession: noop, onDeleteSession: noop,
     ...overrides,
   }

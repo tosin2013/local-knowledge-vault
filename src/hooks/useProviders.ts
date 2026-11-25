@@ -11,6 +11,7 @@ export function useProviders() {
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null)
   const [providerInitialPreset, setProviderInitialPreset] = useState<string | undefined>(undefined)
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
+  const [aiSettingsFocus, setAiSettingsFocus] = useState<'voice' | null>(null)
   const [smallHintDismissed, setSmallHintDismissed] = useState(false)
   const [disabledPlugins, setDisabledPlugins] = useState<string[]>([])
   const pluginContribs = usePluginContributions()
@@ -78,6 +79,16 @@ export function useProviders() {
     setProviderDialogOpen(true)
   }, [])
 
+  const openAiSettings = useCallback((focus?: 'voice') => {
+    setAiSettingsFocus(focus ?? null)
+    setAiSettingsOpen(true)
+  }, [])
+
+  const closeAiSettings = useCallback(() => {
+    setAiSettingsOpen(false)
+    setAiSettingsFocus(null)
+  }, [])
+
   return {
     llmStatus,
     llmChecking,
@@ -89,6 +100,9 @@ export function useProviders() {
     providerInitialPreset,
     aiSettingsOpen,
     setAiSettingsOpen,
+    aiSettingsFocus,
+    openAiSettings,
+    closeAiSettings,
     smallHintDismissed,
     setSmallHintDismissed,
     disabledPlugins,

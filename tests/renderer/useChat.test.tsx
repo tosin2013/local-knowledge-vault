@@ -398,4 +398,47 @@ describe('useChat', () => {
     expect(result.current.chatInput).toBe('my question')
     expect(result.current.messages).toEqual([])
   })
+
+  it('sends a spoken turn into the current session without clearing the composer (#426)', async () => {
+    const lkv = lkvMock()
+    const assistant = makeMessage({ id: 'a_1', role: 'assistant', content: 'ATP comes from mitochondria [itm_1].', citations_json: '[{"id":"itm_1","title":"Cells"}]' })
+    const user = makeMessage({ id: 'u_1', role: 'user', content: 'What do they do?' })
+    lkv.chat.listSessions.mockResolvedValue([makeSession('s_1', 'Biology')])
+    lkv.chat.listMessages.mockResolvedValue([])
+    lkv.chat.send.mockResolvedValue(makeSendResult({ messages: [user, assistant], session: makeSession('s_1', 'Biology'), offline: false }))
+    const { result } = renderHook(() => useChat(makeDeps()))
+    await act(async () => {
+      await result.current.refreshSessions()
+      await result.current.onSelectSession('s_1')
+    })
+    act(() => result.current.setChatInput('draft in the box'))
+    let sent: Awaited<ReturnType<typeof result.current.sendTurn>> = undefined
+    await act(async () => {
+      sent = await result.current.sendTurn('What do they do?', { spoken: true })
+    })
+    expect(lkv.chat.createSession).not.toHaveBeenCalled()
+    expect(lkv.chat.send).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's_1', text: 'What do they do?', spoken: true }))
+    expect(sent).toEqual({
+      ok: true,
+      content: assistant.content,
+      citationsJson: assistant.citations_json,
+      offline: false,
+    })
+    expect(result.current.chatInput).toBe('draft in the box')
+    expect(result.current.messages).toEqual([user, assistant])
+  })
+
+  it('does not put a failed spoken turn back in the composer (#426)', async () => {
+    const lkv = lkvMock()
+    lkv.chat.send.mockRejectedValue(new Error('provider down'))
+    const { result } = renderHook(() => useChat(makeDeps()))
+    act(() => result.current.setChatInput('typed draft'))
+    let sent: Awaited<ReturnType<typeof result.current.sendTurn>> = undefined
+    await act(async () => {
+      sent = await result.current.sendTurn('Hello out loud', { spoken: true })
+    })
+    expect(sent).toEqual({ ok: false, error: 'provider down' })
+    expect(result.current.chatInput).toBe('typed draft')
+    expect(result.current.messages).toEqual([])
+  })
 })
