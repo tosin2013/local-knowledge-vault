@@ -31,6 +31,11 @@ export interface UseChatDeps {
   busy: boolean
 }
 
+/** Result of sending one Ask turn, including a spoken Talk turn (#426). */
+export type SendTurnResult =
+  | { ok: true; content: string; citationsJson: string | null; offline: boolean }
+  | { ok: false; error: string }
+
 /** Owns chat sessions/messages and the Personality + Project profile state. */
 export function useChat(deps: UseChatDeps) {
   const {
@@ -280,107 +285,125 @@ export function useChat(deps: UseChatDeps) {
     }
   }, [activeSessionId, messages, selectedProfileId, prompts, userProfiles, setBusy, setError, setStatusMsg])
 
-  const onSendChat = useCallback(async () => {
-    if (!window.lkv || !chatInput.trim() || sending) return
-    const text = chatInput.trim()
-    let sessionId = activeSessionId
-    const existing = sessionId ? sessions.find((s) => s.id === sessionId) : null
-    const untitled =
-      !existing ||
-      !existing.title.trim() ||
-      existing.title.trim().toLowerCase() === 'new chat' ||
-      existing.title.trim().toLowerCase() === 'untitled'
-    if (!sessionId) {
-      const session = await window.lkv.chat.createSession({
-        mode: 'grounded',
-        title: titleFromFirstQuestion(text),
-      })
-      sessionId = session.id
-      setActiveSessionId(sessionId)
+  const sendTurn = useCallback(
+    async (
+      text: string,
+      opts?: { spoken?: boolean; fromComposer?: boolean },
+    ): Promise<SendTurnResult | void> => {
+      const trimmed = text.trim()
+      if (!window.lkv || !trimmed || sending) return
+      let sessionId = activeSessionId
+      const existing = sessionId ? sessions.find((s) => s.id === sessionId) : null
+      const untitled =
+        !existing ||
+        !existing.title.trim() ||
+        existing.title.trim().toLowerCase() === 'new chat' ||
+        existing.title.trim().toLowerCase() === 'untitled'
+      if (!sessionId) {
+        const session = await window.lkv.chat.createSession({
+          mode: 'grounded',
+          title: titleFromFirstQuestion(trimmed),
+        })
+        sessionId = session.id
+        setActiveSessionId(sessionId)
+        activeSessionIdRef.current = sessionId
+        await refreshSessions()
+      }
       activeSessionIdRef.current = sessionId
-      await refreshSessions()
-    }
-    activeSessionIdRef.current = sessionId
-    setChatInput('')
-    setSending(true)
-    setBusy(true)
-    setError(null)
-    setChatOffline(false)
-    // Render the user's message immediately rather than waiting for the reply.
-    const optimisticId = `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: optimisticId,
-        session_id: sessionId,
-        role: 'user',
-        content: text,
-        uncited: false,
-        citations_json: null,
-        hits_json: null,
-        provider_json: null,
-        created_at: new Date().toISOString(),
-      },
-    ])
-    try {
-      const res = await window.lkv.chat.send({
-        sessionId,
-        text,
-        filters: { project },
-        promptId:
-          selectedPromptId ||
-          findGroundedDefaultPrompt(prompts)?.id ||
-          undefined,
-        limit: 8,
-      })
-      // Late-reply guard: a reply for a session the user has since left must
-      // not overwrite the messages of the session they are now viewing.
-      if (activeSessionIdRef.current === sessionId) {
-        setMessages(res.messages)
+      if (opts?.fromComposer) setChatInput('')
+      setSending(true)
+      setBusy(true)
+      setError(null)
+      setChatOffline(false)
+      // Render the user's message immediately rather than waiting for the reply.
+      const optimisticId = `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: optimisticId,
+          session_id: sessionId,
+          role: 'user',
+          content: trimmed,
+          uncited: false,
+          citations_json: null,
+          hits_json: null,
+          provider_json: null,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      try {
+        const res = await window.lkv.chat.send({
+          sessionId,
+          text: trimmed,
+          filters: { project },
+          promptId:
+            selectedPromptId ||
+            findGroundedDefaultPrompt(prompts)?.id ||
+            undefined,
+          limit: 8,
+          ...(opts?.spoken ? { spoken: true } : {}),
+        })
+        // Late-reply guard: a reply for a session the user has since left must
+        // not overwrite the messages of the session they are now viewing.
+        if (activeSessionIdRef.current === sessionId) {
+          setMessages(res.messages)
+        }
+        setChatOffline(!!res.offline)
+        // Belt-and-suspenders: rename untitled sessions from the first question
+        if (
+          untitled &&
+          sessionId &&
+          messages.length === 0 &&
+          window.lkv.chat.updateSessionTitle
+        ) {
+          await window.lkv.chat.updateSessionTitle(sessionId, titleFromFirstQuestion(trimmed))
+        }
+        await refreshSessions()
+        return {
+          ok: true,
+          content: res.assistant.content,
+          citationsJson: res.assistant.citations_json,
+          offline: !!res.offline,
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(msg)
+        // The chat was deleted out from under this composer (#315): drop the
+        // ghost session id so the next send starts a new session instead of
+        // failing the same way every time.
+        if (/^Session not found/.test(msg) && activeSessionIdRef.current === sessionId) {
+          setActiveSessionId(null)
+          activeSessionIdRef.current = null
+          setMessages([])
+        }
+        // A failed send must not lose a typed question: roll back the optimistic
+        // bubble and put the text back in the composer (#128). Spoken turns stay
+        // out of the composer and report the error to the Talk UI instead.
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+        if (opts?.fromComposer) setChatInput(trimmed)
+        return { ok: false, error: msg }
+      } finally {
+        setSending(false)
+        setBusy(false)
       }
-      setChatOffline(!!res.offline)
-      // Belt-and-suspenders: rename untitled sessions from the first question
-      if (
-        untitled &&
-        sessionId &&
-        messages.length === 0 &&
-        window.lkv.chat.updateSessionTitle
-      ) {
-        await window.lkv.chat.updateSessionTitle(sessionId, titleFromFirstQuestion(text))
-      }
-      await refreshSessions()
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      // The chat was deleted out from under this composer (#315): drop the
-      // ghost session id so the next send starts a new session instead of
-      // failing the same way every time.
-      if (/^Session not found/.test(msg) && activeSessionIdRef.current === sessionId) {
-        setActiveSessionId(null)
-        activeSessionIdRef.current = null
-        setMessages([])
-      }
-      // A failed send must not lose the question: roll back the optimistic
-      // bubble and put the text back in the composer (#128).
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
-      setChatInput(text)
-    } finally {
-      setSending(false)
-      setBusy(false)
-    }
-  }, [
-    chatInput,
-    sending,
-    activeSessionId,
-    sessions,
-    project,
-    selectedPromptId,
-    prompts,
-    messages,
-    persistProfile,
-    refreshSessions,
-    setError,
-  ])
+    },
+    [
+      sending,
+      activeSessionId,
+      sessions,
+      project,
+      selectedPromptId,
+      prompts,
+      messages,
+      refreshSessions,
+      setError,
+      setBusy,
+    ],
+  )
+
+  const onSendChat = useCallback(async () => {
+    await sendTurn(chatInput, { fromComposer: true })
+  }, [sendTurn, chatInput])
 
   const gorgiasReaderSelected = isGorgiasReaderPrompt(selectedPromptId, prompts)
   const projectIsGorgias = project.trim() === GORGIAS_PROJECT
@@ -652,6 +675,7 @@ export function useChat(deps: UseChatDeps) {
     onDeleteSession,
     onExportCitationPack,
     onSendChat,
+    sendTurn,
     onProfileChange,
     onSaveAsProfile,
     onRenameProfile,

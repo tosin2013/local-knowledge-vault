@@ -22,10 +22,8 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import type { Citation, ReviewGrade, ReviewQueueItem } from '../../../electron/types'
 import { ProjectSelect } from '../ProjectSelect'
 import { AnswerText } from '../../components/answer/AnswerText'
-import { speakSentences, type Utterance } from './audio'
-import { speakableText, splitSentences, parseSpokenCommand } from './speech'
+import { parseSpokenCommand } from './speech'
 import { isMultipleChoice, questionSpeech, quizInput, startCard, type QuizCardState } from './talkQuiz'
-import { useMic } from './useMic'
 import { studyHint } from './speech'
 import {
   conceptSpeech,
@@ -41,7 +39,7 @@ import {
   type TeachSummary,
 } from './teachFlow'
 import { PasteToLearnDialog } from './PasteToLearnDialog'
-import { useVoice } from './useVoice'
+import { useTalkLoop } from './useTalkLoop'
 
 export interface TalkViewProps {
   project: string
@@ -59,8 +57,6 @@ interface Line {
   text: string
   citations?: Citation[]
 }
-
-type Busy = 'idle' | 'thinking' | 'speaking'
 
 const QUIZ_CARDS = 5
 const TEACH_WORDS = /^(teach me( this| these notes)?|teach)$/i
@@ -86,14 +82,25 @@ function parseCitations(json: string | null): Citation[] {
  * the grades feed spaced review.
  */
 export function TalkView({ project, onProjectChange, onOpenNote, teachNoteId, onTeachStarted }: TalkViewProps) {
-  const voice = useVoice()
-  const mic = useMic()
+  const talk = useTalkLoop()
+  const {
+    voice,
+    mic,
+    busy,
+    setBusy,
+    running,
+    notice,
+    setNotice,
+    stopSpeaking,
+    speak,
+    start,
+    stop,
+    canHear,
+    status,
+  } = talk
   const [lines, setLines] = useState<Line[]>([])
-  const [busy, setBusy] = useState<Busy>('idle')
-  const [running, setRunning] = useState(false)
   const [handsFree, setHandsFree] = useState(true)
   const [typed, setTyped] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
   const [quiz, setQuiz] = useState<QuizCardState | null>(null)
   const teachRef = useRef<TeachState | null>(null)
   const [teach, setTeach] = useState<TeachState | null>(null)
@@ -103,12 +110,7 @@ export function TalkView({ project, onProjectChange, onOpenNote, teachNoteId, on
   const sessionRef = useRef<string | null>(null)
   const quizRef = useRef<{ sessionId: string; cards: ReviewQueueItem[]; index: number } | null>(null)
   const quizState = useRef<QuizCardState | null>(null)
-  const utter = useRef<Utterance | null>(null)
-  const runningRef = useRef(false)
-  const speakingRef = useRef(false)
   const nextId = useRef(1)
-  const settingsRef = useRef(voice)
-  settingsRef.current = voice
 
   // A new project starts a new conversation.
   useEffect(() => {
@@ -122,45 +124,14 @@ export function TalkView({ project, onProjectChange, onOpenNote, teachNoteId, on
     setLines([])
   }, [project])
 
-  const stopSpeaking = useCallback(() => {
-    utter.current?.stop()
-    utter.current = null
-    speakingRef.current = false
-    setBusy((b) => (b === 'speaking' ? 'idle' : b))
-  }, [])
-
-  useEffect(
-    () => () => {
-      runningRef.current = false
-      utter.current?.stop()
-    },
-    []
-  )
-
   const add = (role: Line['role'], text: string, citations?: Citation[]) =>
     setLines((prev) => [...prev, { id: nextId.current++, role, text, citations }])
 
   /** Show and (when spoken replies are on) say a line; resolves when the speech ends. */
   const say = useCallback((text: string, citations?: Citation[], rate = 1): Promise<void> => {
     add('vault', text, citations)
-    const v = settingsRef.current
-    if (!v.enabled || !v.settings.spokenReplies) return Promise.resolve()
-    utter.current?.stop()
-    const u = speakSentences(splitSentences(speakableText(text)), v.settings, v.status, (why) =>
-      setNotice(`The speech provider didn’t answer (${why}); using this computer’s voice.`),
-      rate
-    )
-    utter.current = u
-    speakingRef.current = true
-    setBusy('speaking')
-    return u.done.then(() => {
-      if (utter.current === u) {
-        utter.current = null
-        speakingRef.current = false
-        setBusy((b) => (b === 'speaking' ? 'idle' : b))
-      }
-    })
-  }, [])
+    return speak(text, rate)
+  }, [speak])
 
   const askCard = useCallback(
     async (): Promise<void> => {
@@ -409,9 +380,7 @@ export function TalkView({ project, onProjectChange, onOpenNote, teachNoteId, on
         return
       }
       if (parseSpokenCommand(t) === 'stop') {
-        runningRef.current = false
-        setRunning(false)
-        mic.cancel()
+        stop()
         void say('Okay. Press Start talking whenever you want to pick this up again.')
         return
       }
@@ -445,45 +414,10 @@ export function TalkView({ project, onProjectChange, onOpenNote, teachNoteId, on
         setNotice(e instanceof Error ? e.message : String(e))
       }
     },
-    [project, quizTurn, teachTurn, startQuiz, startLesson, say, stopSpeaking, mic]
+    [project, quizTurn, teachTurn, startQuiz, startLesson, say, stopSpeaking, stop]
   )
 
-  /** The hands-free loop: listen → pause ends the turn → answer → listen again. */
-  const loop = useCallback(async () => {
-    while (runningRef.current) {
-      const r = await mic.listen({
-        handsFree: true,
-        onSpeechStart: () => {
-          if (speakingRef.current) stopSpeaking()
-        },
-        // Vault's own voice shouldn't count as the learner talking; echo
-        // cancellation helps, and a higher bar while it speaks does the rest.
-        detector: { threshold: () => (speakingRef.current ? 0.08 : 0.02), maxWaitMs: 30000 },
-      })
-      if (!runningRef.current || 'cancelled' in r) break
-      if ('timeout' in r) {
-        setNotice('Paused: I didn’t hear anything for a while. Press Start talking to carry on.')
-        break
-      }
-      if ('error' in r) break
-      await respond(r.text)
-    }
-    runningRef.current = false
-    setRunning(false)
-  }, [mic, respond, stopSpeaking])
-
-  const start = () => {
-    setNotice(null)
-    runningRef.current = true
-    setRunning(true)
-    void loop()
-  }
-  const stop = () => {
-    runningRef.current = false
-    setRunning(false)
-    mic.cancel()
-    stopSpeaking()
-  }
+  talk.setOnTurn(respond)
 
   // Push-to-talk: hold to talk, let go to send.
   const holding = useRef(false)
@@ -500,22 +434,6 @@ export function TalkView({ project, onProjectChange, onOpenNote, teachNoteId, on
     holding.current = false
     mic.stop()
   }
-
-  const canHear = voice.enabled && voice.status?.canTranscribe === true
-  const status =
-    mic.phase === 'listening'
-      ? busy === 'speaking'
-        ? 'Speaking… talk to interrupt'
-        : 'Listening…'
-      : mic.phase === 'transcribing'
-        ? 'Writing down what you said…'
-        : busy === 'thinking'
-          ? 'Checking your notes…'
-          : busy === 'speaking'
-            ? 'Speaking…'
-            : running
-              ? 'Ready'
-              : ''
 
   return (
     <Box data-testid="talk-view" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, p: 1.5, minHeight: 0 }}>

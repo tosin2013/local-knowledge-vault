@@ -59,6 +59,8 @@ function makeProps(overrides: Partial<ChatViewProps> = {}): ChatViewProps {
     onSaveAsProfile: vi.fn(),
     onProfileSaveCancel: vi.fn(),
     onSend: vi.fn(),
+    onSpokenTurn: vi.fn(),
+    onOpenVoiceSettings: vi.fn(),
     onNewChat: vi.fn(),
     onExportCitationPack: vi.fn(),
     onSaveAsNote: vi.fn(),
@@ -247,5 +249,16 @@ describe('ChatView', () => {
     })
     render(<ChatView {...props} />)
     expect(screen.queryByTestId('answer-provider-chip')).not.toBeInTheDocument()
+  })
+
+  it('always shows a Talk it through button, even when Voice is off (#426)', () => {
+    const props = makeProps()
+    render(<ChatView {...props} />)
+    const btn = screen.getByRole('button', { name: 'Talk it through' })
+    expect(btn).toBeInTheDocument()
+    expect(screen.queryByTestId('mic-button')).not.toBeInTheDocument()
+    fireEvent.click(btn)
+    expect(props.onOpenVoiceSettings).toHaveBeenCalled()
+    expect(screen.getByTestId('ask-talk-setup')).toBeInTheDocument()
   })
 })

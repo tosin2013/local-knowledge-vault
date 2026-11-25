@@ -22,6 +22,7 @@ import {
   Typography,
 } from '@mui/material'
 import { MicButton } from './voice/MicButton'
+import { AskTalkControls, useAskTalk, type SpokenTurnResult } from './voice/AskTalk'
 import SendIcon from '@mui/icons-material/Send'
 import AddIcon from '@mui/icons-material/Add'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -108,6 +109,10 @@ export interface ChatViewProps {
   onSaveAsProfile: () => void
   onProfileSaveCancel: () => void
   onSend: () => void
+  /** Send a spoken (or in-conversation typed) turn into the current session (#426). */
+  onSpokenTurn: (text: string) => Promise<SpokenTurnResult | void>
+  /** Open Settings → AI providers, scrolled to Voice. */
+  onOpenVoiceSettings: () => void
   onNewChat: () => void
   onExportCitationPack: () => void
   onSaveAsNote: (content: string, cites: Citation[]) => void
@@ -274,12 +279,26 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
     onSaveAsProfile,
     onProfileSaveCancel,
     onSend,
+    onSpokenTurn,
+    onOpenVoiceSettings,
     onNewChat,
     onExportCitationPack,
     onSaveAsNote,
     onSelectSession,
     onDeleteSession,
   } = props
+
+  const askTalk = useAskTalk({ onSpokenTurn, onOpenVoiceSettings, activeSessionId })
+
+  const handleSend = () => {
+    if (askTalk.talk.running) {
+      const text = chatInput
+      onChatInput('')
+      void askTalk.respond(text)
+      return
+    }
+    onSend()
+  }
 
   return (
     <Box className="chat-layout">
@@ -665,6 +684,7 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
               </Paper>
             </Collapse>
 
+            <AskTalkControls askTalk={askTalk} sending={busy || sending} />
             <Stack direction="row" spacing={1} sx={{
               alignItems: 'flex-end',
             }}>
@@ -682,7 +702,7 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    onSend()
+                    handleSend()
                   }
                 }}
               />
@@ -694,7 +714,7 @@ export const ChatView = memo(function ChatView(props: ChatViewProps) {
               <IconButton
                 color="primary"
                 disabled={busy || sending || !chatInput.trim()}
-                onClick={onSend}
+                onClick={handleSend}
                 aria-label={busy || sending ? 'Sending' : 'Send'}
                 sx={{
                   bgcolor: 'primary.main',

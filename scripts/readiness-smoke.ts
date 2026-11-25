@@ -214,6 +214,10 @@ function main(): void {
 
   // Back-date one strong review into last week and one into this week for the trend.
   const database = db.getDb()
+  // Enqueue/rate use the real clock, so pin this unreviewed card due before the
+  // frozen exam cut-off (2026-11-25). Otherwise the count drops to 0 on or after
+  // the exam day and this smoke fails even though the grouping rules are unchanged.
+  database.prepare('UPDATE card_schedule SET due_at = ? WHERE card_id = ?').run('2026-11-20T12:00:00.000-05:00', newCard.id)
   const logs = database.prepare('SELECT id, card_id, reviewed_at FROM review_log WHERE migrated = 0').all() as Array<{ id: string; card_id: string; reviewed_at: string }>
   const strongLogs = logs.filter((l) => l.card_id === strongCard.id)
   if (strongLogs[0]) {

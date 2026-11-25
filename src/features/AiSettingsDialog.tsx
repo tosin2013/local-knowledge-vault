@@ -18,6 +18,8 @@ export interface AiSettingsDialogProps {
   onEditProvider: (p: ProviderConfig) => void
   onError: (m: string) => void
   onUseAdvanced: () => void
+  /** When opening from Ask Talk, scroll to the Voice section. */
+  focus?: 'voice' | null
 }
 
 export function AiSettingsDialog(props: AiSettingsDialogProps) {
@@ -32,6 +34,7 @@ export function AiSettingsDialog(props: AiSettingsDialogProps) {
     onEditProvider,
     onError,
     onUseAdvanced,
+    focus,
   } = props
 
   return (
@@ -76,7 +79,7 @@ export function AiSettingsDialog(props: AiSettingsDialogProps) {
           </Stack>
         )}
         <KeyStorageNotice keyStorage={llmStatus?.keyStorage} />
-        <VoiceSettings />
+        <VoiceSettings autoFocus={focus === 'voice'} />
         <BridgeSettings />
         <UpdateSettings />
       </DialogContent>
